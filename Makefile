@@ -6,15 +6,18 @@ PY ?= python3
 lint:
 	$(PY) scripts/pdd.py bundle lint
 
-## Run the candidate test suites (pytest + hypothesis, invariant-lineaged)
+## Run the candidate test suites with a scrubbed environment: candidate code
+## under pytest must NEVER see PDD_EVIDENCE_KEY or other caller secrets.
 test:
-	$(PY) -m pytest implementations/ -q
+	env -i PATH="$$PATH" HOME="$$HOME" LANG="C.UTF-8" PBT_RUNS=200 $(PY) -m pytest implementations/ -q
 
 ## Run the full three-layer Validator Loop on the sealed bundle's candidate
+## (candidate execution is env-scrubbed inside validate_candidate.py)
 validate:
 	$(PY) scripts/pdd.py validate user-registry --pbt-runs 200
 
-## Build the signed Evidence Chain + genesis ledger block, then verify the ledger
+## Build the signed Evidence Chain + genesis ledger block, then verify the
+## ledger and every admission evidence object (needs PDD_EVIDENCE_KEY exported)
 evidence: 
 	$(PY) scripts/pdd.py evidence build user-registry --impl implementations/user-registry/python-stdlib
 	$(PY) scripts/pdd.py evidence verify user-registry

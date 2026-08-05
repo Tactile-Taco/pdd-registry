@@ -228,6 +228,9 @@ def cmd_evidence_verify(argv: list[str]) -> int:
             rc = 1
         else:
             print(f"OK: {path.name} digest+signature valid, ledger-attested")
+    if not attested:
+        print("FAIL: ledger contains no evidence attestation blocks (nothing verified)")
+        rc = 1
     return rc
 
 

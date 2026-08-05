@@ -109,10 +109,11 @@ def layer_structural(bundle: Path, impl: Path) -> list[dict]:
 def _scrubbed_env(pbt_runs: int) -> dict:
     """Environment for candidate code: NEVER pass secrets (PDD_EVIDENCE_KEY,
     tokens) to code under test — a malicious candidate must not read the
-    signing key (security review HIGH)."""
+    signing key (security review HIGH). HOME points at a fresh temp dir so
+    candidate code cannot read the invoking user's private files."""
     return {"PBT_RUNS": str(pbt_runs),
             "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
-            "HOME": os.environ.get("HOME", "/tmp"),
+            "HOME": tempfile.mkdtemp(prefix="pdd-home-"),
             "LANG": "C.UTF-8"}
 
 

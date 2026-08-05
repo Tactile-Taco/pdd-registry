@@ -77,7 +77,7 @@
       "invariant_id": "B-001..B-005",
       "layer": "behavioral",
       "outcome": "pass",
-      "evidence": "pytest: 10 passed in 3.35s"
+      "evidence": "pytest: 10 passed in 3.85s"
     },
     {
       "invariant_id": "B-001",
@@ -88,14 +88,14 @@
     {
       "invariant_id": "O-001,O-002",
       "layer": "operational",
-      "outcome": "skip",
-      "evidence": "sandbox not requested or docker not found; static scan only"
+      "outcome": "pass",
+      "evidence": "docker sandbox (network none, read-only fs): sandbox smoke ok"
     },
     {
       "invariant_id": "O-005",
       "layer": "operational",
       "outcome": "observe",
-      "evidence": "p95=0.00ms over 1000 creates (budget 500ms, should-tier)"
+      "evidence": "p95=0.01ms over 1000 creates (budget 500ms, should-tier)"
     }
   ],
   "verdict": "admit",
