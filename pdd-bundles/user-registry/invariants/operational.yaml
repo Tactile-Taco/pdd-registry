@@ -1,0 +1,41 @@
+operational_invariants:
+  - id: O-001
+    statement: The implementation must not initiate outbound network connections.
+    severity: must
+    infra_assumption: sandbox network denial (docker --network none) or static import/call scan
+    validation:
+      - sandbox_network_denial
+      - import_scan
+
+  - id: O-002
+    statement: The implementation must not perform filesystem writes.
+    severity: must
+    infra_assumption: sandbox read-only fs or static call scan
+    validation:
+      - filesystem_trace
+      - import_scan
+
+  - id: O-003
+    statement: >
+      Runtime dependencies must come from the approved allowlist (Python
+      standard library only).
+    severity: must
+    infra_assumption: dependency/import scan
+    validation:
+      - dependency_scan
+
+  - id: O-004
+    statement: The implementation must not spawn background work (threads, timers, detached processes).
+    severity: must
+    infra_assumption: static call scan; docker sandbox if available
+    validation:
+      - background_work_detection
+
+  - id: O-005
+    statement: >
+      Performance budget (advisory): p95 end-to-end create latency under the
+      benchmark workload must remain below 500 ms; peak memory below 64 MB.
+    severity: should
+    infra_assumption: benchmark harness; excess recorded as observation, not admission failure
+    validation:
+      - benchmark

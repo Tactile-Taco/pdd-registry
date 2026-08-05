@@ -1,0 +1,26 @@
+capabilities:
+  network:
+    outbound_allowed: false
+    allowed_destinations: []
+  filesystem:
+    read_allowed: false
+    write_allowed: false
+    allowed_paths: []
+  database:
+    allowed: true
+    engine: in-memory store (any engine permitted; protocol constrains counts, not engine)
+    max_reads_per_request: 1
+    max_writes_per_request: 1
+  secrets:
+    allowed_environment_variables: []
+  resources:
+    max_latency_ms: 500        # severity: should (advisory budget)
+    max_memory_mb: 64          # severity: should (advisory budget)
+    max_cpu_ms: null
+    max_concurrency: 1
+  background_work:
+    allowed: false
+  telemetry:
+    required_fields:
+      - correlation_id
+      - protocol_version

@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "user-registry create request",
+  "type": "object",
+  "required": ["client_request_id", "email", "display_name"],
+  "additionalProperties": false,
+  "properties": {
+    "client_request_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "description": "Idempotency key supplied by the client. The registry keys on this."
+    },
+    "email": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 320,
+      "pattern": "^\\s*[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}\\s*$",
+      "description": "Email address. ASCII-only (case-folding is well-defined); optional surrounding whitespace is trimmed by the protocol (B-005). Stored normalized: trimmed, lowercased, unique."
+    },
+    "display_name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200,
+      "description": "Stored as submitted (any 1..200 char string)."
+    }
+  }
+}

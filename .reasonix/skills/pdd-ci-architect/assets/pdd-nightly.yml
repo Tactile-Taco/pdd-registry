@@ -1,0 +1,26 @@
+name: pdd-nightly
+on:
+  schedule:
+    - cron: "0 3 * * *"
+  workflow_dispatch: {}
+permissions:
+  contents: read
+  issues: write
+jobs:
+  deep-validation:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with: { node-version: "22", cache: npm }
+      - run: npm ci
+      - name: Extended property runs
+        run: PBT_RUNS=5000 npm run validate:behavioral
+      - name: Mutation testing (report)
+        run: npm run test:mutation || true
+      - name: Evidence chain verify
+        run: npm run evidence:verify
+      - name: Open issue on failure
+        if: failure()
+        run: gh issue create --title "nightly pdd failure $(date +%F)" --body "see run $GITHUB_RUN_ID"
+        env: { GH_TOKEN: ${{ secrets.GITHUB_TOKEN }} }

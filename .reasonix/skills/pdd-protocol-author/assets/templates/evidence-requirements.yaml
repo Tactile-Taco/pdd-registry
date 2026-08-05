@@ -1,0 +1,17 @@
+evidence_requirements:
+  required:
+    - protocol_version
+    - implementation_artifact_hash
+    - validator_versions
+    - validation_results
+    - dependency_manifest
+    - discovery_log
+  attestations:
+    signed: false
+    signer: null
+  replay:
+    deterministic_replay_required: true
+    required_environment_metadata:
+      - runtime
+      - operating_system
+      - dependency_lockfile

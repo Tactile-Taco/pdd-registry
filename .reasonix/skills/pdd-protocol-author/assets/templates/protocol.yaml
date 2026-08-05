@@ -1,0 +1,26 @@
+protocol:
+  name: example-protocol
+  version: 0.1.0
+  status: draft
+
+purpose: >
+  Describe the component's protocol-visible purpose.
+
+boundary:
+  in_scope:
+    - Describe behavior governed by this protocol.
+  out_of_scope:
+    - Describe behavior intentionally excluded from this protocol.
+
+handshakes:
+  request_schema: schemas/request.schema.json
+  response_schema: schemas/response.schema.json
+
+invariants:
+  structural: invariants/structural.yaml
+  behavioral: invariants/behavioral.yaml
+  operational: invariants/operational.yaml
+
+capabilities: capability-manifest.yaml
+validators: validators/validation-plan.yaml
+evidence: evidence-requirements.yaml

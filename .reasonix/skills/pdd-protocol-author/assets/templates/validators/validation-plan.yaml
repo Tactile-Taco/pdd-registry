@@ -1,0 +1,16 @@
+validation_plan:
+  structural:
+    - id: schema-validation
+      validates:
+        - schema-conformance
+      method: json_schema_validation
+  behavioral:
+    - id: property-tests
+      validates:
+        - define-primary-behavior
+      method: property_based_test
+  operational:
+    - id: capability-checks
+      validates:
+        - capability-manifest-conformance
+      method: sandbox_policy_check

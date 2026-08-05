@@ -1,0 +1,25 @@
+capabilities:
+  network:
+    outbound_allowed: false
+    allowed_destinations: []
+  filesystem:
+    read_allowed: false
+    write_allowed: false
+    allowed_paths: []
+  database:
+    allowed: false
+    max_reads_per_request: 0
+    max_writes_per_request: 0
+  secrets:
+    allowed_environment_variables: []
+  resources:
+    max_latency_ms: null
+    max_memory_mb: null
+    max_cpu_ms: null
+    max_concurrency: null
+  background_work:
+    allowed: false
+  telemetry:
+    required_fields:
+      - correlation_id
+      - protocol_version

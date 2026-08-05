@@ -1,0 +1,47 @@
+behavioral_invariants:
+  - id: B-001
+    statement: >
+      Idempotent creation: repeated invocations with the same client_request_id
+      must return the originally committed user (outcome "existing") and must
+      not create a second user or alter the record.
+    severity: must
+    property: "f(x, s) = (y, s') => f(x, s') = (y, s')"
+    validation:
+      - property_based_idempotency_test
+      - store_write_counter
+
+  - id: B-002
+    statement: >
+      Email uniqueness: two creations with different client_request_ids but
+      equal normalized emails must not both commit; the second must return a
+      typed "conflict" error and perform no write.
+    severity: must
+    validation:
+      - property_based_test
+      - store_write_counter
+
+  - id: B-003
+    statement: >
+      Invalid input fails closed: a request violating the request schema must
+      return error kind "invalid_request" and must not change registry state.
+    severity: must
+    validation:
+      - fuzz_test
+      - state_transition_test
+
+  - id: B-004
+    statement: >
+      Deterministic reads: given the same state, get(client_request_id) must
+      return the same output for identical inputs and must not mutate state.
+    severity: must
+    validation:
+      - replay_test
+
+  - id: B-005
+    statement: >
+      Email normalization: emails differing only in case or surrounding
+      whitespace denote the same address; a second create with the same
+      normalized email returns "conflict".
+    severity: must
+    validation:
+      - metamorphic_test

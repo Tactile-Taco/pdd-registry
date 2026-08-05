@@ -1,0 +1,6 @@
+structural_invariants:
+  - id: schema-conformance
+    statement: Requests and responses must conform to their referenced schemas.
+    severity: must
+    validation:
+      - json_schema_validation

@@ -1,0 +1,44 @@
+// PDD Runtime Verification Layer - Express middleware template.
+// Observes the monitorable projection of a protocol and appends to the Dynamic Evidence Ledger.
+// Isolation property: verdicts are computed OUTSIDE the generated implementation's code paths.
+import { appendFileSync, readFileSync, existsSync } from "node:fs";
+import { createHash, createHmac } from "node:crypto";
+
+const KEY = process.env.PDD_EVIDENCE_KEY || "dev-only-insecure-key";
+const sha = (s) => "sha256:" + createHash("sha256").update(s).digest("hex");
+const stable = (o) => JSON.stringify(o, Object.keys(o).sort());
+const sign = (d) => "hmac-sha256:" + createHmac("sha256", KEY).update(d).digest("hex");
+
+export function makeRvl({ protocol, implVersion, ledgerPath, checks, onViolation }) {
+  const append = (observations, decision) => {
+    let prev = "sha256:" + "0".repeat(64);
+    if (existsSync(ledgerPath)) {
+      const lines = readFileSync(ledgerPath, "utf8").trim().split("
+").filter(Boolean);
+      if (lines.length) prev = JSON.parse(lines.at(-1)).digest;
+    }
+    const block = { previous: prev, protocol, implementation_version: implVersion,
+                    observations, decision, time: new Date().toISOString() };
+    block.digest = sha(stable(block));
+    block.signature = sign(block.digest);
+    appendFileSync(ledgerPath, JSON.stringify(block) + "
+");
+    return block;
+  };
+  return function rvl(req, res, next) {
+    const start = process.hrtime.bigint();
+    const violations = [];
+    for (const c of checks.request || []) { const v = c(req); if (v) violations.push(v); }
+    const origJson = res.json.bind(res);
+    res.json = (body) => {
+      const ms = Number(process.hrtime.bigint() - start) / 1e6;
+      for (const c of checks.response || []) { const v = c(req, res, body, ms); if (v) violations.push(v); }
+      if (violations.length) {
+        const block = append({ route: req.path, violations, latency_ms: ms }, "attest-violation");
+        onViolation?.(block, req, res);
+      }
+      return origJson(body);
+    };
+    next();
+  };
+}

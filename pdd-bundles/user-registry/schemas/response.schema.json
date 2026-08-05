@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "user-registry create response",
+  "type": "object",
+  "required": ["ok"],
+  "additionalProperties": false,
+  "properties": {
+    "ok": {
+      "type": "boolean",
+      "description": "true on created/existing; false on typed error."
+    },
+    "outcome": {
+      "type": ["string", "null"],
+      "enum": ["created", "existing", null],
+      "description": "Set when ok=true."
+    },
+    "user": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "required": ["id", "client_request_id", "email", "display_name", "created_at"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "client_request_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "email": { "type": "string", "minLength": 3, "maxLength": 320 },
+        "display_name": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "created_at": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$" }
+      }
+    },
+    "error": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "required": ["kind", "message"],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": ["invalid_request", "conflict", "not_found", "internal"]
+        },
+        "message": { "type": "string" }
+      }
+    }
+  }
+}

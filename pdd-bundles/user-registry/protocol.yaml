@@ -1,0 +1,41 @@
+protocol:
+  name: user-registry
+  version: 1.0.0
+  status: sealed
+
+purpose: >
+  Idempotent user creation. Create a user record keyed by a client-supplied
+  request id; repeated submissions with the same client_request_id return the
+  originally committed record and never create a second user. Email addresses
+  are unique (case-insensitive).
+
+boundary:
+  in_scope:
+    - Create a user from a validated request
+    - Retrieve a user by client_request_id
+    - Idempotency keyed on client_request_id
+    - Email uniqueness (case-insensitive) as a hard constraint
+  out_of_scope:
+    - Authentication, authorization, passwords
+    - User listing, search, update, delete
+    - Persistence engine choice (in-memory store is permitted; the protocol
+      constrains write counts, not the engine)
+    - Anything outside the typed handshake
+
+handshakes:
+  request_schema: schemas/request.schema.json
+  response_schema: schemas/response.schema.json
+
+depends_on: []
+provides:
+  user-registry.create: schemas/request.schema.json
+  user-registry.response: schemas/response.schema.json
+
+invariants:
+  structural: invariants/structural.yaml
+  behavioral: invariants/behavioral.yaml
+  operational: invariants/operational.yaml
+
+capabilities: capability-manifest.yaml
+validators: validators/validation-plan.yaml
+evidence: evidence-requirements.yaml

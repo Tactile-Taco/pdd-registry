@@ -1,0 +1,6 @@
+behavioral_invariants:
+  - id: define-primary-behavior
+    statement: Replace with the main protocol-visible behavioral property.
+    severity: must
+    validation:
+      - property_based_test

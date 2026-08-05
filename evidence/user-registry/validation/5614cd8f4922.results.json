@@ -1,0 +1,107 @@
+{
+  "protocol": {
+    "name": "user-registry",
+    "version": "1.0.0",
+    "bundle_digest": "sha256:52a6dacd9a4b57e0548512065ef10b27e9d26e5d6d68b9596d2bc474538b4d16"
+  },
+  "candidate_digest": "sha256:5614cd8f49224f28f4bed982555e2971d58334590744e57ca75c7f6616676dcf",
+  "validators": [
+    {
+      "id": "schema-validator",
+      "version": "1.0.0",
+      "layer": "structural"
+    },
+    {
+      "id": "contract-runner",
+      "version": "1.0.0",
+      "layer": "structural"
+    },
+    {
+      "id": "property-runner",
+      "version": "1.0.0",
+      "layer": "behavioral"
+    },
+    {
+      "id": "mutation-sanity",
+      "version": "1.0.0",
+      "layer": "behavioral"
+    },
+    {
+      "id": "import-scanner",
+      "version": "1.0.0",
+      "layer": "operational"
+    },
+    {
+      "id": "capability-monitor",
+      "version": "1.0.0",
+      "layer": "operational"
+    },
+    {
+      "id": "benchmark-runner",
+      "version": "1.0.0",
+      "layer": "operational"
+    }
+  ],
+  "results": [
+    {
+      "invariant_id": "S-001",
+      "layer": "structural",
+      "outcome": "pass",
+      "evidence": "compile ok for 1 module(s)"
+    },
+    {
+      "invariant_id": "S-002",
+      "layer": "structural",
+      "outcome": "pass",
+      "evidence": "enumerated error kinds referenced in candidate source"
+    },
+    {
+      "invariant_id": "S-003",
+      "layer": "structural",
+      "outcome": "pass",
+      "evidence": "no schema history yet; v1.0.0 baseline (schema-diff n/a)"
+    },
+    {
+      "invariant_id": "B-001..B-005",
+      "layer": "behavioral",
+      "outcome": "pass",
+      "evidence": "pytest: 10 passed in 2.93s"
+    },
+    {
+      "invariant_id": "B-001",
+      "layer": "behavioral",
+      "outcome": "pass",
+      "evidence": "mutant rejected by B-001 property (property is not vacuous)"
+    },
+    {
+      "invariant_id": "O-003",
+      "layer": "operational",
+      "outcome": "pass",
+      "evidence": "imports=['__future__', 're', 'time', 'typing', 'uuid']; unapproved=[]"
+    },
+    {
+      "invariant_id": "O-001,O-002,O-004",
+      "layer": "operational",
+      "outcome": "pass",
+      "evidence": "forbidden signals=[]"
+    },
+    {
+      "invariant_id": "O-001,O-002",
+      "layer": "operational",
+      "outcome": "skip",
+      "evidence": "sandbox not requested or docker not found; static scan only"
+    },
+    {
+      "invariant_id": "O-005",
+      "layer": "operational",
+      "outcome": "observe",
+      "evidence": "p95=0.00ms over 1000 creates (budget 500ms, should-tier)"
+    }
+  ],
+  "verdict": "admit",
+  "verdict_reason": "all must invariants pass; no mutation-suspect flags",
+  "environment": {
+    "runtime": "3.14.6",
+    "os": "linux"
+  }
+}

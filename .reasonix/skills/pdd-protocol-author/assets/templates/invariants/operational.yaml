@@ -1,0 +1,18 @@
+operational_invariants:
+  - id: capability-manifest-conformance
+    statement: Runtime authority and resource usage must conform to capability-manifest.yaml.
+    severity: must
+    infra_assumption: sandbox or runtime instrumentation (enforced by sandbox policy check)
+    validation:
+      - sandbox_policy_check
+      - runtime_instrumentation
+  # Performance/resource invariants default to `severity: should` with generous
+  # budgets (project policy: infrastructure is provisional). Upgrade to `must`
+  # only with an explicit budget rationale. Observed excess on a `should`
+  # invariant is recorded as an observation, not an admission failure.
+  - id: latency-budget
+    statement: p95 end-to-end latency must remain under 500 ms under the benchmark workload.
+    severity: should
+    infra_assumption: benchmark harness; measured, recorded as observation
+    validation:
+      - benchmark

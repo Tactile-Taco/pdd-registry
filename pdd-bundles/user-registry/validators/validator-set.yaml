@@ -1,0 +1,27 @@
+# Approved validator identities and versions (paper appendix conformance).
+# The Validation Engine must reject any run by a validator version not listed here.
+validators:
+  - id: bundle-linter
+    version: 1.0.0
+    layer: structural
+  - id: schema-validator
+    version: 1.0.0
+    layer: structural
+  - id: contract-runner
+    version: 1.0.0
+    layer: structural
+  - id: property-runner
+    version: 1.0.0
+    layer: behavioral
+  - id: mutation-sanity
+    version: 1.0.0
+    layer: behavioral
+  - id: import-scanner
+    version: 1.0.0
+    layer: operational
+  - id: capability-monitor
+    version: 1.0.0
+    layer: operational
+  - id: benchmark-runner
+    version: 1.0.0
+    layer: operational

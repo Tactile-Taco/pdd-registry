@@ -1,0 +1,16 @@
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+*.egg-info/
+
+# Editor
+.vscode/
+.idea/
+
+# Local runtime state (never commit sandbox droppings)
+*.tmp
+sandbox-workdir/
+
+# Keep evidence/ and pdd-bundles/ tracked: they are the durable artifacts.
