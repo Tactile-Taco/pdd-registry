@@ -131,12 +131,29 @@ def cmd_evidence_build(argv: list[str]) -> int:
     # Idempotency: an admission that is already attested keeps its attested
     # evidence snapshot — provenance `time` is part of the signed body, so a
     # rebuild would silently overwrite the attested object and force a new
-    # block every run. Gate on the admission (artifact) digest.
+    # block every run. Gate on the admission (artifact) digest, and confirm the
+    # attested file is actually on disk and matches the ledger before claiming
+    # the snapshot is preserved.
     ledger = EVIDENCE / name / "runtime-ledger.jsonl"
     if ledger.exists():
         existing = [json.loads(line) for line in ledger.read_text().splitlines() if line.strip()]
-        if any((b.get("observations") or {}).get("admission") == impl_digest for b in existing):
-            print(f"admission {impl_digest.split(':')[1][:16]} already attested; "
+        matches = [b for b in existing
+                   if (b.get("observations") or {}).get("admission") == impl_digest]
+        if matches:
+            attested_digest = (matches[-1].get("observations") or {}).get("evidence_digest")
+            adm_file = next(
+                (EVIDENCE / name / "admission").glob(f"{impl_digest.split(':')[1][:16]}*.evidence.json"),
+                None)
+            if adm_file is None or not attested_digest:
+                print(f"FAIL: admission {impl_digest.split(':')[1][:16]} is attested "
+                      f"but its evidence file is missing from disk")
+                return 1
+            on_disk = "sha256:" + hashlib.sha256(adm_file.read_bytes()).hexdigest()
+            if on_disk != attested_digest:
+                print(f"FAIL: attested evidence file differs from the ledger "
+                      f"(on disk {on_disk} != attested {attested_digest}) — re-run validate, then rebuild")
+                return 1
+            print(f"admission {impl_digest.split(':')[1][:16]} already attested and consistent; "
                   f"evidence snapshot preserved (re-verify with `pdd evidence verify`)")
             return 0
 
@@ -202,6 +219,10 @@ def cmd_evidence_verify(argv: list[str]) -> int:
         sys.exit(f"no ledger at {ledger}")
     r = subprocess.run([sys.executable, str(EVIDENCE_CHAIN), "verify", str(ledger)],
                        capture_output=True, text=True)
+    if r.returncode != 0:
+        print("FAIL: ledger verify subprocess failed: "
+              + (r.stdout.strip()[:200] or r.stderr.strip()[:200]))
+        return 1
     print(r.stdout.strip())
     result = json.loads(r.stdout)
     if not result["ok"]:
@@ -214,11 +235,20 @@ def cmd_evidence_verify(argv: list[str]) -> int:
     for b in blocks:
         obs = b.get("observations") or {}
         if obs.get("evidence_digest"):
-            attested[obs["evidence_digest"]] = b.get("digest")
+            attested[obs["evidence_digest"]] = b
     for path in sorted((EVIDENCE / name / "admission").glob("*.evidence.json")):
         cur = "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest()
         if cur not in attested:
             print(f"FAIL: {path.name} is not attested by the ledger (no matching evidence_digest)")
+            rc = 1
+            continue
+        block = attested[cur]
+        ev = json.loads(path.read_text())
+        block_admission = (block.get("observations") or {}).get("admission")
+        ev_artifact = (ev.get("implementation") or {}).get("artifact_digest")
+        if block_admission != ev_artifact:
+            print(f"FAIL: {path.name} attesting block binds admission {block_admission}, "
+                  f"evidence object attests {ev_artifact}")
             rc = 1
             continue
         vr = subprocess.run([sys.executable, str(EVIDENCE_CHAIN), "verify-evidence", str(path)],
@@ -230,7 +260,6 @@ def cmd_evidence_verify(argv: list[str]) -> int:
         else:
             print(f"OK: {path.name} digest+signature valid, ledger-attested")
             # The discovery log is bound into the signed provenance: recompute and compare.
-            ev = json.loads(path.read_text())
             disc_digest = (ev.get("provenance") or {}).get("discovery_digest")
             if disc_digest:
                 # Match the discovery file by the artifact-digest prefix used at build.

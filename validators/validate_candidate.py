@@ -125,7 +125,12 @@ def layer_operational_static(bundle: Path, impl: Path) -> list[dict]:
     results = []
     impl_files = [p for p in impl.rglob("*.py") if "tests" not in p.parts]
     src = "\n".join(p.read_text() for p in impl_files)
-    tree = ast.parse(src)
+    try:
+        tree = ast.parse(src)
+    except SyntaxError as exc:
+        return [{"invariant_id": "O-001,O-002,O-003,O-004", "layer": "operational",
+                 "outcome": "fail",
+                 "evidence": f"candidate is not parseable: {exc}"}]
 
     # O-003: import allowlist (stdlib + __future__ + local sibling modules)
     local_stems = {p.stem for p in impl_files}
