@@ -79,32 +79,32 @@
       "invariant_id": "B-001..B-005",
       "layer": "behavioral",
       "outcome": "pass",
-      "evidence": "pytest: 10 passed in 3.33s"
+      "evidence": "pytest: 10 passed in 3.71s"
     },
     {
       "invariant_id": "B-001",
       "layer": "behavioral",
       "outcome": "pass",
-      "evidence": "mutant rejected by B-001 property (property is not vacuous)"
+      "evidence": "mutant rejected by B-001 property (exit 1) \u2014 property is not vacuous"
     },
     {
       "invariant_id": "O-001,O-002",
       "layer": "operational",
-      "outcome": "skip",
-      "evidence": "sandbox not requested or docker not found; static scan only"
+      "outcome": "pass",
+      "evidence": "docker sandbox (network none, read-only fs): sandbox smoke ok"
     },
     {
       "invariant_id": "O-005",
       "layer": "operational",
       "outcome": "observe",
-      "evidence": "p95=0.00ms over 1000 creates (budget 500ms, should-tier)"
+      "evidence": "p95=0.01ms over 1000 creates (budget 500ms, should-tier)"
     }
   ],
   "provenance": {
-    "time": "2026-08-05T18:27:10Z",
+    "time": "2026-08-05T18:38:47Z",
     "manifest": "user-registry-python-stdlib",
     "discovery_digest": "sha256:feea3c972df5bc8e73157a0476906cf8d2e1b50639eeba90ff65b233a54f8a4e"
   },
-  "digest": "sha256:6ae33648838b1962d1e31e80335dd8524f94ebe3978205013029714ae11bd0e5",
-  "signature": "hmac-sha256:2e8b0a3a7af15bbdf50f4ec5b8bfb3b66d6fdb348969cc31bf05f5aba4ff0bae"
+  "digest": "sha256:eed23a80ec898309b9269554ba6ea8c5265b24c56426271a812a875f32a8b26b",
+  "signature": "hmac-sha256:a1066a09dba5da79c1c9962c52bc1167d8687505240e6b1d700daa4bcd87ca05"
 }

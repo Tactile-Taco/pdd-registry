@@ -128,6 +128,18 @@ def cmd_evidence_build(argv: list[str]) -> int:
     if results["verdict"] != "admit":
         sys.exit(f"cannot build admission evidence: verdict is {results['verdict']}")
 
+    # Idempotency: an admission that is already attested keeps its attested
+    # evidence snapshot — provenance `time` is part of the signed body, so a
+    # rebuild would silently overwrite the attested object and force a new
+    # block every run. Gate on the admission (artifact) digest.
+    ledger = EVIDENCE / name / "runtime-ledger.jsonl"
+    if ledger.exists():
+        existing = [json.loads(line) for line in ledger.read_text().splitlines() if line.strip()]
+        if any((b.get("observations") or {}).get("admission") == impl_digest for b in existing):
+            print(f"admission {impl_digest.split(':')[1][:16]} already attested; "
+                  f"evidence snapshot preserved (re-verify with `pdd evidence verify`)")
+            return 0
+
     manifest = json.loads((impl / "candidate-manifest.json").read_text())
 
     evidence = {
@@ -169,16 +181,6 @@ def cmd_evidence_build(argv: list[str]) -> int:
     evidence_path.write_text(json.dumps(evidence_obj, indent=2))
     evidence_digest = "sha256:" + hashlib.sha256(evidence_path.read_bytes()).hexdigest()
 
-    ledger = EVIDENCE / name / "runtime-ledger.jsonl"
-    if ledger.exists():
-        existing = [json.loads(line) for line in ledger.read_text().splitlines() if line.strip()]
-        already = any(
-            (b.get("observations") or {}).get("admission") == impl_digest
-            and (b.get("observations") or {}).get("evidence_digest") == evidence_digest
-            for b in existing)
-        if already:
-            print(f"admission {impl_digest.split(':')[1][:16]} already attested with this evidence; no new genesis block")
-            return 0
     genesis = subprocess.run(
         [sys.executable, str(EVIDENCE_CHAIN), "append", str(ledger),
          json.dumps({"id": name, "version": "1.0.0"}),
@@ -213,7 +215,6 @@ def cmd_evidence_verify(argv: list[str]) -> int:
         obs = b.get("observations") or {}
         if obs.get("evidence_digest"):
             attested[obs["evidence_digest"]] = b.get("digest")
-    on_disk = set()
     for path in sorted((EVIDENCE / name / "admission").glob("*.evidence.json")):
         cur = "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest()
         if cur not in attested:
@@ -232,7 +233,9 @@ def cmd_evidence_verify(argv: list[str]) -> int:
             ev = json.loads(path.read_text())
             disc_digest = (ev.get("provenance") or {}).get("discovery_digest")
             if disc_digest:
-                disc_file = next((EVIDENCE / name / "discovery").glob("*.discovery.json"), None)
+                # Match the discovery file by the artifact-digest prefix used at build.
+                disc_file = next(
+                    (EVIDENCE / name / "discovery").glob(f"{path.name[:16]}*.discovery.json"), None)
                 if disc_file is None:
                     print("FAIL: evidence binds a discovery digest but no discovery file on disk")
                     rc = 1
@@ -267,8 +270,8 @@ def cmd_run(argv: list[str]) -> int:
             capture_output=True, text=True, timeout=300)
         print(r.stdout.strip() or r.stderr.strip()[:500])
         return r.returncode
-    print("sandbox run requires docker; local smoke:")
-    return 0
+    print("pdd run --sandbox requires docker; refusing a local (unsandboxed) smoke run")
+    return 1
 
 
 COMMANDS = {

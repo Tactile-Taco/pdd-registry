@@ -50,10 +50,12 @@ ALLOWED_IMPORTS = {
     "re", "time", "uuid", "typing", "dataclasses", "json", "math", "datetime",
     "functools", "itertools", "collections", "enum", "decimal", "abc",
 }
-FORBIDDEN_CALLS = {  # O-001/O-002/O-004 static signals
-    "open", "socket", "urllib", "requests", "subprocess", "os.system", "os.popen",
-    "Thread", "Timer", "sleep", "multiprocessing", "tempfile", "Path.write_text",
-}
+# Forbidden signals for O-001/O-002/O-004 (AST-based; docker sandbox is the enforcement)
+FORBIDDEN_CALL_NAMES = {"open", "eval", "exec", "compile", "__import__", "input"}
+FORBIDDEN_ATTRS = {"system", "popen", "call", "Popen", "run", "connect", "sendto",
+                   "sendall", "write_text", "write_bytes", "mkdir", "unlink", "remove"}
+FORBIDDEN_MODULES = {"os", "subprocess", "socket", "urllib", "requests", "pathlib",
+                     "tempfile", "multiprocessing", "threading"}
 
 
 def bundle_digest(bundle_dir: Path) -> str:
@@ -138,11 +140,25 @@ def layer_operational_static(bundle: Path, impl: Path) -> list[dict]:
                     "outcome": "pass" if not bad else "fail",
                     "evidence": f"imports={sorted(imports)}; unapproved={bad}"})
 
-    # O-001/O-002/O-004: forbidden call scan (static signal; docker sandbox is the enforcement)
-    forbidden = [name for name in FORBIDDEN_CALLS if name in src]
+    # O-001/O-002/O-004: forbidden call scan — AST-based (import bindings and
+    # attribute calls), NOT substring matching, so `from os import system` and
+    # `__import__` aliasing are caught. Static signal; docker sandbox enforces.
+    forbidden_signals = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Call):
+            if isinstance(node.func, ast.Name) and node.func.id in FORBIDDEN_CALL_NAMES:
+                forbidden_signals.add(f"call {node.func.id}")
+            if isinstance(node.func, ast.Attribute):
+                if node.func.attr in FORBIDDEN_ATTRS:
+                    forbidden_signals.add(f"call .{node.func.attr}")
+                if (isinstance(node.func.value, ast.Name)
+                        and node.func.value.id in FORBIDDEN_MODULES):
+                    forbidden_signals.add(f"call {node.func.value.id}.{node.func.attr}")
+        if isinstance(node, ast.ImportFrom) and node.module in FORBIDDEN_MODULES:
+            forbidden_signals.add(f"import from {node.module}")
     results.append({"invariant_id": "O-001,O-002,O-004", "layer": "operational",
-                    "outcome": "pass" if not forbidden else "fail",
-                    "evidence": f"forbidden signals={forbidden}"})
+                    "outcome": "pass" if not forbidden_signals else "fail",
+                    "evidence": f"forbidden signals={sorted(forbidden_signals)}"})
     return results
 
 
@@ -193,8 +209,9 @@ def mutation_sanity(impl: Path, testdir: Path, pbt_runs: int) -> dict:
                 return {"invariant_id": "B-001", "layer": "behavioral", "outcome": "mutation-suspect",
                         "evidence": "mutant run collected no tests (exit 5) — B-001 filter may be stale; "
                                     "do not admit until the property runs against the mutant"}
+            note = "assertion failure" if "assert" in proc.stdout.lower() else f"exit {proc.returncode}"
             return {"invariant_id": "B-001", "layer": "behavioral", "outcome": "pass",
-                    "evidence": "mutant rejected by B-001 property (property is not vacuous)"}
+                    "evidence": f"mutant rejected by B-001 property ({note}) — property is not vacuous"}
         return {"invariant_id": "B-001", "layer": "behavioral", "outcome": "mutation-suspect",
                 "evidence": "B-001 passed against the idempotency-removed mutant — property is vacuous"}
 
