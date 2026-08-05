@@ -162,8 +162,9 @@ def cmd_evidence_build(argv: list[str]) -> int:
 
     adm = EVIDENCE / name / "admission"
     adm.mkdir(parents=True, exist_ok=True)
-    (adm / f"{impl_digest.split(':')[1][:16]}.evidence.json").write_text(
-        json.dumps(evidence_obj, indent=2))
+    evidence_path = adm / f"{impl_digest.split(':')[1][:16]}.evidence.json"
+    evidence_path.write_text(json.dumps(evidence_obj, indent=2))
+    evidence_digest = "sha256:" + hashlib.sha256(evidence_path.read_bytes()).hexdigest()
     disc = EVIDENCE / name / "discovery"
     disc.mkdir(parents=True, exist_ok=True)
     (disc / f"{impl_digest.split(':')[1][:16]}.discovery.json").write_text(
@@ -173,15 +174,18 @@ def cmd_evidence_build(argv: list[str]) -> int:
     if ledger.exists():
         existing = [json.loads(line) for line in ledger.read_text().splitlines() if line.strip()]
         already = any(
-            (b.get("observations") or {}).get("admission") == impl_digest for b in existing)
+            (b.get("observations") or {}).get("admission") == impl_digest
+            and (b.get("observations") or {}).get("evidence_digest") == evidence_digest
+            for b in existing)
         if already:
-            print(f"admission {impl_digest.split(':')[1][:16]} already attested; no new genesis block")
+            print(f"admission {impl_digest.split(':')[1][:16]} already attested with this evidence; no new genesis block")
             return 0
     genesis = subprocess.run(
         [sys.executable, str(EVIDENCE_CHAIN), "append", str(ledger),
          json.dumps({"id": name, "version": "1.0.0"}),
          manifest["artifact_id"] + "@" + impl_digest.split(':')[1][:12],
-         json.dumps({"admission": impl_digest}), "attest-pass"],
+         json.dumps({"admission": impl_digest, "evidence_digest": evidence_digest}),
+         "attest-pass"],
         capture_output=True, text=True)
     if genesis.returncode != 0:
         sys.exit(f"genesis block failed: {genesis.stderr}")
@@ -198,7 +202,33 @@ def cmd_evidence_verify(argv: list[str]) -> int:
     r = subprocess.run([sys.executable, str(EVIDENCE_CHAIN), "verify", str(ledger)],
                        capture_output=True, text=True)
     print(r.stdout.strip())
-    return 0 if json.loads(r.stdout)["ok"] else 1
+    result = json.loads(r.stdout)
+    if not result["ok"]:
+        return 1
+    # Also verify each admission evidence object (signature + digest) and that
+    # the ledger's recorded evidence_digest matches the file on disk.
+    rc = 0
+    blocks = [json.loads(ln) for ln in ledger.read_text().splitlines() if ln.strip()]
+    attested = {}
+    for b in blocks:
+        obs = b.get("observations") or {}
+        if obs.get("evidence_digest"):
+            attested[obs["evidence_digest"]] = b.get("digest")
+    for path in sorted((EVIDENCE / name / "admission").glob("*.evidence.json")):
+        on_disk = "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest()
+        if on_disk not in attested:
+            print(f"FAIL: {path.name} is not attested by the ledger (no matching evidence_digest)")
+            rc = 1
+            continue
+        vr = subprocess.run([sys.executable, str(EVIDENCE_CHAIN), "verify-evidence", str(path)],
+                            capture_output=True, text=True)
+        vres = json.loads(vr.stdout)
+        if not vres["ok"]:
+            print(f"FAIL: {path.name} digest/signature invalid ({vres['reason']})")
+            rc = 1
+        else:
+            print(f"OK: {path.name} digest+signature valid, ledger-attested")
+    return rc
 
 
 def cmd_run(argv: list[str]) -> int:
@@ -207,7 +237,8 @@ def cmd_run(argv: list[str]) -> int:
     if shutil.which("docker") and "--sandbox" in argv:
         r = subprocess.run(
             ["docker", "run", "--rm", "--network", "none", "--read-only",
-             "-v", f"{impl.resolve()}:/candidate:ro", "-w", "/candidate", "python:3.12-slim",
+             "-v", f"{impl.resolve()}:/candidate:ro", "-w", "/candidate",
+             "python:3.12-slim@sha256:d657ab0ade19f404a6ccc883ab399540de667aff751748ce23c07330c5a89e64",
              "python", "-c",
              "import sys; sys.path.insert(0,'.'); from user_registry import UserRegistry; "
              "reg = UserRegistry(); r1 = reg.create({'client_request_id':'a','email':'x@y.dev','display_name':'X'}); "

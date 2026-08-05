@@ -106,16 +106,54 @@ def layer_structural(bundle: Path, impl: Path) -> list[dict]:
     return results
 
 
+def _scrubbed_env(pbt_runs: int) -> dict:
+    """Environment for candidate code: NEVER pass secrets (PDD_EVIDENCE_KEY,
+    tokens) to code under test — a malicious candidate must not read the
+    signing key (security review HIGH)."""
+    return {"PBT_RUNS": str(pbt_runs),
+            "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
+            "HOME": os.environ.get("HOME", "/tmp"),
+            "LANG": "C.UTF-8"}
+
+
+def layer_operational_static(bundle: Path, impl: Path) -> list[dict]:
+    """Static O-layer checks — runs BEFORE any candidate code executes, so a
+    hostile candidate cannot pass the scan by evading it at runtime."""
+    results = []
+    impl_files = [p for p in impl.rglob("*.py") if "tests" not in p.parts]
+    src = "\n".join(p.read_text() for p in impl_files)
+    tree = ast.parse(src)
+
+    # O-003: import allowlist (stdlib + __future__ + local sibling modules)
+    local_stems = {p.stem for p in impl_files}
+    imports = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            imports.update(a.name.split(".")[0] for a in node.names)
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            imports.add(node.module.split(".")[0])
+    bad = sorted(imports - ALLOWED_IMPORTS - {"__future__"} - local_stems)
+    results.append({"invariant_id": "O-003", "layer": "operational",
+                    "outcome": "pass" if not bad else "fail",
+                    "evidence": f"imports={sorted(imports)}; unapproved={bad}"})
+
+    # O-001/O-002/O-004: forbidden call scan (static signal; docker sandbox is the enforcement)
+    forbidden = [name for name in FORBIDDEN_CALLS if name in src]
+    results.append({"invariant_id": "O-001,O-002,O-004", "layer": "operational",
+                    "outcome": "pass" if not forbidden else "fail",
+                    "evidence": f"forbidden signals={forbidden}"})
+    return results
+
+
 def layer_behavioral(bundle: Path, impl: Path, pbt_runs: int) -> list[dict]:
     results = []
     testdir = impl / "tests"
     if not testdir.exists():
         return [{"invariant_id": "B-*", "layer": "behavioral", "outcome": "fail",
                  "evidence": "no tests/ directory in candidate"}]
-    env = dict(os.environ, PBT_RUNS=str(pbt_runs))
     proc = subprocess.run(
         [sys.executable, "-m", "pytest", str(testdir), "-q", "--tb=short"],
-        capture_output=True, text=True, env=env, timeout=900)
+        capture_output=True, text=True, env=_scrubbed_env(pbt_runs), timeout=900)
     summary = proc.stdout.strip().splitlines()[-1] if proc.stdout.strip() else proc.stderr[-200:]
     if proc.returncode == 0:
         results.append({"invariant_id": "B-001..B-005", "layer": "behavioral",
@@ -125,11 +163,11 @@ def layer_behavioral(bundle: Path, impl: Path, pbt_runs: int) -> list[dict]:
                         "outcome": "fail", "evidence": f"pytest failed: {summary}"})
         # keep going: mutation sanity may still add signal
     # Mutation sanity: remove the idempotency guard and require the B-001 property to fail.
-    results.append(mutation_sanity(impl, testdir))
+    results.append(mutation_sanity(impl, testdir, pbt_runs))
     return results
 
 
-def mutation_sanity(impl: Path, testdir: Path) -> dict:
+def mutation_sanity(impl: Path, testdir: Path, pbt_runs: int) -> dict:
     """Hand-built mutant: delete the idempotent early-return; B-001 must FAIL on the mutant."""
     src_file = impl / "user_registry.py"
     original = src_file.read_text()
@@ -148,7 +186,7 @@ def mutation_sanity(impl: Path, testdir: Path) -> dict:
         proc = subprocess.run(
             [sys.executable, "-m", "pytest", str(mutant_dir / "tests"),
              "-q", "-k", "B001_repeat", "--tb=no"],
-            capture_output=True, text=True, timeout=900)
+            capture_output=True, text=True, env=_scrubbed_env(pbt_runs), timeout=900)
         if proc.returncode != 0:
             if proc.returncode == 5 or "no tests ran" in proc.stdout.lower():
                 return {"invariant_id": "B-001", "layer": "behavioral", "outcome": "mutation-suspect",
@@ -160,38 +198,16 @@ def mutation_sanity(impl: Path, testdir: Path) -> dict:
                 "evidence": "B-001 passed against the idempotency-removed mutant — property is vacuous"}
 
 
-def layer_operational(bundle: Path, impl: Path, sandbox: bool) -> list[dict]:
+def layer_operational_dynamic(bundle: Path, impl: Path, sandbox: bool, pbt_runs: int) -> list[dict]:
     results = []
-    # O invariants constrain the runtime implementation, not its test harness.
-    impl_files = [p for p in impl.rglob("*.py") if "tests" not in p.parts]
-    src = "\n".join(p.read_text() for p in impl_files)
-    tree = ast.parse(src)
-
-    # O-003: import allowlist (stdlib + __future__ + local sibling modules)
-    local_stems = {p.stem for p in impl_files}
-    imports = set()
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Import):
-            imports.update(a.name.split(".")[0] for a in node.names)
-        elif isinstance(node, ast.ImportFrom) and node.module:
-            imports.add(node.module.split(".")[0])
-    bad = sorted(imports - ALLOWED_IMPORTS - {"__future__"} - local_stems)
-    results.append({"invariant_id": "O-003", "layer": "operational",
-                    "outcome": "pass" if not bad else "fail",
-                    "evidence": f"imports={sorted(imports)}; unapproved={bad}"})
-
-    # O-001/O-002/O-004: forbidden call scan
-    forbidden = [name for name in FORBIDDEN_CALLS if name in src]
-    results.append({"invariant_id": "O-001,O-002,O-004", "layer": "operational",
-                    "outcome": "pass" if not forbidden else "fail",
-                    "evidence": f"forbidden signals={forbidden}"})
 
     # Docker sandbox (optional, infra contingency): network none + read-only fs.
     if sandbox and shutil.which("docker"):
         proc = subprocess.run(
             ["docker", "run", "--rm", "--network", "none", "--read-only",
+             "-e", f"PBT_RUNS={os.environ.get('PBT_RUNS', '200')}",
              "-v", f"{impl.resolve()}:/candidate:ro", "-w", "/candidate",
-             "python:3.12-slim", "python", "-c",
+             "python:3.12-slim@sha256:d657ab0ade19f404a6ccc883ab399540de667aff751748ce23c07330c5a89e64", "python", "-c",
              "import sys; sys.path.insert(0,'.'); from user_registry import UserRegistry; "
              "r = UserRegistry().create({'client_request_id':'x','email':'a@b.com','display_name':'A'}); "
              "assert r['ok'] is True; print('sandbox smoke ok')"],
@@ -209,22 +225,30 @@ def layer_operational(bundle: Path, impl: Path, sandbox: bool) -> list[dict]:
                         "outcome": "skip" if not sandbox else "skip",
                         "evidence": "sandbox not requested or docker not found; static scan only"})
 
-    # O-005 benchmark (advisory, should-tier): p95 create latency.
+    # O-005 benchmark (advisory, should-tier): p95 create latency, in a
+    # subprocess with scrubbed env — candidate code never sees our secrets.
+    bench_code = (
+        "import json, statistics, sys, time\n"
+        "sys.path.insert(0, '.')\n"
+        "from user_registry import UserRegistry\n"
+        "reg = UserRegistry()\n"
+        "lat = []\n"
+        "for i in range(1000):\n"
+        "    t0 = time.perf_counter()\n"
+        "    reg.create({'client_request_id': 'bench-%d' % i, 'email': 'u%d@bench.dev' % i,"
+        " 'display_name': 'User %d' % i})\n"
+        "    lat.append((time.perf_counter() - t0) * 1000)\n"
+        "print(json.dumps({'p95_ms': statistics.quantiles(sorted(lat), n=20)[18]}))\n"
+    )
     try:
-        import importlib.util
-        spec = importlib.util.spec_from_file_location("user_registry", impl / "user_registry.py")
-        mod = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(mod)
-        reg = mod.UserRegistry()
-        lat = []
-        for i in range(1000):
-            t0 = time.perf_counter()
-            reg.create({"client_request_id": f"bench-{i}", "email": f"u{i}@bench.dev",
-                        "display_name": f"User {i}"})
-            lat.append((time.perf_counter() - t0) * 1000)
-        p95 = statistics.quantiles(sorted(lat), n=20)[18]
+        proc = subprocess.run([sys.executable, "-c", bench_code], cwd=impl,
+                              capture_output=True, text=True,
+                              env=_scrubbed_env(pbt_runs), timeout=300)
+        bench = json.loads(proc.stdout.strip()) if proc.returncode == 0 else {}
+        p95 = bench.get("p95_ms")
         results.append({"invariant_id": "O-005", "layer": "operational", "outcome": "observe",
-                        "evidence": f"p95={p95:.2f}ms over 1000 creates (budget 500ms, should-tier)"})
+                        "evidence": f"p95={p95:.2f}ms over 1000 creates (budget 500ms, should-tier)" if p95 is not None
+                        else f"benchmark failed: {proc.stderr.strip()[:120]}"})
     except Exception as exc:  # noqa: BLE001
         results.append({"invariant_id": "O-005", "layer": "operational", "outcome": "skip",
                         "evidence": f"benchmark failed: {exc}"})
@@ -265,8 +289,9 @@ def main(argv: list[str]) -> int:
             return 2
 
     results = (layer_structural(bundle, impl)
+               + layer_operational_static(bundle, impl)   # static scan BEFORE any execution
                + layer_behavioral(bundle, impl, pbt_runs)
-               + layer_operational(bundle, impl, sandbox))
+               + layer_operational_dynamic(bundle, impl, sandbox, pbt_runs))
     verdict_text, reason = verdict(results)
 
     out = {

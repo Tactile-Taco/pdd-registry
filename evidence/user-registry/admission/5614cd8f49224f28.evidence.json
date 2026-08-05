@@ -64,18 +64,6 @@
       "evidence": "no schema history yet; v1.0.0 baseline (schema-diff n/a)"
     },
     {
-      "invariant_id": "B-001..B-005",
-      "layer": "behavioral",
-      "outcome": "pass",
-      "evidence": "pytest: 10 passed in 3.54s"
-    },
-    {
-      "invariant_id": "B-001",
-      "layer": "behavioral",
-      "outcome": "pass",
-      "evidence": "mutant rejected by B-001 property (property is not vacuous)"
-    },
-    {
       "invariant_id": "O-003",
       "layer": "operational",
       "outcome": "pass",
@@ -88,23 +76,35 @@
       "evidence": "forbidden signals=[]"
     },
     {
+      "invariant_id": "B-001..B-005",
+      "layer": "behavioral",
+      "outcome": "pass",
+      "evidence": "pytest: 10 passed in 3.35s"
+    },
+    {
+      "invariant_id": "B-001",
+      "layer": "behavioral",
+      "outcome": "pass",
+      "evidence": "mutant rejected by B-001 property (property is not vacuous)"
+    },
+    {
       "invariant_id": "O-001,O-002",
       "layer": "operational",
-      "outcome": "pass",
-      "evidence": "docker sandbox (network none, read-only fs): sandbox smoke ok"
+      "outcome": "skip",
+      "evidence": "sandbox not requested or docker not found; static scan only"
     },
     {
       "invariant_id": "O-005",
       "layer": "operational",
       "outcome": "observe",
-      "evidence": "p95=0.01ms over 1000 creates (budget 500ms, should-tier)"
+      "evidence": "p95=0.00ms over 1000 creates (budget 500ms, should-tier)"
     }
   ],
   "provenance": {
-    "time": "2026-08-05T17:58:29Z",
+    "time": "2026-08-05T18:11:17Z",
     "manifest": "user-registry-python-stdlib",
     "discovery_digest": "sha256:4d73826d872ab31be950b48ceb00fa0c88b09d1ac7c81d586cb425482ae03bfa"
   },
-  "digest": "sha256:583fa5b9d381b5b5bc61d3b69c56550e2043a21ae682aad39a6d14cdb29f88ed",
-  "signature": "hmac-sha256:2a6101e831a1bc01ee83bf7e932fc7400b5ebc7c976d81e65125d805703082ec"
+  "digest": "sha256:7ebdc09a3b220170fdd9a0028247b1084b522da7f094f75747b60d7bbc119269",
+  "signature": "hmac-sha256:8a7478aca6dfb65fdf8f6d664561164fc43cd3a009a69b6fdf4e039dffc77939"
 }

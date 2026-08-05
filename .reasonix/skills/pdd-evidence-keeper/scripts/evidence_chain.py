@@ -37,15 +37,30 @@ def append_block(ledger_path, protocol, impl_version, observations, decision):
     return block
 
 def verify_ledger(ledger_path):
-    prev = "sha256:" + "0" * 64; n = 0
-    for i, line in enumerate(Path(ledger_path).read_text().strip().splitlines()):
+    prev = "sha256:" + "0" * 64
+    lines = [ln for ln in Path(ledger_path).read_text().strip().splitlines() if ln.strip()] if Path(ledger_path).exists() else []
+    if not lines:
+        return {"ok": False, "blocks": 0, "reason": "empty-ledger"}
+    n = 0
+    for i, line in enumerate(lines):
         b = json.loads(line)
         if b["previous"] != prev: return {"ok": False, "diverged_at": i, "reason": "chain-link"}
         d = dict(b); dg = d.pop("digest"); d.pop("signature", None)
         if digest_obj(d) != dg: return {"ok": False, "diverged_at": i, "reason": "digest"}
-        if sign(dg) != b.get("signature"): return {"ok": False, "diverged_at": i, "reason": "signature"}
+        if not hmac.compare_digest(sign(dg), b.get("signature", "")): return {"ok": False, "diverged_at": i, "reason": "signature"}
         prev = dg; n = i + 1
     return {"ok": True, "blocks": n}
+
+
+def verify_evidence_object(path):
+    """Recompute digest + signature of one admission evidence object."""
+    b = json.loads(Path(path).read_text())
+    d = dict(b); dg = d.pop("digest"); d.pop("signature", None)
+    if digest_obj(d) != dg:
+        return {"ok": False, "reason": "digest"}
+    if not hmac.compare_digest(sign(dg), b.get("signature", "")):
+        return {"ok": False, "reason": "signature"}
+    return {"ok": True, "digest": dg}
 
 if __name__ == "__main__":
     cmd = sys.argv[1]
@@ -54,6 +69,8 @@ if __name__ == "__main__":
                                       json.loads(sys.argv[5]), sys.argv[6])))
     elif cmd == "verify":
         print(json.dumps(verify_ledger(sys.argv[2])))
+    elif cmd == "verify-evidence":
+        print(json.dumps(verify_evidence_object(sys.argv[2])))
     elif cmd == "build":
         print(json.dumps(build_evidence(json.loads(sys.argv[2]), sys.argv[3],
                                         json.loads(sys.argv[4]), json.loads(sys.argv[5]),

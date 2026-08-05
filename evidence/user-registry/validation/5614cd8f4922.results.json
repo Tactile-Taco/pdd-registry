@@ -62,18 +62,6 @@
       "evidence": "no schema history yet; v1.0.0 baseline (schema-diff n/a)"
     },
     {
-      "invariant_id": "B-001..B-005",
-      "layer": "behavioral",
-      "outcome": "pass",
-      "evidence": "pytest: 10 passed in 3.54s"
-    },
-    {
-      "invariant_id": "B-001",
-      "layer": "behavioral",
-      "outcome": "pass",
-      "evidence": "mutant rejected by B-001 property (property is not vacuous)"
-    },
-    {
       "invariant_id": "O-003",
       "layer": "operational",
       "outcome": "pass",
@@ -86,16 +74,28 @@
       "evidence": "forbidden signals=[]"
     },
     {
+      "invariant_id": "B-001..B-005",
+      "layer": "behavioral",
+      "outcome": "pass",
+      "evidence": "pytest: 10 passed in 3.35s"
+    },
+    {
+      "invariant_id": "B-001",
+      "layer": "behavioral",
+      "outcome": "pass",
+      "evidence": "mutant rejected by B-001 property (property is not vacuous)"
+    },
+    {
       "invariant_id": "O-001,O-002",
       "layer": "operational",
-      "outcome": "pass",
-      "evidence": "docker sandbox (network none, read-only fs): sandbox smoke ok"
+      "outcome": "skip",
+      "evidence": "sandbox not requested or docker not found; static scan only"
     },
     {
       "invariant_id": "O-005",
       "layer": "operational",
       "outcome": "observe",
-      "evidence": "p95=0.01ms over 1000 creates (budget 500ms, should-tier)"
+      "evidence": "p95=0.00ms over 1000 creates (budget 500ms, should-tier)"
     }
   ],
   "verdict": "admit",
