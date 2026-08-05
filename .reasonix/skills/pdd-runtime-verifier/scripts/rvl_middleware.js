@@ -4,7 +4,9 @@
 import { appendFileSync, readFileSync, existsSync } from "node:fs";
 import { createHash, createHmac } from "node:crypto";
 
-const KEY = process.env.PDD_EVIDENCE_KEY || "dev-only-insecure-key";
+// Fail closed: never sign ledger blocks with a public fallback key.
+const KEY = process.env.PDD_EVIDENCE_KEY;
+if (!KEY) throw new Error("PDD_EVIDENCE_KEY is not set (or is empty); refusing to sign ledger blocks (fail closed)");
 const sha = (s) => "sha256:" + createHash("sha256").update(s).digest("hex");
 const stable = (o) => JSON.stringify(o, Object.keys(o).sort());
 const sign = (d) => "hmac-sha256:" + createHmac("sha256", KEY).update(d).digest("hex");
@@ -13,8 +15,7 @@ export function makeRvl({ protocol, implVersion, ledgerPath, checks, onViolation
   const append = (observations, decision) => {
     let prev = "sha256:" + "0".repeat(64);
     if (existsSync(ledgerPath)) {
-      const lines = readFileSync(ledgerPath, "utf8").trim().split("
-").filter(Boolean);
+      const lines = readFileSync(ledgerPath, "utf8").trim().split("\n").filter(Boolean);
       if (lines.length) prev = JSON.parse(lines.at(-1)).digest;
     }
     const block = { previous: prev, protocol, implementation_version: implVersion,

@@ -214,9 +214,11 @@ def cmd_evidence_verify(argv: list[str]) -> int:
         obs = b.get("observations") or {}
         if obs.get("evidence_digest"):
             attested[obs["evidence_digest"]] = b.get("digest")
+    on_disk = set()
     for path in sorted((EVIDENCE / name / "admission").glob("*.evidence.json")):
-        on_disk = "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest()
-        if on_disk not in attested:
+        on_disk.add("sha256:" + hashlib.sha256(path.read_bytes()).hexdigest())
+        cur = "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest()
+        if cur not in attested:
             print(f"FAIL: {path.name} is not attested by the ledger (no matching evidence_digest)")
             rc = 1
             continue
@@ -230,6 +232,10 @@ def cmd_evidence_verify(argv: list[str]) -> int:
             print(f"OK: {path.name} digest+signature valid, ledger-attested")
     if not attested:
         print("FAIL: ledger contains no evidence attestation blocks (nothing verified)")
+        rc = 1
+    missing = sorted(set(attested) - on_disk)
+    if missing:
+        print(f"FAIL: ledger attests {len(missing)} evidence digest(s) with no file on disk")
         rc = 1
     return rc
 

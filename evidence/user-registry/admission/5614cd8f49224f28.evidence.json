@@ -79,7 +79,7 @@
       "invariant_id": "B-001..B-005",
       "layer": "behavioral",
       "outcome": "pass",
-      "evidence": "pytest: 10 passed in 3.85s"
+      "evidence": "pytest: 10 passed in 4.14s"
     },
     {
       "invariant_id": "B-001",
@@ -97,14 +97,14 @@
       "invariant_id": "O-005",
       "layer": "operational",
       "outcome": "observe",
-      "evidence": "p95=0.01ms over 1000 creates (budget 500ms, should-tier)"
+      "evidence": "p95=0.00ms over 1000 creates (budget 500ms, should-tier)"
     }
   ],
   "provenance": {
-    "time": "2026-08-05T18:15:30Z",
+    "time": "2026-08-05T18:20:13Z",
     "manifest": "user-registry-python-stdlib",
     "discovery_digest": "sha256:4d73826d872ab31be950b48ceb00fa0c88b09d1ac7c81d586cb425482ae03bfa"
   },
-  "digest": "sha256:cbd1af51a03cb005f2a356b01565167ba8273c1d6f0878459d4666f3b0cbf5f6",
-  "signature": "hmac-sha256:08384292101de213b770fb2223a391533e696dbaae76f20bd692fafa7f31b324"
+  "digest": "sha256:38166e0f520729d5660fc247f4f6f779c9945a0c99abccc6b297864874853288",
+  "signature": "hmac-sha256:4ebb2f0bc70099132ea37fc39ab8a00fb184382990a380e87a4615c432c1cc74"
 }
