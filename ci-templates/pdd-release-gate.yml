@@ -13,11 +13,12 @@ jobs:
         with: { python-version: "3.12" }
       - run: pip install pyyaml pytest hypothesis jsonschema
       - name: All protocols sealed
-        run: grep -rL "status: sealed" pdd-bundles/*/protocol.yaml && echo "all sealed"
+        run: '! grep -rL "status: sealed" pdd-bundles/*/protocol.yaml && echo "all sealed"'
       - name: Validator loop green on this commit
         run: make all
       - name: Evidence chain verifies
         run: python3 .reasonix/skills/pdd-evidence-keeper/scripts/evidence_chain.py verify evidence/user-registry/runtime-ledger.jsonl
+        env: { PDD_EVIDENCE_KEY: ${{ secrets.PDD_EVIDENCE_KEY }} }
       - name: Attach evidence bundle to release
         run: tar czf pdd-evidence.tar.gz evidence/ && gh release upload "$GITHUB_REF_NAME" pdd-evidence.tar.gz --clobber
         env: { GH_TOKEN: ${{ secrets.GITHUB_TOKEN }} }

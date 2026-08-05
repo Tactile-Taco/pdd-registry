@@ -3,7 +3,14 @@
 import hashlib, hmac, json, os, sys, time
 from pathlib import Path
 
-KEY = os.environ.get("PDD_EVIDENCE_KEY", "dev-only-insecure-key").encode()
+KEY_ENV = "PDD_EVIDENCE_KEY"
+KEY = os.environ.get(KEY_ENV)
+if KEY is None:
+    sys.exit(
+        f"error: {KEY_ENV} is not set; refusing to sign or verify evidence (fail closed). "
+        "Export the same key used at signing time (local dev: any non-empty value; "
+        "CI: repository secret).")
+KEY = KEY.encode()
 
 def canon(x): return json.dumps(x, sort_keys=True, separators=(",", ":")).encode()
 def digest_bytes(b): return "sha256:" + hashlib.sha256(b).hexdigest()

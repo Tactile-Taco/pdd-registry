@@ -82,7 +82,7 @@ def layer_structural(bundle: Path, impl: Path) -> list[dict]:
     impl_files = [p for p in impl.rglob("*.py") if "tests" not in p.parts]
     if jsonschema is None:
         results.append({"invariant_id": "S-001", "layer": "structural",
-                        "outcome": "skip", "evidence": "jsonschema not installed"}),
+                        "outcome": "skip", "evidence": "jsonschema not installed"})
         return results
     # S-001: compile + serialize smoke
     for f in impl_files:
@@ -150,6 +150,10 @@ def mutation_sanity(impl: Path, testdir: Path) -> dict:
              "-q", "-k", "B001_repeat", "--tb=no"],
             capture_output=True, text=True, timeout=900)
         if proc.returncode != 0:
+            if proc.returncode == 5 or "no tests ran" in proc.stdout.lower():
+                return {"invariant_id": "B-001", "layer": "behavioral", "outcome": "mutation-suspect",
+                        "evidence": "mutant run collected no tests (exit 5) — B-001 filter may be stale; "
+                                    "do not admit until the property runs against the mutant"}
             return {"invariant_id": "B-001", "layer": "behavioral", "outcome": "pass",
                     "evidence": "mutant rejected by B-001 property (property is not vacuous)"}
         return {"invariant_id": "B-001", "layer": "behavioral", "outcome": "mutation-suspect",
@@ -245,9 +249,13 @@ def main(argv: list[str]) -> int:
         return 2
     bundle, impl = Path(argv[1]), Path(argv[2])
     sandbox = "--sandbox" in argv
-    pbt_runs = 5000 if "--pbt-runs" in argv else 200
+    pbt_runs = 200
     if "--pbt-runs" in argv:
-        pbt_runs = int(argv[argv.index("--pbt-runs") + 1])
+        idx = argv.index("--pbt-runs")
+        if idx + 1 >= len(argv):
+            print("--pbt-runs requires a value")
+            return 2
+        pbt_runs = int(argv[idx + 1])
 
     results = (layer_structural(bundle, impl)
                + layer_behavioral(bundle, impl, pbt_runs)

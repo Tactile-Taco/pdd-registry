@@ -84,12 +84,23 @@ def cmd_bundle_seal(argv: list[str]) -> int:
     return 0
 
 
+def _flag_value(argv: list[str], name: str) -> str | None:
+    """Return the value following --name, or None (missing or trailing flag)."""
+    if name not in argv:
+        return None
+    idx = argv.index(name)
+    if idx + 1 >= len(argv):
+        sys.exit(f"flag {name} requires a value")
+    return argv[idx + 1]
+
+
 def cmd_validate(argv: list[str]) -> int:
     name = argv[0]
-    impl = Path(argv[argv.index("--impl") + 1]) if "--impl" in argv else default_impl(name)
+    impl = Path(_flag_value(argv, "--impl")) if "--impl" in argv else default_impl(name)
     extra = ["--sandbox"] if "--sandbox" in argv else []
-    if "--pbt-runs" in argv:
-        extra += ["--pbt-runs", argv[argv.index("--pbt-runs") + 1]]
+    runs = _flag_value(argv, "--pbt-runs")
+    if runs:
+        extra += ["--pbt-runs", runs]
     r = subprocess.run([sys.executable, "validators/validate_candidate.py",
                         str(bundle_dir(name)), str(impl), *extra], cwd=REPO_ROOT)
     return r.returncode
@@ -99,17 +110,23 @@ def cmd_evidence_build(argv: list[str]) -> int:
     name = argv[0]
     if "--impl" not in argv:
         sys.exit("evidence build requires --impl DIR")
-    impl = Path(argv[argv.index("--impl") + 1])
+    impl = Path(_flag_value(argv, "--impl"))
     proto = bundle_dir(name)
-    results_file = next((EVIDENCE / name / "validation").glob("*.results.json"), None)
+    impl_src = impl / "user_registry.py"
+    impl_digest = "sha256:" + __import__("hashlib").sha256(impl_src.read_bytes()).hexdigest()
+    # The attested results must be for THIS candidate: match by digest prefix.
+    results_file = next(
+        (EVIDENCE / name / "validation").glob(f"{impl_digest.split(':')[1][:12]}*.results.json"),
+        None)
     if results_file is None:
-        sys.exit("no validation results found — run `pdd validate` first")
+        sys.exit("no validation results for this candidate digest — run `pdd validate` first")
     results = json.loads(results_file.read_text())
+    if results.get("candidate_digest") != impl_digest:
+        sys.exit(f"candidate digest mismatch: results attest {results.get('candidate_digest')}, "
+                 f"--impl is {impl_digest}; refusing to bind evidence to the wrong artifact")
     if results["verdict"] != "admit":
         sys.exit(f"cannot build admission evidence: verdict is {results['verdict']}")
 
-    impl_src = impl / "user_registry.py"
-    impl_digest = "sha256:" + __import__("hashlib").sha256(impl_src.read_bytes()).hexdigest()
     manifest = json.loads((impl / "candidate-manifest.json").read_text())
 
     evidence = {
@@ -182,7 +199,7 @@ def cmd_evidence_verify(argv: list[str]) -> int:
 
 def cmd_run(argv: list[str]) -> int:
     name = argv[0]
-    impl = Path(argv[argv.index("--impl") + 1]) if "--impl" in argv else default_impl(name)
+    impl = Path(_flag_value(argv, "--impl")) if "--impl" in argv else default_impl(name)
     if shutil.which("docker") and "--sandbox" in argv:
         r = subprocess.run(
             ["docker", "run", "--rm", "--network", "none", "--read-only",
@@ -216,10 +233,19 @@ def main(argv: list[str]) -> int:
         if len(rest) < 1:
             print(__doc__)
             return 2
-        sub = COMMANDS[head][rest[0]]
+        sub = COMMANDS[head].get(rest[0])
+        if sub is None:
+            print(f"unknown subcommand: {head} {rest[0]}")
+            print(__doc__)
+            return 2
         return sub(rest[1:])
     if head in ("validate", "run"):
+        if not rest:
+            print(f"{head} requires a bundle name")
+            print(__doc__)
+            return 2
         return COMMANDS[head](rest)
+    print(f"unknown command: {head}")
     print(__doc__)
     return 2
 

@@ -32,6 +32,7 @@ ci-templates/           # GitHub Actions workflows (install via `make ci-install
 ## Quickstart
 
 ```bash
+export PDD_EVIDENCE_KEY=dev-local-key   # any non-empty value locally; CI uses the repository secret
 make lint       # hardened bundle linter over pdd-bundles/*
 make test       # candidate test suites (pytest + hypothesis, invariant-lineaged)
 make validate   # three-layer Validator Loop -> verdict + validation-results.json
@@ -97,6 +98,13 @@ make lint && python3 scripts/pdd.py bundle seal my-protocol
 ```
 
 ## Evidence chain integrity
+
+The evidence scripts **fail closed**: signing and verification require the
+`PDD_EVIDENCE_KEY` environment variable (export the same key at sign and verify
+time). Locally any non-empty value works; CI reads the `PDD_EVIDENCE_KEY`
+repository secret. Without the key, evidence operations refuse to run — the
+HMAC default is deliberately not a secret, so no silent "verified" claim is
+possible under the public default.
 
 ```bash
 python3 .reasonix/skills/pdd-evidence-keeper/scripts/evidence_chain.py verify evidence/user-registry/runtime-ledger.jsonl

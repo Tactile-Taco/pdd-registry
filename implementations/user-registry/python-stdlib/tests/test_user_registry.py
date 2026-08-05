@@ -4,6 +4,7 @@ Every test names the invariant it witnesses (per pdd-implementation-generator ru
 Run with: python3 -m pytest implementations/user-registry/python-stdlib/tests/
 """
 
+import os
 import sys
 from pathlib import Path
 
@@ -12,6 +13,9 @@ from hypothesis import given, settings, strategies as st
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from user_registry import UserRegistry, _normalize_email  # noqa: E402
+
+# Nightly/extended runs override via PBT_RUNS (set by the Validation Engine).
+PBT_EXAMPLES = int(os.environ.get("PBT_RUNS", "200"))
 
 VALID_REQ = st.fixed_dictionaries(
     {
@@ -41,7 +45,7 @@ INVALID_REQ = st.one_of(
 # ---- B-001: idempotent creation --------------------------------------------
 
 @given(VALID_REQ)
-@settings(max_examples=200, deadline=None)
+@settings(max_examples=PBT_EXAMPLES, deadline=None)
 def test_B001_repeat_request_id_returns_original_without_second_write(request):
     reg = UserRegistry()
     first = reg.create(request)
@@ -53,7 +57,7 @@ def test_B001_repeat_request_id_returns_original_without_second_write(request):
 
 
 @given(st.lists(VALID_REQ, min_size=1, max_size=50))
-@settings(max_examples=50, deadline=None)
+@settings(max_examples=min(50, PBT_EXAMPLES), deadline=None)
 def test_B001_many_repeats_never_grow_state(requests):
     reg = UserRegistry()
     for request in requests:
@@ -68,7 +72,7 @@ def test_B001_many_repeats_never_grow_state(requests):
 # ---- B-002: email uniqueness ------------------------------------------------
 
 @given(VALID_REQ, VALID_REQ)
-@settings(max_examples=100, deadline=None)
+@settings(max_examples=min(100, PBT_EXAMPLES), deadline=None)
 def test_B002_different_ids_same_email_second_conflicts(request_a, request_b):
     hypothesis.assume(request_a["email"] != request_b["email"]
                       or request_a["client_request_id"] != request_b["client_request_id"])
@@ -87,7 +91,7 @@ def test_B002_different_ids_same_email_second_conflicts(request_a, request_b):
 # ---- B-003: invalid input fails closed --------------------------------------
 
 @given(INVALID_REQ)
-@settings(max_examples=200, deadline=None)
+@settings(max_examples=PBT_EXAMPLES, deadline=None)
 def test_B003_invalid_input_fails_closed_no_state_change(request):
     reg = UserRegistry()
     result = reg.create(request)
@@ -97,7 +101,7 @@ def test_B003_invalid_input_fails_closed_no_state_change(request):
 
 
 @given(VALID_REQ, INVALID_REQ)
-@settings(max_examples=100, deadline=None)
+@settings(max_examples=min(100, PBT_EXAMPLES), deadline=None)
 def test_B003_invalid_after_valid_keeps_prior_state(request, bad):
     reg = UserRegistry()
     reg.create(request)
@@ -109,7 +113,7 @@ def test_B003_invalid_after_valid_keeps_prior_state(request, bad):
 # ---- B-004: deterministic reads ----------------------------------------------
 
 @given(VALID_REQ)
-@settings(max_examples=100, deadline=None)
+@settings(max_examples=min(100, PBT_EXAMPLES), deadline=None)
 def test_B004_get_is_deterministic_and_non_mutating(request):
     reg = UserRegistry()
     reg.create(request)
@@ -130,7 +134,7 @@ def test_B004_get_unknown_id_returns_not_found():
 # ---- B-005: email normalization ----------------------------------------------
 
 @given(VALID_REQ)
-@settings(max_examples=100, deadline=None)
+@settings(max_examples=min(100, PBT_EXAMPLES), deadline=None)
 def test_B005_case_and_whitespace_variants_conflict(request):
     hypothesis.assume(len(request["client_request_id"]) < 100)  # variant id needs headroom
     email = request["email"]

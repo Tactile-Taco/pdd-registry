@@ -20,7 +20,10 @@ jobs:
         run: python3 -m pytest implementations/ -q -k B001 || true
       - name: Evidence chain verify
         run: python3 .reasonix/skills/pdd-evidence-keeper/scripts/evidence_chain.py verify evidence/user-registry/runtime-ledger.jsonl
+        env: { PDD_EVIDENCE_KEY: ${{ secrets.PDD_EVIDENCE_KEY }} }
       - name: Open issue on failure
         if: failure()
         run: gh issue create --title "nightly pdd failure $(date +%F)" --body "see run $GITHUB_RUN_ID"
-        env: { GH_TOKEN: ${{ secrets.GITHUB_TOKEN }} }
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PDD_EVIDENCE_KEY: ${{ secrets.PDD_EVIDENCE_KEY }}
