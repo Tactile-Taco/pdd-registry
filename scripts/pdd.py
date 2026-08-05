@@ -147,9 +147,12 @@ def cmd_evidence_build(argv: list[str]) -> int:
         },
         "decision": "admit",
     }
-    # Bind the discovery log into the signed object via provenance metadata.
-    disc_digest = "sha256:" + hashlib.sha256(
-        json.dumps(evidence["discovery_log"], sort_keys=True).encode()).hexdigest()
+    disc = EVIDENCE / name / "discovery"
+    disc.mkdir(parents=True, exist_ok=True)
+    disc_path = disc / f"{impl_digest.split(':')[1][:16]}.discovery.json"
+    disc_path.write_text(json.dumps(evidence["discovery_log"], indent=2))
+    # Bind the discovery log into the signed object: digest of the exact bytes on disk.
+    disc_digest = "sha256:" + hashlib.sha256(disc_path.read_bytes()).hexdigest()
     chain = subprocess.run(
         [sys.executable, str(EVIDENCE_CHAIN), "build",
          json.dumps(evidence["protocol"]), impl_digest,
@@ -165,10 +168,6 @@ def cmd_evidence_build(argv: list[str]) -> int:
     evidence_path = adm / f"{impl_digest.split(':')[1][:16]}.evidence.json"
     evidence_path.write_text(json.dumps(evidence_obj, indent=2))
     evidence_digest = "sha256:" + hashlib.sha256(evidence_path.read_bytes()).hexdigest()
-    disc = EVIDENCE / name / "discovery"
-    disc.mkdir(parents=True, exist_ok=True)
-    (disc / f"{impl_digest.split(':')[1][:16]}.discovery.json").write_text(
-        json.dumps(evidence["discovery_log"], indent=2))
 
     ledger = EVIDENCE / name / "runtime-ledger.jsonl"
     if ledger.exists():
@@ -229,6 +228,19 @@ def cmd_evidence_verify(argv: list[str]) -> int:
             rc = 1
         else:
             print(f"OK: {path.name} digest+signature valid, ledger-attested")
+            # The discovery log is bound into the signed provenance: recompute and compare.
+            ev = json.loads(path.read_text())
+            disc_digest = (ev.get("provenance") or {}).get("discovery_digest")
+            if disc_digest:
+                disc_file = next((EVIDENCE / name / "discovery").glob("*.discovery.json"), None)
+                if disc_file is None:
+                    print("FAIL: evidence binds a discovery digest but no discovery file on disk")
+                    rc = 1
+                else:
+                    on_disk = "sha256:" + hashlib.sha256(disc_file.read_bytes()).hexdigest()
+                    if on_disk != disc_digest:
+                        print(f"FAIL: discovery file digest mismatch (signed {disc_digest}, on disk {on_disk})")
+                        rc = 1
     if not attested:
         print("FAIL: ledger contains no evidence attestation blocks (nothing verified)")
         rc = 1
