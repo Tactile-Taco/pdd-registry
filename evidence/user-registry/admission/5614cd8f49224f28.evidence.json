@@ -67,7 +67,7 @@
       "invariant_id": "B-001..B-005",
       "layer": "behavioral",
       "outcome": "pass",
-      "evidence": "pytest: 10 passed in 3.66s"
+      "evidence": "pytest: 10 passed in 3.54s"
     },
     {
       "invariant_id": "B-001",
@@ -101,9 +101,10 @@
     }
   ],
   "provenance": {
-    "time": "2026-08-05T17:54:14Z",
-    "manifest": "user-registry-python-stdlib"
+    "time": "2026-08-05T17:58:29Z",
+    "manifest": "user-registry-python-stdlib",
+    "discovery_digest": "sha256:4d73826d872ab31be950b48ceb00fa0c88b09d1ac7c81d586cb425482ae03bfa"
   },
-  "digest": "sha256:6d09ac7271732b3ed13708e0243f830bf91fcc3a96581e8f1bf0e1ce8ad3c1cd",
-  "signature": "hmac-sha256:a7a29cb3e01af20cf223b247bef85310c12f49bb16ee0c1966eaea682d7f2652"
+  "digest": "sha256:583fa5b9d381b5b5bc61d3b69c56550e2043a21ae682aad39a6d14cdb29f88ed",
+  "signature": "hmac-sha256:2a6101e831a1bc01ee83bf7e932fc7400b5ebc7c976d81e65125d805703082ec"
 }

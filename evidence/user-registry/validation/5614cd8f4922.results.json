@@ -65,7 +65,7 @@
       "invariant_id": "B-001..B-005",
       "layer": "behavioral",
       "outcome": "pass",
-      "evidence": "pytest: 10 passed in 3.66s"
+      "evidence": "pytest: 10 passed in 3.54s"
     },
     {
       "invariant_id": "B-001",

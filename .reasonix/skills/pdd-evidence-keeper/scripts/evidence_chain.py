@@ -5,9 +5,9 @@ from pathlib import Path
 
 KEY_ENV = "PDD_EVIDENCE_KEY"
 KEY = os.environ.get(KEY_ENV)
-if KEY is None:
+if not KEY:
     sys.exit(
-        f"error: {KEY_ENV} is not set; refusing to sign or verify evidence (fail closed). "
+        f"error: {KEY_ENV} is not set (or is empty); refusing to sign or verify evidence (fail closed). "
         "Export the same key used at signing time (local dev: any non-empty value; "
         "CI: repository secret).")
 KEY = KEY.encode()

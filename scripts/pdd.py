@@ -20,6 +20,7 @@ Stdlib only. Reuses the skill scripts under .reasonix/skills/.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import shutil
 import subprocess
@@ -113,7 +114,7 @@ def cmd_evidence_build(argv: list[str]) -> int:
     impl = Path(_flag_value(argv, "--impl"))
     proto = bundle_dir(name)
     impl_src = impl / "user_registry.py"
-    impl_digest = "sha256:" + __import__("hashlib").sha256(impl_src.read_bytes()).hexdigest()
+    impl_digest = "sha256:" + hashlib.sha256(impl_src.read_bytes()).hexdigest()
     # The attested results must be for THIS candidate: match by digest prefix.
     results_file = next(
         (EVIDENCE / name / "validation").glob(f"{impl_digest.split(':')[1][:12]}*.results.json"),
@@ -146,11 +147,14 @@ def cmd_evidence_build(argv: list[str]) -> int:
         },
         "decision": "admit",
     }
+    # Bind the discovery log into the signed object via provenance metadata.
+    disc_digest = "sha256:" + hashlib.sha256(
+        json.dumps(evidence["discovery_log"], sort_keys=True).encode()).hexdigest()
     chain = subprocess.run(
         [sys.executable, str(EVIDENCE_CHAIN), "build",
          json.dumps(evidence["protocol"]), impl_digest,
          json.dumps(results["validators"]), json.dumps(results["results"]),
-         json.dumps({"manifest": manifest["artifact_id"]})],
+         json.dumps({"manifest": manifest["artifact_id"], "discovery_digest": disc_digest})],
         capture_output=True, text=True)
     if chain.returncode != 0:
         sys.exit(f"evidence build failed: {chain.stderr}")

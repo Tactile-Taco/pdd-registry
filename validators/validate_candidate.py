@@ -255,7 +255,14 @@ def main(argv: list[str]) -> int:
         if idx + 1 >= len(argv):
             print("--pbt-runs requires a value")
             return 2
-        pbt_runs = int(argv[idx + 1])
+        try:
+            pbt_runs = int(argv[idx + 1])
+        except ValueError:
+            print(f"--pbt-runs must be an integer, got {argv[idx + 1]!r}")
+            return 2
+        if pbt_runs < 1:
+            print("--pbt-runs must be >= 1")
+            return 2
 
     results = (layer_structural(bundle, impl)
                + layer_behavioral(bundle, impl, pbt_runs)
