@@ -356,6 +356,7 @@ def layer_operational_dynamic(bundle: Path, impl: Path, sandbox: bool, pbt_runs:
                         "evidence": "no benchmark method declared in candidate-manifest.json"})
         return results
     bench = _assert_bench_meta(raw_bench)
+    bench_iterations = bench["iterations"]  # keep before `bench` is reused below
     bench_catalog = bench.get("catalog")
     bench_ctor = f"{entry_class}({json.dumps(bench_catalog)})" if bench_catalog else f"{entry_class}()"
     bench_code = (
@@ -364,7 +365,7 @@ def layer_operational_dynamic(bundle: Path, impl: Path, sandbox: bool, pbt_runs:
         f"from {entry_module} import {entry_class}\n"
         f"reg = {bench_ctor}\n"
         "lat = []\n"
-        f"for i in range({bench['iterations']}):\n"
+        f"for i in range({bench_iterations}):\n"
         f"    args = {json.dumps(bench.get('args_template') or {})}\n"
         "    args = {k: (v % i if isinstance(v, str) and '%d' in v else v) for k, v in args.items()}\n"
         "    t0 = time.perf_counter()\n"
@@ -377,13 +378,13 @@ def layer_operational_dynamic(bundle: Path, impl: Path, sandbox: bool, pbt_runs:
         proc = subprocess.run([sys.executable, "-c", bench_code], cwd=impl,
                               capture_output=True, text=True,
                               env=_scrubbed_env(pbt_runs), timeout=300)
-        bench = json.loads(proc.stdout.strip()) if proc.returncode == 0 else {}
-        p95 = bench.get("p95_ms")
+        out = json.loads(proc.stdout.strip()) if proc.returncode == 0 else {}
+        p95 = out.get("p95_ms")
         results.append({"invariant_id": "O-005", "layer": "operational", "outcome": "observe",
-                        "evidence": f"p95={p95:.2f}ms over {bench['iterations']} calls "
+                        "evidence": f"p95={p95:.2f}ms over {bench_iterations} calls "
                                     f"(budget 500ms, should-tier)" if p95 is not None
                         else f"benchmark failed: {proc.stderr.strip()[:120]}"})
-    except Exception as exc:  # noqa: BLE001
+    except (json.JSONDecodeError, KeyError, TypeError, ValueError, subprocess.TimeoutExpired) as exc:
         results.append({"invariant_id": "O-005", "layer": "operational", "outcome": "skip",
                         "evidence": f"benchmark failed: {exc}"})
     return results

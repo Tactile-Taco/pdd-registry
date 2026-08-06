@@ -352,6 +352,7 @@ def cmd_run(argv: list[str]) -> int:
             ["docker", "run", "--rm", "--network", "none", "--read-only",
              "--memory", "256m", "--pids-limit", "64", "--cpus", "1",
              "--cap-drop", "ALL", "--user", "65534:65534",
+             "--security-opt", "no-new-privileges",
              "-v", f"{impl.resolve()}:/candidate:ro", "-w", "/candidate",
              "python:3.12-slim@sha256:d657ab0ade19f404a6ccc883ab399540de667aff751748ce23c07330c5a89e64",
              "python", "-c", code],
