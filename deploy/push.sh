@@ -48,8 +48,20 @@ echo "==> Building image (docker)"
 docker build -t "${IMAGE}" .
 
 echo "==> Pushing ${IMAGE}"
-printf '%s' "${GITHUB_TOKEN}" | docker login ghcr.io -u tactile-taco --password-stdin
-docker push "${IMAGE}"
+# WARP-mediated egress is intermittently flaky for the docker daemon
+# (ENETUNREACH to ghcr.io, observed on the M6 runner); the push is idempotent
+# (same digest), so retry a few times before giving up.
+push_ok=0
+for attempt in 1 2 3; do
+  printf '%s' "${GITHUB_TOKEN}" | docker login ghcr.io -u tactile-taco --password-stdin
+  if docker push "${IMAGE}"; then
+    push_ok=1
+    break
+  fi
+  echo "==> docker push attempt ${attempt} failed (intermittent egress); retrying in 10s" >&2
+  sleep 10
+done
+[ "${push_ok}" = 1 ] || { echo "docker push failed after 3 attempts" >&2; exit 1; }
 
 # Pin the manifest to the digest we just pushed (k8s.yaml must never drift to a
 # stale :latest). RepoDigests[0] is "host/name@sha256:…"; strip the scheme so
