@@ -46,10 +46,14 @@ EVIDENCE_CHAIN = SKILLS / "pdd-evidence-keeper" / "scripts" / "evidence_chain.py
 _BUNDLE_NAME_RE = re.compile(r"[A-Za-z0-9_-]+$")
 
 
+def _valid_bundle_name(name: str) -> bool:
+    """Bundle names feed filesystem paths; constrain to [A-Za-z0-9_-] so a
+    hostile name cannot escape pdd-bundles/ or evidence/ (security review)."""
+    return isinstance(name, str) and bool(_BUNDLE_NAME_RE.fullmatch(name))
+
+
 def bundle_dir(name: str) -> Path:
-    """Bundle dir; names feed filesystem paths, so constrain them (security
-    review: a hostile name must not escape pdd-bundles/ or evidence/)."""
-    if not isinstance(name, str) or not _BUNDLE_NAME_RE.fullmatch(name):
+    if not _valid_bundle_name(name):
         sys.exit(f"invalid bundle name {name!r}")
     d = BUNDLES / name
     if not d.exists():
@@ -58,6 +62,8 @@ def bundle_dir(name: str) -> Path:
 
 
 def default_impl(name: str) -> Path:
+    if not _valid_bundle_name(name):
+        sys.exit(f"invalid bundle name {name!r}")
     d = IMPLS / name
     if not d.exists():
         sys.exit(f"no implementations under implementations/{name}/")
@@ -69,6 +75,8 @@ def default_impl(name: str) -> Path:
 
 def cmd_bundle_lint(argv: list[str]) -> int:
     target = argv[0] if argv else None
+    if target is not None and not _valid_bundle_name(target):
+        sys.exit(f"invalid bundle name {target!r}")
     dirs = [BUNDLES / target] if target else sorted(BUNDLES.iterdir())
     rc = 0
     for d in dirs:
@@ -237,6 +245,8 @@ def cmd_evidence_build(argv: list[str]) -> int:
 
 def cmd_evidence_verify(argv: list[str]) -> int:
     name = argv[0]
+    if not _valid_bundle_name(name):
+        sys.exit(f"invalid bundle name {name!r}")
     ledger = EVIDENCE / name / "runtime-ledger.jsonl"
     if not ledger.exists():
         sys.exit(f"no ledger at {ledger}")
@@ -322,8 +332,10 @@ def cmd_run(argv: list[str]) -> int:
         if not (entry_module and entry_class and smoke.get("method")):
             print("candidate-manifest.json must declare entry_module/entry_class/smoke")
             return 1
-        if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", entry_module) or not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", entry_class):
-            print(f"entry_module/entry_class must be Python identifiers, got {entry_module!r}/{entry_class!r}")
+        if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", entry_module) or not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", entry_class) \
+                or not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", smoke.get("method")):
+            print(f"entry_module/entry_class/smoke.method must be Python identifiers, got "
+                  f"{entry_module!r}/{entry_class!r}/{smoke.get('method')!r}")
             return 1
         assert_expr = smoke.get("assert_expr", "True")
         if not isinstance(assert_expr, str) or any(b in assert_expr for b in ("import", "open(", "__", ";", "eval", "exec")):

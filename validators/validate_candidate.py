@@ -326,21 +326,21 @@ def layer_operational_dynamic(bundle: Path, impl: Path, sandbox: bool, pbt_runs:
                         f"from {entry_module} import {entry_class}; "
                         f"r = {call}; "
                         f"assert {assert_expr}; print('sandbox smoke ok')")
-            proc = subprocess.run(
-                ["docker", "run", "--rm", "--network", "none", "--read-only", *_SANDBOX_DOCKER_FLAGS,
-                 "-e", f"PBT_RUNS={os.environ.get('PBT_RUNS', '200')}",
-                 "-v", f"{impl.resolve()}:/candidate:ro", "-w", "/candidate",
-                 "python:3.12-slim@sha256:d657ab0ade19f404a6ccc883ab399540de667aff751748ce23c07330c5a89e64",
-                 "python", "-c", code],
-                capture_output=True, text=True, timeout=300)
-            if proc.returncode == 0:
-                results.append({"invariant_id": "O-001,O-002", "layer": "operational",
-                                "outcome": "pass",
-                                "evidence": "docker sandbox (network none, read-only fs): " + proc.stdout.strip()})
-            else:
-                results.append({"invariant_id": "O-001,O-002", "layer": "operational",
-                                "outcome": "skip",
-                                "evidence": f"docker sandbox unavailable/failed: {proc.stderr.strip()[:200]}"})
+                proc = subprocess.run(
+                    ["docker", "run", "--rm", "--network", "none", "--read-only", *_SANDBOX_DOCKER_FLAGS,
+                     "-e", f"PBT_RUNS={os.environ.get('PBT_RUNS', '200')}",
+                     "-v", f"{impl.resolve()}:/candidate:ro", "-w", "/candidate",
+                     "python:3.12-slim@sha256:d657ab0ade19f404a6ccc883ab399540de667aff751748ce23c07330c5a89e64",
+                     "python", "-c", code],
+                    capture_output=True, text=True, timeout=300)
+                if proc.returncode == 0:
+                    results.append({"invariant_id": "O-001,O-002", "layer": "operational",
+                                    "outcome": "pass",
+                                    "evidence": "docker sandbox (network none, read-only fs): " + proc.stdout.strip()})
+                else:
+                    results.append({"invariant_id": "O-001,O-002", "layer": "operational",
+                                    "outcome": "skip",
+                                    "evidence": f"docker sandbox unavailable/failed: {proc.stderr.strip()[:200]}"})
     else:
         results.append({"invariant_id": "O-001,O-002", "layer": "operational",
                         "outcome": "skip",
