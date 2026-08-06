@@ -151,6 +151,29 @@ _SANDBOX_DOCKER_FLAGS = ["--memory", "256m", "--pids-limit", "64", "--cpus", "1"
 
 _BENCH_CODE_BANNED = ("import", "open(", "__", ";", "eval", "exec")
 
+# Eval-mode expression nodes allowed in smoke.assert_expr: expression forms
+# only — no calls, imports, lambdas, comprehensions, or assignment (a
+# substring blacklist is evadable; an AST allowlist is not, security review).
+_SAFE_EXPR_NODES = (ast.Expression, ast.Constant, ast.Name, ast.Attribute, ast.Subscript,
+                    ast.Compare, ast.BoolOp, ast.BinOp, ast.UnaryOp, ast.List, ast.Tuple,
+                    ast.Dict, ast.Slice, ast.cmpop, ast.boolop, ast.operator, ast.unaryop,
+                    ast.Load)
+
+
+def _assert_safe_expression(expr: str) -> None:
+    """smoke.assert_expr must parse as a pure eval-mode expression using only
+    the allowed node types (no function calls, imports, lambdas, dunders)."""
+    if not isinstance(expr, str):
+        raise SystemExit(f"smoke.assert_expr must be a string, got {type(expr).__name__}")
+    try:
+        tree = ast.parse(expr, mode="eval")
+    except SyntaxError as exc:
+        raise SystemExit(f"smoke.assert_expr is not a valid expression: {expr!r}") from exc
+    for node in ast.walk(tree):
+        if not isinstance(node, _SAFE_EXPR_NODES):
+            raise SystemExit(f"smoke.assert_expr uses disallowed construct "
+                             f"{type(node).__name__}: {expr!r}")
+
 
 def _assert_bench_meta(bench: dict) -> dict:
     """Coerce/validate manifest benchmark fields before interpolation into
@@ -257,12 +280,18 @@ def layer_behavioral(bundle: Path, impl: Path, pbt_runs: int, manifest: dict) ->
     return results
 
 
-def _docker_infra_error(returncode: int) -> bool:
-    """docker CLI/daemon failures exit 125; container exit codes pass through
-    unchanged — classifying by exit code is non-spoofable by candidate output
-    (security review: a failing candidate must not downgrade its smoke to a
-    non-gating skip by echoing docker markers)."""
-    return returncode == 125
+def _docker_infra_error(returncode: int, cidfile: Path) -> bool:
+    """True only when the failure is provably infrastructure: docker CLI/
+    daemon errors exit 125 BEFORE a container is created (no cidfile). If the
+    container ran (cidfile exists), the failure is the candidate's own — even
+    a deliberate sys.exit(125) inside the container is then classified as a
+    candidate-side fail (non-spoofable, security review)."""
+    if returncode != 125:
+        return False
+    try:
+        return not (cidfile.exists() and cidfile.read_text().strip())
+    except OSError:
+        return True
 
 
 def mutation_sanity(impl: Path, testdir: Path, pbt_runs: int, manifest: dict) -> dict:
@@ -333,10 +362,12 @@ def layer_operational_dynamic(bundle: Path, impl: Path, sandbox: bool, pbt_runs:
         else:
             _assert_identifier(smoke.get("method"), "smoke.method")
             assert_expr = smoke.get("assert_expr", "True")
-            if not isinstance(assert_expr, str) or any(b in assert_expr for b in _BENCH_CODE_BANNED):
+            try:
+                _assert_safe_expression(assert_expr)
+            except SystemExit as exc:
                 results.append({"invariant_id": "O-001,O-002", "layer": "operational",
                                 "outcome": "skip",
-                                "evidence": "smoke.assert_expr rejected (banned constructs) — nothing executed"})
+                                "evidence": f"smoke.assert_expr rejected: {exc} — nothing executed"})
             else:
                 call_style = smoke.get("call_style", "kwargs")
                 args_lit = json.dumps(smoke.get("args") or {})
@@ -348,30 +379,33 @@ def layer_operational_dynamic(bundle: Path, impl: Path, sandbox: bool, pbt_runs:
                         f"from {entry_module} import {entry_class}; "
                         f"r = {call}; "
                         f"assert {assert_expr}; print('sandbox smoke ok')")
-                proc = subprocess.run(
-                    ["docker", "run", "--rm", "--network", "none", "--read-only", *_SANDBOX_DOCKER_FLAGS,
-                     "--security-opt", "no-new-privileges",
-                     "-e", f"PBT_RUNS={pbt_runs}",
-                     "-v", f"{impl.resolve()}:/candidate:ro", "-w", "/candidate",
-                     "python:3.12-slim@sha256:d657ab0ade19f404a6ccc883ab399540de667aff751748ce23c07330c5a89e64",
-                     "python", "-c", code],
-                    capture_output=True, text=True, timeout=300)
-                if proc.returncode == 0:
-                    results.append({"invariant_id": "O-001,O-002", "layer": "operational",
-                                    "outcome": "pass",
-                                    "evidence": "docker sandbox (network none, read-only fs): " + proc.stdout.strip()})
-                elif _docker_infra_error(proc.returncode):
-                    results.append({"invariant_id": "O-001,O-002", "layer": "operational",
-                                    "outcome": "skip",
-                                    "evidence": f"docker sandbox infra failure (exit {proc.returncode}): "
-                                                f"{proc.stderr.strip()[:200]}"})
-                else:
-                    # The candidate's own smoke failed inside a healthy sandbox:
-                    # fail-closed (a candidate that fails its declared smoke
-                    # must not admit), security review.
-                    results.append({"invariant_id": "O-001,O-002", "layer": "operational",
-                                    "outcome": "fail",
-                                    "evidence": f"sandbox smoke failed: {proc.stderr.strip()[:200]}"})
+                with tempfile.TemporaryDirectory(prefix="pdd-cid-") as cid_td:
+                    cidfile = Path(cid_td) / "cid"
+                    proc = subprocess.run(
+                        ["docker", "run", "--rm", "--network", "none", "--read-only", *_SANDBOX_DOCKER_FLAGS,
+                         "--security-opt", "no-new-privileges",
+                         "--cidfile", str(cidfile),
+                         "-e", f"PBT_RUNS={pbt_runs}",
+                         "-v", f"{impl.resolve()}:/candidate:ro", "-w", "/candidate",
+                         "python:3.12-slim@sha256:d657ab0ade19f404a6ccc883ab399540de667aff751748ce23c07330c5a89e64",
+                         "python", "-c", code],
+                        capture_output=True, text=True, timeout=300)
+                    if proc.returncode == 0:
+                        results.append({"invariant_id": "O-001,O-002", "layer": "operational",
+                                        "outcome": "pass",
+                                        "evidence": "docker sandbox (network none, read-only fs): " + proc.stdout.strip()})
+                    elif _docker_infra_error(proc.returncode, cidfile):
+                        results.append({"invariant_id": "O-001,O-002", "layer": "operational",
+                                        "outcome": "skip",
+                                        "evidence": f"docker sandbox infra failure (exit {proc.returncode}): "
+                                                    f"{proc.stderr.strip()[:200]}"})
+                    else:
+                        # The candidate's own smoke failed inside a healthy sandbox:
+                        # fail-closed (a candidate that fails its declared smoke
+                        # must not admit), security review.
+                        results.append({"invariant_id": "O-001,O-002", "layer": "operational",
+                                        "outcome": "fail",
+                                        "evidence": f"sandbox smoke failed: {proc.stderr.strip()[:200]}"})
     else:
         results.append({"invariant_id": "O-001,O-002", "layer": "operational",
                         "outcome": "skip",

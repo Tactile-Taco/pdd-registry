@@ -52,6 +52,29 @@ def _valid_bundle_name(name: str) -> bool:
     return isinstance(name, str) and bool(_BUNDLE_NAME_RE.fullmatch(name))
 
 
+def _assert_safe_expression(expr: str) -> None:
+    """smoke.assert_expr must parse as a pure eval-mode expression using only
+    the allowed node types (no function calls, imports, lambdas, dunders).
+    Mirrors validators/validate_candidate.py (duplicated for the subprocess
+    boundary; keep in lockstep)."""
+    import ast as _ast
+
+    if not isinstance(expr, str):
+        raise SystemExit(f"smoke.assert_expr must be a string, got {type(expr).__name__}")
+    try:
+        tree = _ast.parse(expr, mode="eval")
+    except SyntaxError as exc:
+        raise SystemExit(f"smoke.assert_expr is not a valid expression: {expr!r}") from exc
+    safe_nodes = (_ast.Expression, _ast.Constant, _ast.Name, _ast.Attribute, _ast.Subscript,
+                  _ast.Compare, _ast.BoolOp, _ast.BinOp, _ast.UnaryOp, _ast.List, _ast.Tuple,
+                  _ast.Dict, _ast.Slice, _ast.cmpop, _ast.boolop, _ast.operator, _ast.unaryop,
+                  _ast.Load)
+    for node in _ast.walk(tree):
+        if not isinstance(node, safe_nodes):
+            raise SystemExit(f"smoke.assert_expr uses disallowed construct "
+                             f"{type(node).__name__}: {expr!r}")
+
+
 def bundle_dir(name: str) -> Path:
     if not _valid_bundle_name(name):
         sys.exit(f"invalid bundle name {name!r}")
@@ -336,8 +359,12 @@ def cmd_run(argv: list[str]) -> int:
                   f"{entry_module!r}/{entry_class!r}/{smoke.get('method')!r}")
             return 1
         assert_expr = smoke.get("assert_expr", "True")
-        if not isinstance(assert_expr, str) or any(b in assert_expr for b in ("import", "open(", "__", ";", "eval", "exec")):
-            print("smoke.assert_expr rejected (banned constructs)")
+        # AST allowlist gate, mirroring validators/validate_candidate.py
+        # (substring blacklists are evadable; an eval-mode AST allowlist is not).
+        try:
+            _assert_safe_expression(assert_expr)
+        except SystemExit as exc:
+            print(f"smoke.assert_expr rejected: {exc}")
             return 1
         args_lit = json.dumps(smoke.get("args") or {})
         if smoke.get("call_style") == "single_dict":
