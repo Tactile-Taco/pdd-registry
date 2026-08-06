@@ -53,7 +53,8 @@ echo "==> Pushing ${IMAGE}"
 # (same digest), so retry a few times before giving up.
 push_ok=0
 for attempt in 1 2 3; do
-  printf '%s' "${GITHUB_TOKEN}" | docker login ghcr.io -u tactile-taco --password-stdin
+  # login can fail with the same egress flake; it is not fatal by itself
+  printf '%s' "${GITHUB_TOKEN}" | docker login ghcr.io -u tactile-taco --password-stdin || true
   if docker push "${IMAGE}"; then
     push_ok=1
     break
