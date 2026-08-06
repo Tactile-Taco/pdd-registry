@@ -69,15 +69,39 @@ def _admission(name: str) -> list[dict]:
     adm_dir = EVIDENCE / name / "admission"
     if not adm_dir.exists():
         return result
+    ledger = EVIDENCE / name / "runtime-ledger.jsonl"
+    blocks = []
+    if ledger.exists():
+        blocks = [json.loads(ln) for ln in ledger.read_text().splitlines() if ln.strip()]
+    verify_script = SKILLS / "pdd-evidence-keeper" / "scripts" / "evidence_chain.py"
     for f in sorted(adm_dir.glob("*.evidence.json")):
         try:
             ev = json.loads(f.read_text())
+            artifact = (ev.get("implementation") or {}).get("artifact_digest")
+            # Real verification: HMAC signature + digest of the evidence object,
+            # then ledger attestation for the same artifact digest.
+            vp = subprocess.run(
+                [sys.executable, str(verify_script), "verify-evidence", str(f)],
+                capture_output=True, text=True, timeout=60, cwd=ROOT)
+            try:
+                sig_ok = json.loads(vp.stdout).get("ok") is True
+            except Exception:  # noqa: BLE001
+                sig_ok = False
+            ledger_attested = False
+            decision = None
+            for b in blocks:
+                obs = b.get("observations") or {}
+                if obs.get("admission") == artifact:
+                    ledger_attested = True
+                    decision = b.get("decision")
             result.append({
                 "bundle": name,
                 "file": f.name,
-                "artifact_digest": (ev.get("implementation") or {}).get("artifact_digest"),
-                "decision": ev.get("decision"),
-                "verified": (ev.get("provenance") or {}).get("discovery_digest") is not None,
+                "artifact_digest": artifact,
+                "decision": decision,
+                "signature_valid": sig_ok,
+                "ledger_attested": ledger_attested,
+                "verified": bool(sig_ok and ledger_attested),
             })
         except Exception as exc:  # noqa: BLE001
             result.append({"bundle": name, "file": f.name, "error": str(exc)})

@@ -23,6 +23,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GHCR_PAT }}
           STAGING_HOST: ${{ secrets.STAGING_HOST }}
           STAGING_DNS: ${{ secrets.STAGING_DNS }}
+          PDD_EVIDENCE_KEY: ${{ secrets.PDD_EVIDENCE_KEY }}
         run: ./deploy/push.sh
       - name: Verify service
         run: |

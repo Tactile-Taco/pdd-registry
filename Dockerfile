@@ -1,6 +1,7 @@
 # Docker-based build path for the pdd service image (fallback to the Nix
-# pipeline: flake.nix `.#image` + nix2container). Content-equivalent: same repo
-# layout at /opt/pdd, same pinned toolchain versions.
+# pipeline: flake.nix `.#image` + nix2container — both layouts ship the same
+# repo content at /opt/pdd; toolchain versions are pinned exactly here, and
+# float to the nixpkgs-25.05 channel in the flake).
 FROM python:3.12-slim
 
 ENV PYTHONUNBUFFERED=1 \
