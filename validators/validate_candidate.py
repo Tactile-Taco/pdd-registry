@@ -256,20 +256,12 @@ def layer_behavioral(bundle: Path, impl: Path, pbt_runs: int, manifest: dict) ->
     return results
 
 
-def _docker_infra_error(stderr: str) -> bool:
-    """True only when the failure is provably infrastructure, not the
-    candidate: the docker CLI writes its own errors as the FIRST stderr line
-    (container output follows), and a candidate-side failure carries a
-    Traceback/AssertionError. Anything ambiguous is NOT infra — the smoke
-    then records 'fail' (fail-closed; a hostile candidate must not be able to
-    downgrade its own failed smoke to a non-gating skip by echoing a docker
-    marker, security review)."""
-    if "Traceback" in stderr or "AssertionError" in stderr:
-        return False
-    first = (stderr.splitlines() or [""])[0]
-    return any(first.startswith(marker) for marker in (
-        "docker: ", "Error response from daemon", "Cannot connect to the Docker daemon",
-        "error during connect", "Unable to find image", "denied: requested access"))
+def _docker_infra_error(returncode: int) -> bool:
+    """docker CLI/daemon failures exit 125; container exit codes pass through
+    unchanged — classifying by exit code is non-spoofable by candidate output
+    (security review: a failing candidate must not downgrade its smoke to a
+    non-gating skip by echoing docker markers)."""
+    return returncode == 125
 
 
 def mutation_sanity(impl: Path, testdir: Path, pbt_runs: int, manifest: dict) -> dict:
@@ -367,10 +359,11 @@ def layer_operational_dynamic(bundle: Path, impl: Path, sandbox: bool, pbt_runs:
                     results.append({"invariant_id": "O-001,O-002", "layer": "operational",
                                     "outcome": "pass",
                                     "evidence": "docker sandbox (network none, read-only fs): " + proc.stdout.strip()})
-                elif _docker_infra_error(proc.stderr):
+                elif _docker_infra_error(proc.returncode):
                     results.append({"invariant_id": "O-001,O-002", "layer": "operational",
                                     "outcome": "skip",
-                                    "evidence": f"docker sandbox infra failure: {proc.stderr.strip()[:200]}"})
+                                    "evidence": f"docker sandbox infra failure (exit {proc.returncode}): "
+                                                f"{proc.stderr.strip()[:200]}"})
                 else:
                     # The candidate's own smoke failed inside a healthy sandbox:
                     # fail-closed (a candidate that fails its declared smoke
