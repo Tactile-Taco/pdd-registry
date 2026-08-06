@@ -111,7 +111,13 @@ def load_bundle(bundle_dir: Path) -> dict:
 
 
 def load_catalog(bundles_dir: Path) -> list[dict]:
-    """Catalog over every pdd-bundles/* directory (sorted, stable order)."""
+    """Catalog over every pdd-bundles/* directory (sorted, stable order).
+
+    A missing bundles dir yields an empty catalog (v1 /bundles behavior),
+    not a 500 for every route.
+    """
+    if not bundles_dir.exists():
+        return []
     out = []
     for d in sorted(bundles_dir.iterdir()):
         if d.is_dir() and (d / "protocol.yaml").exists():

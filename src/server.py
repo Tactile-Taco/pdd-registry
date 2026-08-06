@@ -20,7 +20,8 @@ import json
 import os
 import subprocess
 import sys
-from http.server import BaseHTTPRequestHandler, HTTPServer
+import traceback
+from http.server import BaseHTTPRequestHandler, HTTPServer, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
@@ -226,8 +227,11 @@ class Handler(BaseHTTPRequestHandler):
                 self._bundle_route(path, query)
                 return
             self._json({"error": "not found"}, status=404)
-        except Exception as exc:  # noqa: BLE001
-            self._json({"error": str(exc)}, status=500)
+        except Exception:  # noqa: BLE001
+            # Never echo exception internals (paths, YAML parser details) to
+            # clients — log them and return a generic 500.
+            traceback.print_exc()
+            self._json({"error": "internal error"}, status=500)
 
     def _bundle_route(self, path: str, query: dict):
         """/bundles/{name} and /bundles/{name}/{invariants|capabilities|ledger}."""
@@ -241,9 +245,10 @@ class Handler(BaseHTTPRequestHandler):
             self._json({"error": f"no bundle named {name}"}, status=404)
             return
         if "error" in b:
-            # Broken bundle (missing/unparseable protocol.yaml): surface the
-            # catalog error instead of crashing on missing keys.
-            self._json({"error": b["error"]}, status=500)
+            # Broken bundle (missing/unparseable protocol.yaml): log the
+            # catalog error, surface a generic 500 (no parser internals).
+            print(f"catalog error for bundle {name}: {b['error']}", file=sys.stderr)
+            self._json({"error": f"bundle {name} is broken (see server log)"}, status=500)
             return
         if len(parts) == 2:
             self._json({
@@ -291,4 +296,6 @@ class Handler(BaseHTTPRequestHandler):
 
 
 if __name__ == "__main__":
-    HTTPServer(("0.0.0.0", PORT), Handler).serve_forever()
+    # Threading: subprocess routes (/evidence/*, /bundles/{name}/ledger) can
+    # take seconds; one slow request must not block /healthz for every client.
+    ThreadingHTTPServer(("0.0.0.0", PORT), Handler).serve_forever()

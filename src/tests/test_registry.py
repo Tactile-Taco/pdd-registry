@@ -32,6 +32,7 @@ server.ROOT = ROOT
 server.SKILLS = ROOT / ".reasonix" / "skills"
 server.BUNDLES = ROOT / "pdd-bundles"
 server.EVIDENCE = ROOT / "evidence"
+server.PDD = ROOT / "scripts" / "pdd.py"
 
 
 @pytest.fixture
@@ -270,8 +271,8 @@ def test_ledger_view_rejects_escaping_names():
 
 
 def test_bundle_route_broken_bundle(client, monkeypatch):
-    """A broken bundle (unparseable protocol.yaml) must yield a clear 500 with
-    the catalog error, not a KeyError crash."""
+    """A broken bundle (unparseable protocol.yaml) must yield a generic 500
+    (no YAML parser internals echoed), not a KeyError crash."""
     with tempfile.TemporaryDirectory() as td:
         bdir = Path(td) / "broken-bundle"
         bdir.mkdir()
@@ -279,8 +280,31 @@ def test_bundle_route_broken_bundle(client, monkeypatch):
         monkeypatch.setattr(server, "BUNDLES", Path(td))
         status, body = client("/bundles/broken-bundle")
         assert status == 500
-        assert "unparseable" in body["error"]
+        assert "broken" in body["error"]
         # other bundles are still served from the real catalog
         monkeypatch.setattr(server, "BUNDLES", ROOT / "pdd-bundles")
         status, body = client("/bundles/user-registry")
         assert status == 200 and body["name"] == "user-registry"
+
+
+def test_bundles_filter_depends_on_positive(client, monkeypatch):
+    """A bundle with a string depends_on must match the filter exactly after
+    normalization (no substring matching)."""
+    with tempfile.TemporaryDirectory() as td:
+        bdir = Path(td) / "dependent-bundle"
+        bdir.mkdir()
+        (bdir / "protocol.yaml").write_text(
+            "protocol:\n  name: dependent-bundle\n  version: 1.0.0\n  status: draft\n"
+            "depends_on: user-registry\n")  # string form, normalized to [..]
+        monkeypatch.setattr(server, "BUNDLES", Path(td))
+        status, body = client("/bundles?depends_on=user-registry")
+        assert status == 200
+        assert [b["name"] for b in body["bundles"]] == ["dependent-bundle"]
+        # exact membership: a prefix must NOT match
+        status, body = client("/bundles?depends_on=user")
+        assert status == 200 and body["bundles"] == []
+
+
+def test_load_catalog_missing_dir(tmp_path):
+    """A missing bundles dir yields an empty catalog, not an exception."""
+    assert registry_index.load_catalog(tmp_path / "does-not-exist") == []

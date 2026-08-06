@@ -88,6 +88,17 @@ returns a clear 500 with the catalog error instead of a `KeyError`; and
 unreachable via HTTP since routes constrain names to real bundle dirs.
 `make test` now 34 pass (10 candidate + 24 service).
 
+**Second (should-fix) review round**: server now serves with
+`ThreadingHTTPServer` (subprocess routes must not block `/healthz`); the
+blanket exception handler logs the traceback and returns a generic 500
+instead of echoing `str(exc)` (paths / YAML parser internals); the
+broken-bundle route also returns a generic 500 with the catalog error logged;
+`load_catalog` returns an empty catalog when the bundles dir is missing
+(restores v1 `/bundles` behavior instead of 500-ing every route). Tests added:
+positive + exact-membership `depends_on` filter, missing-dir catalog,
+`server.PDD` override in the test harness. `make test` now 36 pass (10
+candidate + 26 service; `test_registry.py` 23 tests).
+
 ## Registry-server implications (feeding the next iteration)
 
 - v2 confirms the proposal's read-API direction: every endpoint stayed
