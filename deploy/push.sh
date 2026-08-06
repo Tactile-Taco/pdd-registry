@@ -52,8 +52,9 @@ printf '%s' "${GITHUB_TOKEN}" | docker login ghcr.io -u tactile-taco --password-
 docker push "${IMAGE}"
 
 # Pin the manifest to the digest we just pushed (k8s.yaml must never drift to a
-# stale :latest). RepoDigests[0] is "host/name@sha256:…".
-DIGEST="$(docker inspect --format='{{index .RepoDigests 0}}' "${IMAGE}" | sed 's/.*@//')"
+# stale :latest). RepoDigests[0] is "host/name@sha256:…"; strip the scheme so
+# the substitution below can write the full "…@sha256:<hex>" reference.
+DIGEST="$(docker inspect --format='{{index .RepoDigests 0}}' "${IMAGE}" | sed 's/.*@sha256://')"
 echo "==> Deploying image digest ${DIGEST}"
 
 echo "==> Creating evidence Secret on ${STAGING_TAILSCALE_IP} (idempotent)"
