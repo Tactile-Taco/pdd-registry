@@ -28,13 +28,16 @@ STAGING_USER="${STAGING_SSH_USER:-tacticaltaco}"
 STAGING_TARGET="${STAGING_USER}@${STAGING_TAILSCALE_IP}"
 
 # ssh to the staging guest. CI path (STAGING_SSH_KEY set, self-hosted runner):
-# the runner has no ssh agent keys and the guest's host key rotates when the
-# microvm is re-created, so host-key verification is disabled for this
-# tailnet-only target. Manual path keeps the caller's default ssh behaviour.
+# the runner has no ssh agent keys, so push.sh needs the key material written
+# to a file first (the workflow does this in $RUNNER_TEMP) and the guest host
+# key is pinned in deploy/staging-known_hosts (fail-closed: a re-created guest
+# with new keys fails until that file is rotated). Manual path keeps the
+# caller's default ssh behaviour.
 ssh_guest() {
   if [ -n "${STAGING_SSH_KEY:-}" ]; then
     ssh -i "${STAGING_SSH_KEY}" -o BatchMode=yes -o ConnectTimeout=10 \
-      -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+      -o StrictHostKeyChecking=yes \
+      -o UserKnownHostsFile="${STAGING_KNOWN_HOSTS:-deploy/staging-known_hosts}" \
       "${STAGING_TARGET}" "$@"
   else
     ssh "${STAGING_TARGET}" "$@"
@@ -62,9 +65,16 @@ printf 'PDD_EVIDENCE_KEY=%s\n' "${PDD_EVIDENCE_KEY}" \
 
 echo "==> Applying manifest (host + image digest substituted) to ${STAGING_TAILSCALE_IP}"
 MANIFEST="deploy/k8s.yaml"
-sed -e "s/__STAGING_HOST__/${PROJECT}.${STAGING_TAILSCALE_DNS}/" \
+# Escape & for sed (the values are operator-controlled, but never trust them).
+DNS_ESC="${STAGING_TAILSCALE_DNS//&/\\&}"
+SUBSTITUTED="$(sed -e "s/__STAGING_HOST__/${PROJECT}.${DNS_ESC}/" \
     -e "s|image: ghcr.io/tactile-taco/${PROJECT}.*|image: ghcr.io/tactile-taco/${PROJECT}@sha256:${DIGEST}|" \
-    "${MANIFEST}" \
+    "${MANIFEST}")"
+# Fail closed if the digest substitution did not land (e.g. manifest drift):
+# re-applying a stale pinned digest would silently roll staging back.
+printf '%s' "${SUBSTITUTED}" | grep -q "image: ghcr.io/tactile-taco/${PROJECT}@sha256:${DIGEST}" \
+  || { echo "manifest substitution failed for ${MANIFEST}" >&2; exit 1; }
+printf '%s' "${SUBSTITUTED}" \
   | ssh_guest 'sudo k3s kubectl apply -f -'
 echo "==> Bouncing the deployment to pull the new image"
 ssh_guest "sudo k3s kubectl rollout restart deployment/${PROJECT} && \

@@ -28,8 +28,9 @@ Validator Loop, an HMAC-signed Evidence Chain + ledger, and a small HTTP service
   at `ghcr.io/tactile-taco/pdd-repository@sha256:c92ae4d0…` (manifest-list digest
   from `docker push`; amd64 manifest `fe4a1d83` = M6 build).
 - **GitHub secrets** (Tactile-Taco/pdd-repository): `GHCR_PAT`,
-  `PDD_EVIDENCE_KEY`, `STAGING_HOST`, `STAGING_DNS` (plus the default
-  `GITHUB_TOKEN` used by the `gh` steps in nightly/release-gate).
+  `PDD_EVIDENCE_KEY`, `STAGING_TAILSCALE_IP`, `STAGING_TAILSCALE_DNS`,
+  `STAGING_SSH_KEY` (plus the default `GITHUB_TOKEN` used by the `gh` steps
+  in nightly/release-gate).
 - **Tests:** 36 pass (`make test` with the real key: 10 candidate + 26 service,
   incl. the v2 surface; +5 hardening tests from the two review rounds).
   `src/tests/test_registry.py` (23 tests) runs WITHOUT the evidence key.
@@ -44,8 +45,8 @@ Validator Loop, an HMAC-signed Evidence Chain + ledger, and a small HTTP service
   `STAGING_TAILSCALE_DNS` (old `STAGING_HOST`/`STAGING_DNS` deleted), plus
   new `STAGING_SSH_KEY` (runner→guest ed25519, pubkey authorized on the
   guest; host-key verification disabled for the tailnet-only guest).
-- **CI templates** in `ci-templates/` (NOT installed to `.github/workflows/` —
-  needs workflow-scope credentials; run `make ci-install`).
+- **CI workflows** in `ci-templates/` are INSTALLED to `.github/workflows/`
+  (commit 53daf0f; workflow scope granted via `gh auth refresh -s workflow`).
 
 ## 3. Key commands
 
@@ -72,9 +73,9 @@ make all         # commit gate (lint+test+validate+evidence; needs the key)
   `PDD_EVIDENCE_KEY`, `SOPS_AGE_KEY`; misc-secrets project
   (`5598630f-4109-47d9-bbfb-91bac16ac92c`) = `M6_*`, `LAPTOP_*`,
   `STAGING_TAILSCALE_DNS`, `STAGING_TAILSCALE_IP`.
-- **Naming mismatch (next-iteration item):** GitHub secrets are
-  `STAGING_HOST`/`STAGING_DNS`, but Infisical names them
-  `STAGING_TAILSCALE_IP`/`STAGING_TAILSCALE_DNS`. Align before enabling CI.
+- **Naming aligned (this session):** GitHub secrets now match Infisical
+  (`STAGING_TAILSCALE_IP`/`STAGING_TAILSCALE_DNS`; old `STAGING_HOST`/
+  `STAGING_DNS` deleted) and the deploy workflows use the tailscale names.
 - **M6:** `ssh -F /dev/null tacticaltaco@<M6_TAILSCALE_IP>` (from Infisical misc-secrets;
   printing it). Guest (staging k3s) at `localhost:2222` from the M6; stale host
   key fix = `ssh-keygen -R "[localhost]:2222"` after guest re-creates. M6 shell

@@ -1,0 +1,10 @@
+# Staging guest (microvm) SSH host keys — pinned so the CI ssh path
+# (deploy/push.sh with STAGING_SSH_KEY set) verifies the host it deploys to
+# instead of trusting the tailnet blindly.
+#
+# Host: tacticaltaco@<STAGING_TAILSCALE_IP> (guest of the M6, k3s).
+# Rotate this file whenever the guest is re-created (its host keys change):
+#   ssh m6 "ssh-keyscan -T 5 <STAGING_TAILSCALE_IP>" > deploy/staging-known_hosts
+# and commit — a stale entry FAILS the deploy (fail-closed, by design).
+100.83.160.123 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIK+cbAarYlIG93tbeOcYEPKYDRrEq2DYeRe6pJgjFGz1
+100.83.160.123 ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQCvqT1KW2ZISgNc0ZYWP/mIvPMaYwKyBhJZZUm23OdWVqeJHHgQ0Jr9CHiA3yjDvyo5EGS8YUMyq0KkW8Uph5fbPh9eD556VZfib1tJ3JMRxGoaNrieDNigLe/2VaHu1JlNBjzH3jAoj9s/uQuOHIZg6kOYXXSxHexhSliDhhUXjLYhrTie9u3R3764zmRA9HKuC85xibmxxp7U45As/3mu5zZA9eMzwoHQgi1oV54QB/Ksed+pnIPZtlQ6vtsh9GehShJQUP5yueAgSLvIvry95zYvvMh+fi9234fXRdbnAIf5f74Un8A6Svdgtz2w2TqRQ0j7jVud+kmoSmHTG9DIugnJjbu15EPTf/JTFEGdOWuj5k+BRSvEEP/cMONC7NKImazWp6BOWM+kDAS2mq2n4N4FPw1MecDeb0dojdBuroZuJxvXaegDviLf+kfqdiu67e5E1GvYGvI+hiERr5/fT0fSPw6IbcTV0XGG02/Znd4ZnPPEhhJY/Wdo1OPxPMuFO4Fr57vSy2TuYYv8Zq2gblFxa1sbWAg1ENPBALdc+DgSJx9ejfOqRkP3vpBR50e+PnB40Ppd7bX4OD7BQ5GgjH+0IwRO8c+VXhAovu1Z9whAJbSjh/LgPwxGm6R1ZcEPxUNPDCBhwVYU+pWO5Q44Figkt4To0BT03bsgt84ffQ==

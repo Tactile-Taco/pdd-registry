@@ -41,9 +41,12 @@ services.github-runners.pdd = {
   Note: re-registration (config/token change) needs a fresh token; a durable
   fine-grained PAT (`Administration: read` on the repo) can replace it later.
 - The runner user needs `docker` (push.sh builds/pushes via docker) and ssh
-  access to the staging guest (dedicated key, `STAGING_SSH_KEY` GitHub secret;
-  the guest host key rotates on microvm re-create, so host-key verification is
-  disabled for this tailnet-only target).
+  access to the staging guest. The GitHub secret `STAGING_SSH_KEY` holds the
+  private key MATERIAL (ed25519, no passphrase); the workflow materializes it
+  to `$RUNNER_TEMP/ci-staging-key` (0600) before calling push.sh. The guest's
+  host key is pinned in `deploy/staging-known_hosts` (fail-closed: rotate that
+  file whenever the guest microvm is re-created; a stale entry blocks the
+  deploy on purpose).
 
 ## Secrets in GitHub (repo Actions secrets, names aligned with Infisical)
 

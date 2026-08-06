@@ -23,9 +23,16 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GHCR_PAT }}
           STAGING_TAILSCALE_IP: ${{ secrets.STAGING_TAILSCALE_IP }}
           STAGING_TAILSCALE_DNS: ${{ secrets.STAGING_TAILSCALE_DNS }}
-          STAGING_SSH_KEY: ${{ secrets.STAGING_SSH_KEY }}
+          STAGING_SSH_KEY_MATERIAL: ${{ secrets.STAGING_SSH_KEY }}
+          STAGING_KNOWN_HOSTS: deploy/staging-known_hosts
           PDD_EVIDENCE_KEY: ${{ secrets.PDD_EVIDENCE_KEY }}
-        run: ./deploy/push.sh
+        run: |
+          # The secret holds key material; ssh -i needs a file. Materialize
+          # under $RUNNER_TEMP with 0600 perms (the value is masked in logs).
+          umask 077
+          printf '%s\n' "$STAGING_SSH_KEY_MATERIAL" > "$RUNNER_TEMP/ci-staging-key"
+          export STAGING_SSH_KEY="$RUNNER_TEMP/ci-staging-key"
+          ./deploy/push.sh
       - name: Verify service
         env:
           STAGING_TAILSCALE_IP: ${{ secrets.STAGING_TAILSCALE_IP }}
