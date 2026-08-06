@@ -1,6 +1,6 @@
 # pdd-repository — Handoff
 
-**Date:** 2026-08-06 · **Branch:** `pdd-work` — pushed and folded into `main` at `492bd01` (all commits on origin; `main` == `origin/main` == `origin/pdd-work` == `492bd01`) · **Worktree:** `/home/TacticalTaco/.reasonix/global-workspace/pdd-repository-wt` · **Main checkout:** `/home/TacticalTaco/.reasonix/global-workspace/pdd-repository` (on `main`, synced)
+**Date:** 2026-08-06 · **Branch:** `pdd-work` — pushed and folded into `main` at `53daf0f` (all commits on origin; `main` == `origin/main` == `origin/pdd-work` == `53daf0f`) · **Worktree:** `/home/TacticalTaco/.reasonix/global-workspace/pdd-repository-wt` · **Main checkout:** `/home/TacticalTaco/.reasonix/global-workspace/pdd-repository` (on `main`, synced)
 
 > ⚠️ This repo is public: real addresses never appear here. Machine addresses
 > (M6 tailscale IP, staging tailscale IP/DNS, ports) live in Infisical
@@ -33,11 +33,17 @@ Validator Loop, an HMAC-signed Evidence Chain + ledger, and a small HTTP service
 - **Tests:** 36 pass (`make test` with the real key: 10 candidate + 26 service,
   incl. the v2 surface; +5 hardening tests from the two review rounds).
   `src/tests/test_registry.py` (23 tests) runs WITHOUT the evidence key.
-- **Fresh review round DONE:** the interrupted post-mutation review was
-  completed; findings fixed across two rounds (shape normalization,
-  broken-bundle route, `ledger_view` name guard, `ThreadingHTTPServer`,
-  generic 500s, missing-dir catalog) — see the retrospective addendum. The
-  fix commits are part of the unpushed set.
+- **Self-hosted runner DONE:** `m6-pdd` (repo-scoped, label `staging-deploy`)
+  live on the M6 via nixos-infra `modules/github-runner.nix` (nixpkgs-unstable
+  runner v2.335.1; 25.05's v2.330.0 is deprecated by GitHub). CI workflows
+  installed via `make ci-install` and pushed (workflow scope granted by
+  refresh). `pdd-validator-loop` passed on main (1m23s). `pdd-staging-deploy`
+  E2E was blocked by a GitHub Actions outage (see §8); re-dispatch after it
+  clears.
+- **Secrets renamed** to match Infisical: `STAGING_TAILSCALE_IP` /
+  `STAGING_TAILSCALE_DNS` (old `STAGING_HOST`/`STAGING_DNS` deleted), plus
+  new `STAGING_SSH_KEY` (runner→guest ed25519, pubkey authorized on the
+  guest; host-key verification disabled for the tailnet-only guest).
 - **CI templates** in `ci-templates/` (NOT installed to `.github/workflows/` —
   needs workflow-scope credentials; run `make ci-install`).
 
@@ -96,8 +102,11 @@ make all         # commit gate (lint+test+validate+evidence; needs the key)
 
 ## 7. Next steps (not done, flagged)
 
-1. **Self-hosted runner — IN PROGRESS this session**: M6 runner via nixos-infra
-   `services.github-runners` + `make ci-install`; fix the STAGING_* naming.
+1. ~~Self-hosted runner + CI install~~ **DONE (this session)**: `m6-pdd` on
+   the M6 (nixos-infra 58e57d7), `make ci-install` committed on main
+   (53daf0f), STAGING secrets aligned. Remaining: re-run `pdd-staging-deploy`
+   once the GitHub Actions outage clears (see §8) — the runner itself is
+   online and job-ready.
 2. ~~Fold `pdd-work` → `main`~~ **DONE (this session)**: fast-forwarded
    `dc928e8..492bd01` via `git push origin pdd-work:main` — main carries the
    re-signed evidence chain; primary checkout synced to `origin/main`.
@@ -110,7 +119,28 @@ make all         # commit gate (lint+test+validate+evidence; needs the key)
    milestone; push/pull + auth still explicitly out of scope. **Re-verified
    this session**: `make test` 36 pass (10 candidate + 26 service),
    `git diff --check` clean, CLI `pdd index`/`pdd search idempotent` run
-   live. All 5 commits pushed to origin and folded into `main`.
+   live. All commits pushed to origin and folded into `main`.
 4. Optional nits: try/except around the `infisical` subprocess in
    `src/tests/test_server.py:35`; `mktemp -d` HOME cleanup in the Makefile;
    stale generic template in `.reasonix/skills/pdd-ci-architect/assets/`.
+
+## 8. CI + runner status (2026-08-06)
+
+- Workflows installed: `pdd-pr-gates`, `pdd-validator-loop` (passed on
+  main), `pdd-nightly`, `pdd-release-gate`, `pdd-staging-deploy` (trigger:
+  push to `main` + `workflow_dispatch`; was `dev`, which never existed).
+- **YAML gotcha fixed**: inline flow maps with `${{ … }}`
+  (`env: { PDD_EVIDENCE_KEY: … }`) are invalid — GitHub rejects the whole
+  workflow file. All env/with blocks are now block-form.
+- Runner on the M6: `github-runner-pdd.service` (user `github-runner`,
+  group `docker`). Registration token is a 1h sops secret
+  (`github_runner_pdd_token` in nixos-infra secrets.yaml): do NOT change
+  url/name/labels/token without minting a fresh token
+  (`gh api -X POST repos/Tactile-Taco/pdd-repository/actions/runners/registration-token`)
+  and rebuilding — or replace it with a fine-grained PAT (`Administration`
+  read on the repo) for durability.
+- **GitHub Actions outage at 15:22Z 2026-08-06** (status: major, partial
+  outage, "workflow runs failing to start"): blocked the first
+  `pdd-staging-deploy` E2E at "Getting action download info". Not our
+  config: first job of the same commit downloaded actions fine before the
+  incident. Re-dispatch after it resolves.
