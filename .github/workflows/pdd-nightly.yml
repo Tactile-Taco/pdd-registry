@@ -18,10 +18,12 @@ jobs:
         run: PBT_RUNS=5000 python3 validators/validate_candidate.py pdd-bundles/user-registry implementations/user-registry/python-stdlib --pbt-runs 5000
       - name: Candidate suite (scrubbed) + service verification (key)
         run: make test
-        env: { PDD_EVIDENCE_KEY: ${{ secrets.PDD_EVIDENCE_KEY }} }
+        env:
+          PDD_EVIDENCE_KEY: ${{ secrets.PDD_EVIDENCE_KEY }}
       - name: Evidence chain verify
         run: python3 .reasonix/skills/pdd-evidence-keeper/scripts/evidence_chain.py verify evidence/user-registry/runtime-ledger.jsonl
-        env: { PDD_EVIDENCE_KEY: ${{ secrets.PDD_EVIDENCE_KEY }} }
+        env:
+          PDD_EVIDENCE_KEY: ${{ secrets.PDD_EVIDENCE_KEY }}
       - name: Open issue on failure
         if: failure()
         run: gh issue create --title "nightly pdd failure $(date +%F)" --body "see run $GITHUB_RUN_ID"

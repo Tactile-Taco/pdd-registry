@@ -18,13 +18,15 @@ jobs:
       # candidate code), then the service verification surface with the key.
       - name: Candidate suite (scrubbed) + service verification (key)
         run: make test
-        env: { PDD_EVIDENCE_KEY: ${{ secrets.PDD_EVIDENCE_KEY }} }
+        env:
+          PDD_EVIDENCE_KEY: ${{ secrets.PDD_EVIDENCE_KEY }}
       - name: Validator loop green on this commit
         run: make validate
       # Key scoped to evidence steps only.
       - name: Evidence chain build + verify
         run: make evidence
-        env: { PDD_EVIDENCE_KEY: ${{ secrets.PDD_EVIDENCE_KEY }} }
+        env:
+          PDD_EVIDENCE_KEY: ${{ secrets.PDD_EVIDENCE_KEY }}
       - name: Attach evidence bundle to release
         run: tar czf pdd-evidence.tar.gz evidence/ && gh release upload "$GITHUB_REF_NAME" pdd-evidence.tar.gz --clobber
         env:
