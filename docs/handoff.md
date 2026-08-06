@@ -144,3 +144,9 @@ make all         # commit gate (lint+test+validate+evidence; needs the key)
   `pdd-staging-deploy` E2E at "Getting action download info". Not our
   config: first job of the same commit downloaded actions fine before the
   incident. Re-dispatch after it resolves.
+- During the outage the pipeline itself proved out: run 31117469920 built
+  the image on the runner and failed only at `docker push ghcr.io` with a
+  transient `connect: network is unreachable` (docker daemon egress; WARP
+  route churn). Verified working afterwards: `docker pull` from ghcr and
+  docker hub as the runner user, plus the exact CI ssh path to the guest.
+  The deploy E2E just needs one clean Actions window (see §7 item 1).
