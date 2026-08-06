@@ -9,10 +9,12 @@ description: "Author GitHub Actions for PDD Validator Loops: PR gates, three-lay
 Translate the Validator Loop into durable, scheduled, enterprise-grade CI. CI is the always-on Validation Engine trigger: reproducible, cached, gated.
 
 ## Registry integration
-- CI gates mirror the dependency DAG (pdd-registry-client DECIDE item 0):
-  validator-loop runs standalone bundles (no unvalidated `depends_on`) FIRST
-  as parallel jobs; dependent bundles queue until their leaves admit. PR
-  gates block on `must` conflicts AND on unsealed dependencies.
+- CI gates mirror the dependency DAG (pdd-registry-client DECIDE item 0).
+  Today the validator-loop is one sequential job on main and
+  `make validate`/`make evidence` are hardcoded to user-registry — the
+  agent orders work by the DAG (standalone bundles first). Parallel
+  per-bundle CI jobs and status-gated PR checks are the roadmap build-out;
+  PR gates today run bundle lint + cross-bundle compatibility.
 - The nightly workflow is the registry drift audit: new versions, new
   implementations, and new admissions in `pdd-bundles/`/`implementations/`
   re-trigger full validation + evidence verify for affected dependents.

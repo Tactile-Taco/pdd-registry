@@ -14,7 +14,7 @@ Owns the Evidence Store. Guarantees: every admitted artifact is linked to its pr
   implementation variant or a new protocol version = a NEW chain with its
   own genesis admission; an updated implementation = a superseding admission
   block on a new chain (the old chain stays as re-verifiable history).
-- Registry digest-drift policy (handoff §8): the validation results file is
+- Registry digest-drift policy (handoff §2): the validation results file is
   truth; an old admission may attest an earlier bundle digest — keep it, do
   not re-sign history. Optional hardening (not yet built): `evidence verify`
   warning when the embedded digest differs from the live bundle.

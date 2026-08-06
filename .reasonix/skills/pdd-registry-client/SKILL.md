@@ -39,7 +39,9 @@ FIRST** — they have nothing blocking them and validate in parallel. A bundle
 whose `depends_on` targets are draft/unsealed/unvalidated is blocked until
 its leaves admit; validate leaves first, then dependents, in DAG order.
 `pdd-contract-negotiator` reconciles the handshakes between them before
-sealing. CI maps to the same order (validator-loop: standalone jobs first).
+sealing. CI today runs the loop as one sequential job on main (and
+`make validate`/`make evidence` are hardcoded to user-registry) — the DAG
+ordering is agent-side; parallel per-bundle CI jobs are the roadmap.
 
 **1. SEARCH.** `python3 scripts/pdd.py search "<capability terms>"` (or the
 `/search` endpoint). Search for the required *capability/behavior*, not just
@@ -92,6 +94,10 @@ evidence).
 existing admitted implementation; modify a sealed bundle's protocol files
 (that is a new version, item 6); submit an implementation for an unsealed
 bundle; validate a bundle before its `depends_on` leaves admit.
+
+> These gates are agent-enforced: the tooling does not yet read `status`
+> (sealed-only admission and blocked-edge ordering are self-enforced, see
+> pdd-validation-engine).
 
 ## ADD — admit a new protocol bundle
 
