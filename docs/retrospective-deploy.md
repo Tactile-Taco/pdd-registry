@@ -59,9 +59,13 @@ Date: 2026-08-06 · Goal: minimal pdd service live on k3s staging, PDD methodolo
    `#project` template's push.sh with either (a) docker save/load + push, or
    (b) pin an old nixpkgs with skopeo-nix2container — verify which the M6 can
    sustain.
-2. **Evidence key**: staging uses `dev-local-key` (matches committed dev-signed
-   evidence). Before any real release: rotate to a real key from Infisical,
-   re-sign evidence, update the Secret (documented in AGENTS.md invariants).
+2. ~~**Evidence key**~~ **DONE (2026-08-06)**: staging previously used
+   `dev-local-key`. Rotated to the production `PDD_EVIDENCE_KEY` from Infisical
+   (nixos-infra, prod): evidence re-signed under it (commit 3adcf4d), k8s
+   Secret recreated from it (stdin, never argv), image `c92ae4d0` deployed —
+   live `/evidence/admission` reports `verified: true` and `/evidence/verify`
+   `ok: true`. Evidence is now single-key (rotation = re-sign + redeploy; see
+   AGENTS.md invariants).
 3. **Runner**: the manual path works; the self-hosted runner
    (docs/runner-proposal.md + ci-templates/pdd-staging-deploy.yml) is the
    follow-up for push-to-dev automation — deferred, not abandoned.
