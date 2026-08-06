@@ -257,12 +257,19 @@ def layer_behavioral(bundle: Path, impl: Path, pbt_runs: int, manifest: dict) ->
 
 
 def _docker_infra_error(stderr: str) -> bool:
-    """True when a failed sandbox run looks like an infrastructure problem
-    rather than a candidate-side failure (security review: candidate smoke
-    failures must be `fail`, not `skip`)."""
-    return any(marker in stderr for marker in (
-        "Cannot connect to the Docker daemon", "Error response from daemon",
-        "docker: ", "docker: error", "error during connect", "image not found"))
+    """True only when the failure is provably infrastructure, not the
+    candidate: the docker CLI writes its own errors as the FIRST stderr line
+    (container output follows), and a candidate-side failure carries a
+    Traceback/AssertionError. Anything ambiguous is NOT infra — the smoke
+    then records 'fail' (fail-closed; a hostile candidate must not be able to
+    downgrade its own failed smoke to a non-gating skip by echoing a docker
+    marker, security review)."""
+    if "Traceback" in stderr or "AssertionError" in stderr:
+        return False
+    first = (stderr.splitlines() or [""])[0]
+    return any(first.startswith(marker) for marker in (
+        "docker: ", "Error response from daemon", "Cannot connect to the Docker daemon",
+        "error during connect", "Unable to find image", "denied: requested access"))
 
 
 def mutation_sanity(impl: Path, testdir: Path, pbt_runs: int, manifest: dict) -> dict:
@@ -293,7 +300,7 @@ def mutation_sanity(impl: Path, testdir: Path, pbt_runs: int, manifest: dict) ->
         proc = subprocess.run(
             [sys.executable, "-m", "pytest", str(mutant_dir / "tests"),
              "-q", "-k", mutant_def["pytest_filter"], "--tb=no"],
-            capture_output=True, text=True, env=_scrubbed_env(pbt_runs), timeout=900)
+            cwd=mutant_dir, capture_output=True, text=True, env=_scrubbed_env(pbt_runs), timeout=900)
         if proc.returncode == 1:
             return {"invariant_id": mutant_def.get("invariant", "B-001"), "layer": "behavioral",
                     "outcome": "pass",
