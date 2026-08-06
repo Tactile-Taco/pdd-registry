@@ -1,0 +1,60 @@
+{
+  "files": [
+    "pdd_registry.py",
+    "tests/test_pdd_registry.py"
+  ],
+  "dependencies": {
+    "runtime": [
+      "stdlib only"
+    ],
+    "dev": [
+      "pytest",
+      "hypothesis",
+      "jsonschema"
+    ]
+  },
+  "invariant_lineage": {
+    "S-001": [
+      "test_S001_search_response_matches_response_schema",
+      "test_S001_filtered_bundles_are_serializable"
+    ],
+    "S-002": [
+      "test_S002_error_envelope_uses_enumerated_kinds"
+    ],
+    "B-001": [
+      "test_B001_deterministic_search",
+      "test_B001_order_stable_across_calls"
+    ],
+    "B-002": [
+      "test_B002_tokens_and_per_entry",
+      "test_B002_name_matches_rank_above_invariant_matches"
+    ],
+    "B-003": [
+      "test_B003_blank_or_nonword_query_fails_closed",
+      "test_B003_unknown_bundle_returns_not_found_no_state_change"
+    ],
+    "B-004": [
+      "test_B004_status_filter_is_exact",
+      "test_B004_depends_on_filter_exact_membership",
+      "test_B004_listing_keeps_stable_order"
+    ],
+    "B-005": [
+      "test_B005_severity_filter_accepts_only_must_should"
+    ],
+    "O-001": [
+      "test_O001_O002_no_io_in_candidate_source"
+    ],
+    "O-002": [
+      "test_O001_O002_no_io_in_candidate_source"
+    ],
+    "O-005": [
+      "test_O005_search_latency_budget_observed"
+    ]
+  },
+  "known_limitations": [
+    "Attests the pure in-memory core only; HTTP transport and filesystem index (src/server.py, src/registry_index.py) are the deployment surface, not the attested artifact",
+    "No persistence: the caller supplies the catalog; state is lost with the process",
+    "No concurrency control (max_concurrency: 1 per capability manifest)",
+    "Performance budgets (O-005) are advisory should-tier; measured by benchmark, not admission-gating"
+  ]
+}

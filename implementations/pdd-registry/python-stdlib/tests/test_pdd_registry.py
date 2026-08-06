@@ -24,7 +24,12 @@ except ImportError:  # pragma: no cover
     jsonschema = None
 
 _SCHEMAS = REPO_ROOT / "pdd-bundles" / "pdd-registry" / "schemas"
-_RESPONSE_SCHEMA = json.loads((_SCHEMAS / "response.schema.json").read_text())
+
+
+def _response_schema():
+    """Load the bundle's response schema lazily: the mutant run executes from
+    a tempdir where the repo path does not exist — collection must not fail."""
+    return json.loads((_SCHEMAS / "response.schema.json").read_text())
 
 
 def _catalog():
@@ -68,10 +73,10 @@ def _catalog():
 
 
 def test_S001_search_response_matches_response_schema():
-    if jsonschema is None:
+    if jsonschema is None or not _SCHEMAS.exists():
         return  # engine records this as skip upstream; keep the suite green here
     r = Registry(_catalog()).search("idempotent")
-    jsonschema.validate(r, _RESPONSE_SCHEMA)
+    jsonschema.validate(r, _response_schema())
 
 
 def test_S001_filtered_bundles_are_serializable():

@@ -25,6 +25,7 @@ import ast
 import hashlib
 import json
 import os
+import re
 import shutil
 import statistics
 import subprocess
@@ -225,19 +226,22 @@ def mutation_sanity(impl: Path, testdir: Path, pbt_runs: int, manifest: dict) ->
             [sys.executable, "-m", "pytest", str(mutant_dir / "tests"),
              "-q", "-k", mutant_def["pytest_filter"], "--tb=no"],
             capture_output=True, text=True, env=_scrubbed_env(pbt_runs), timeout=900)
-        if proc.returncode != 0:
-            if proc.returncode == 5 or "no tests ran" in proc.stdout.lower():
-                return {"invariant_id": mutant_def.get("invariant", "B-001"), "layer": "behavioral",
-                        "outcome": "mutation-suspect",
-                        "evidence": "mutant run collected no tests (exit 5) — pytest filter may be stale; "
-                                    "do not admit until the property runs against the mutant"}
-            note = "assertion failure" if "assert" in proc.stdout.lower() else f"exit {proc.returncode}"
+        if proc.returncode == 1:
             return {"invariant_id": mutant_def.get("invariant", "B-001"), "layer": "behavioral",
                     "outcome": "pass",
-                    "evidence": f"mutant rejected by {mutant_def['pytest_filter']} ({note}) — property is not vacuous"}
+                    "evidence": f"mutant rejected by {mutant_def['pytest_filter']} "
+                                f"(exit 1, assertion failure) — property is not vacuous"}
+        if proc.returncode == 5 or "no tests ran" in proc.stdout.lower():
+            return {"invariant_id": mutant_def.get("invariant", "B-001"), "layer": "behavioral",
+                    "outcome": "mutation-suspect",
+                    "evidence": "mutant run collected no tests (exit 5) — pytest filter may be stale; "
+                                "do not admit until the property runs against the mutant"}
+        # Only exit 1 (assertion failure) proves non-vacuity. Exit 2 (collection
+        # error) / 4 (usage) / other failures prove nothing about the property.
         return {"invariant_id": mutant_def.get("invariant", "B-001"), "layer": "behavioral",
                 "outcome": "mutation-suspect",
-                "evidence": f"{mutant_def['pytest_filter']} passed against the mutant — property is vacuous"}
+                "evidence": f"mutant run exited {proc.returncode} (expect exit 1 = assertion failure); "
+                            f"mutant definition or filter is broken — {proc.stdout.strip()[-160:] or proc.stderr.strip()[-160:]}"}
 
 
 def layer_operational_dynamic(bundle: Path, impl: Path, sandbox: bool, pbt_runs: int,
@@ -296,7 +300,7 @@ def layer_operational_dynamic(bundle: Path, impl: Path, sandbox: bool, pbt_runs:
         "import json, statistics, sys, time\n"
         "sys.path.insert(0, '.')\n"
         f"from {entry_module} import {entry_class}\n"
-        f"reg = {entry_class}()\n"
+        f"reg = {entry_class}({json.dumps(bench.get('catalog') or [])})\n"
         "lat = []\n"
         f"for i in range({bench.get('iterations', 1000)}):\n"
         f"    args = {json.dumps(bench.get('args_template') or {})}\n"
@@ -346,6 +350,11 @@ def main(argv: list[str]) -> int:
         return 2
     manifest = json.loads(manifest_path.read_text())
     entry_module = manifest.get("entry_module") or "user_registry"
+    entry_class = manifest.get("entry_class") or "UserRegistry"
+    if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", entry_module) or not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", entry_class):
+        print(f"candidate-manifest.json entry_module/entry_class must be Python identifiers, got "
+              f"{entry_module!r}/{entry_class!r}")
+        return 2
     proto = load_yaml(bundle / "protocol.yaml") or {}
     protocol = proto.get("protocol") or proto
     name = bundle.name

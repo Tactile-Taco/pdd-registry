@@ -1,10 +1,10 @@
 {
   "protocol": {
-    "name": "user-registry",
+    "name": "pdd-registry",
     "version": "1.0.0",
-    "bundle_digest": "sha256:ecf72a1122d8866b10666833b93f1601d7f26591fdbde1637b602136e6048318"
+    "bundle_digest": "sha256:17bf338a2a97ca75a5b5aff07a5b785078d2817dcb8ddb0493de6dc4ddf524ac"
   },
-  "candidate_digest": "sha256:5614cd8f49224f28f4bed982555e2971d58334590744e57ca75c7f6616676dcf",
+  "candidate_digest": "sha256:3f170f1707a5b88adc5ababb6abdf2e9170d1f0aa636182e3a4f3a455f07de4f",
   "validators": [
     {
       "id": "schema-validator",
@@ -65,7 +65,7 @@
       "invariant_id": "O-003",
       "layer": "operational",
       "outcome": "pass",
-      "evidence": "imports=['__future__', 're', 'time', 'typing', 'uuid']; unapproved=[]"
+      "evidence": "imports=['dataclasses', 'json', 're']; unapproved=[]"
     },
     {
       "invariant_id": "O-001,O-002,O-004",
@@ -77,13 +77,13 @@
       "invariant_id": "B-001,B-002,B-003,B-004,B-005",
       "layer": "behavioral",
       "outcome": "pass",
-      "evidence": "pytest: 10 passed in 3.07s"
+      "evidence": "pytest: 15 passed in 0.28s"
     },
     {
       "invariant_id": "B-001",
       "layer": "behavioral",
       "outcome": "pass",
-      "evidence": "mutant rejected by B001_repeat (exit 1, assertion failure) \u2014 property is not vacuous"
+      "evidence": "mutant rejected by B001_deterministic (exit 1, assertion failure) \u2014 property is not vacuous"
     },
     {
       "invariant_id": "O-001,O-002",
@@ -95,7 +95,7 @@
       "invariant_id": "O-005",
       "layer": "operational",
       "outcome": "observe",
-      "evidence": "benchmark failed: Traceback (most recent call last):\n  File \"<string>\", line 4, in <module>\n    reg = UserRegistry([])\nTypeError: UserRegi"
+      "evidence": "p95=0.01ms over 1000 calls (budget 500ms, should-tier)"
     }
   ],
   "verdict": "admit",

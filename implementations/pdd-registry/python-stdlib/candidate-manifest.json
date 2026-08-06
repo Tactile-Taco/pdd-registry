@@ -18,7 +18,21 @@
   "benchmark": {
     "method": "search",
     "iterations": 1000,
-    "args_template": {"query": "bench-%d"}
+    "args_template": {"query": "idempotent"},
+    "catalog": [
+      {"name": "user-registry", "version": "1.0.0", "status": "sealed",
+       "purpose": "Idempotent user creation.",
+       "invariants": {"behavioral": [{"id": "B-001", "statement": "Idempotent creation.", "severity": "must"}]},
+       "capabilities": {}},
+      {"name": "pdd-registry", "version": "1.0.0", "status": "sealed",
+       "purpose": "Catalog search and read views.",
+       "invariants": {"behavioral": [{"id": "B-001", "statement": "Deterministic idempotent search.", "severity": "must"}]},
+       "capabilities": {}},
+      {"name": "audit-ledger", "version": "0.9.0", "status": "draft",
+       "purpose": "Append-only event ledger for protocol operations.",
+       "invariants": {"behavioral": [{"id": "B-007", "statement": "Idempotent replay of events.", "severity": "must"}]},
+       "capabilities": {}}
+    ]
   },
   "mutation_sanity": {
     "invariant": "B-001",

@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import shutil
 import subprocess
 import sys
@@ -122,6 +123,8 @@ def cmd_evidence_build(argv: list[str]) -> int:
     entry_module = manifest.get("entry_module")
     if not entry_module:
         sys.exit("candidate-manifest.json must declare `entry_module`")
+    if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", entry_module):
+        sys.exit(f"entry_module must be a Python identifier, got {entry_module!r}")
     impl_src = impl / f"{entry_module}.py"
     impl_digest = "sha256:" + hashlib.sha256(impl_src.read_bytes()).hexdigest()
     # Version comes from the sealed protocol, not a hardcoded literal.
@@ -266,6 +269,11 @@ def cmd_evidence_verify(argv: list[str]) -> int:
             continue
         vr = subprocess.run([sys.executable, str(EVIDENCE_CHAIN), "verify-evidence", str(path)],
                             capture_output=True, text=True)
+        if vr.returncode != 0:
+            print(f"FAIL: {path.name} verify-evidence subprocess errored: "
+                  f"{vr.stderr.strip() or vr.stdout.strip()[:200]}")
+            rc = 1
+            continue
         vres = json.loads(vr.stdout)
         if not vres["ok"]:
             print(f"FAIL: {path.name} digest/signature invalid ({vres['reason']})")
@@ -307,9 +315,17 @@ def cmd_run(argv: list[str]) -> int:
         if not (entry_module and entry_class and smoke.get("method")):
             print("candidate-manifest.json must declare entry_module/entry_class/smoke")
             return 1
+        if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", entry_module) or not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", entry_class):
+            print(f"entry_module/entry_class must be Python identifiers, got {entry_module!r}/{entry_class!r}")
+            return 1
+        args_lit = json.dumps(smoke.get("args") or {})
+        if smoke.get("call_style") == "single_dict":
+            call = f"{entry_class}().{smoke['method']}({args_lit})"
+        else:
+            call = f"{entry_class}().{smoke['method']}(**{args_lit})"
         code = ("import sys; sys.path.insert(0,'.'); "
                 f"from {entry_module} import {entry_class}; "
-                f"r = {entry_class}().{smoke['method']}(**{json.dumps(smoke.get('args') or {})}); "
+                f"r = {call}; "
                 f"assert {smoke.get('assert_expr', 'True')}; print('run: ok')")
         r = subprocess.run(
             ["docker", "run", "--rm", "--network", "none", "--read-only",

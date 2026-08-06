@@ -11,9 +11,8 @@ capabilities, ...}); entries carrying an 'error' key are broken bundles and
 are skipped by search/listing, exactly like the shared index.
 """
 
-import json  # noqa: F401  (kept: schema conformance helpers live in tests)
+import json  # noqa: F401  (allowlisted import; schema helpers live in tests)
 import re
-import typing
 from dataclasses import dataclass, field
 
 ERROR_KINDS = ("invalid_request", "not_found", "internal")
@@ -128,8 +127,3 @@ class Registry:
                     view[layer] = items
                 return {"ok": True, "bundle": name, "invariants": view, "error": None}
         return _error("not_found", f"no bundle named {name!r}")
-
-
-def _catalog_snapshot(catalog: typing.Sequence[dict]) -> typing.Any:
-    """Deep snapshot of the catalog for purity checks (B-001/B-003)."""
-    return json.loads(json.dumps(catalog))
