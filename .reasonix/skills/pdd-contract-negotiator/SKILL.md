@@ -8,6 +8,18 @@ description: "Reconcile interdependent PDD bundles before sealing: dependency gr
 ## Role
 Implements the paper's Contract Negotiation step: dependency resolution, compatibility checking, capability reconciliation, and conflict detection across transitive protocol boundaries. Output = a sealed bundle set + negotiation minutes.
 
+## Registry integration
+- Build the DAG from the live catalog (`python3 scripts/pdd.py index`):
+  `depends_on`/`provides` across ALL bundles, not just the pair under
+  negotiation. Standalone bundles seal first; dependents wait for their
+  leaves (pdd-registry-client DECIDE item 0).
+- Prefer existing sealed versions for dependencies — a dependency that
+  already admits needs no re-negotiation; only a semantic change justifies a
+  new version (DECIDE item 6).
+- Minute the registry search: which candidates were searched, near-misses,
+  and why the chosen handshake won. Minutes are negotiation evidence
+  artifacts, not prose.
+
 ## Inputs
 - Two or more `draft` bundles produced by pdd-protocol-author agents.
 - Each bundle's `protocol.yaml` `depends_on` / `provides` / `consumes` declarations.

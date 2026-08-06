@@ -8,6 +8,18 @@ description: "Close the PDD remediation loop: violation to repair context, candi
 ## Role
 Owns the closed loop: violation block -> repair context C_t -> regenerated candidate I' -> Validate(I', P) -> new ledger block. A patch generated in response to a failure is NOT trusted because it responded to a real failure; it re-enters admission like any candidate.
 
+## Registry integration
+- Route by classification against the registry (pdd-registry-client DECIDE):
+  `implementation-defect` → updated implementation + NEW evidence chain
+  (item 5); `protocol-gap` → NEW VERSION of the protocol (item 6);
+  `validator-defect` → validator fix + re-validation (new results, same
+  chain); `environment-drift` → re-run with corrected provenance.
+- The repair candidate I' re-enters admission like any candidate — same
+  engine, same gates; the violation block's ledger head binds the repair to
+  the exact registry state (protocol version + impl digest) it responded to.
+- DAG-aware: remediating a leaf unblocks its dependents; remediating a
+  dependent before its leaves admit is a no-op.
+
 ## Workflow
 1. **Ingest violation.** Either (a) runtime `attest-violation` block digest from the RVL, or (b) build-time `reject` verdict from the Validation Engine.
 2. **Build repair context C_t**: violated invariant id + statement; layer (S/B/O); shrunk counterexample or redacted observation; protocol version + bundle digest; implementation version + artifact digest; environment metadata; ledger head digest; recurrence count for this invariant (ledger scan); classification `implementation-defect | protocol-gap | validator-defect | environment-drift`.

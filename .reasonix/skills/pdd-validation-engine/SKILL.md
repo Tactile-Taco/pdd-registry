@@ -8,6 +8,16 @@ description: "Run the PDD Validator Loop: structural/behavioral/operational chec
 ## Role
 The admission controller. Generation proposes; validation decides. All three layers are jointly necessary: structural checks miss semantics, behavioral checks miss hidden capabilities, operational checks cannot establish meaning.
 
+## Registry integration
+- Validate in dependency-DAG order: standalone bundles (no unvalidated
+  `depends_on`) FIRST — they are parallelizable and unblock everything
+  downstream; a bundle whose `depends_on` targets are draft/unsealed is not
+  admissible yet — report the blocked edge explicitly, never a silent skip.
+- Registry context feeds the loop: `python3 scripts/pdd.py index` gives the
+  live catalog; `evidence verify` confirms a candidate's chain before
+  re-validation; re-validation after a candidate change is mandatory —
+  never reuse an old verdict for a new digest.
+
 ## Layer 1 — Structural (S)
 - Compile/serialize check; validate payloads against bundle JSON Schemas (ajv or equivalent).
 - Contract tests: enumerate required fields, nullability, enums, error variants; probe with valid + invalid generators.

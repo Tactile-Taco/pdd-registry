@@ -8,6 +8,19 @@ description: "Maintain PDD Evidence Chains and Dynamic Evidence Ledgers: signed 
 ## Role
 Owns the Evidence Store. Guarantees: every admitted artifact is linked to its protocol, validators, and results by a verifiable chain; every runtime observation extends that chain append-only.
 
+## Registry integration
+- Every admitted registry artifact is chained: protocol version digest,
+  implementation candidate digest, validator identities, results, t. A new
+  implementation variant or a new protocol version = a NEW chain with its
+  own genesis admission; an updated implementation = a superseding admission
+  block on a new chain (the old chain stays as re-verifiable history).
+- Registry digest-drift policy (handoff §8): the validation results file is
+  truth; an old admission may attest an earlier bundle digest — keep it, do
+  not re-sign history. Optional hardening (not yet built): `evidence verify`
+  warning when the embedded digest differs from the live bundle.
+- `runtime-ledger.jsonl` blocks identify the protocol version + impl digest
+  from the registry; runtime evidence extends the chain append-only.
+
 ## Build-time: Evidence Chain
 Evidence object per paper: `E = H(P, I, V, R, t)` — P protocol bundle digest, I implementation artifact digest, V validator identities+versions, R validation results, t time/environment/provenance.
 - Digest: SHA-256 over canonical JSON (sorted keys), or file bytes for artifacts.

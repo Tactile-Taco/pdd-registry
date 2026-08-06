@@ -9,6 +9,18 @@ description: "Convert human-language requirements into PDD protocol bundles: typ
 
 Use this skill to turn human intent into a machine-checkable PDD bundle. Treat natural language as a starting point, not the final artifact: extract intent, expose ambiguity, make conservative assumptions, and emit structural, behavioral, and operational constraints.
 
+## Registry integration
+- Search the registry BEFORE authoring (pdd-registry-client DECIDE):
+  `python3 scripts/pdd.py search "<capability>"`. Author a new bundle only
+  when no sealed protocol covers the capability and the gap is documented in
+  the ambiguity log. A near-match usually means NEW VERSION (semantic change
+  to an existing protocol) or NEW IMPLEMENTATION (protocol fits, candidate
+  missing) — not a new bundle.
+- Declare `depends_on`/`provides` from the live catalog so the dependency
+  DAG stays buildable; prefer sealed dependencies. In any multi-bundle
+  program, standalone bundles (no unvalidated deps) are authored first
+  (DECIDE item 0).
+
 ## Operating Mode
 
 - If the user asks for a bundle, create files.

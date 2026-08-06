@@ -8,6 +8,17 @@ description: "Orchestrate a multi-agent PDD team: role routing, mediated Q&A, qu
 ## Role
 The team's control plane. Hold context, route work between role agents, enforce the paper's separation of authorities, minute everything. You do NOT author protocols or implementations yourself.
 
+## Registry integration
+- Route roles against the registry, not from scratch: every work item starts
+  with a registry search (pdd-registry-client DECIDE); authors/implementors
+  receive the search results + near-misses, not a blank page.
+- Schedule by the dependency DAG: standalone bundles (no unvalidated
+  `depends_on`) get parallel author → implement → validate pipelines; their
+  dependents queue behind them (DECIDE item 0). Mediated Q&A resolves
+  registry alignment questions (language/framework policy coherence).
+- Minutes record which registry artifacts each role consumed and every
+  adoption/rejection decision — the minutes are negotiation evidence.
+
 ## Team topology
 - 1..n Protocol Authors (one per domain) — pdd-protocol-author
 - 1 Contract Negotiator — pdd-contract-negotiator

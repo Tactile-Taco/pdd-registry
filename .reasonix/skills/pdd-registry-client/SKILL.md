@@ -25,6 +25,74 @@ The catalog is built **live** from `pdd-bundles/*` — adding a directory is
 the whole "registration". No auth anywhere (tailnet-only); everything is
 read-only except git+deploy.
 
+## DECIDE — the registry decision framework (run this BEFORE writing anything)
+
+The registry is the default source of capabilities. Search first; writing a
+protocol or an implementation from scratch is the exception and must be
+justified by a documented gap. This framework is the shared policy every
+pdd-* skill routes its registry decisions through.
+
+**0. Order by the dependency DAG (do this first, always).**
+Build the DAG from `protocol.yaml` `depends_on`/`provides` across the catalog.
+Work order: **standalone bundles (no unvalidated protocol dependencies)
+FIRST** — they have nothing blocking them and validate in parallel. A bundle
+whose `depends_on` targets are draft/unsealed/unvalidated is blocked until
+its leaves admit; validate leaves first, then dependents, in DAG order.
+`pdd-contract-negotiator` reconciles the handshakes between them before
+sealing. CI maps to the same order (validator-loop: standalone jobs first).
+
+**1. SEARCH.** `python3 scripts/pdd.py search "<capability terms>"` (or the
+`/search` endpoint). Search for the required *capability/behavior*, not just
+the name; try domain synonyms. Record the search + near-misses in the
+ambiguity/negotiation minutes.
+
+**2. ALIGN.** Before adopting a found protocol, verify governed alignment:
+- *semantics*: `purpose`/`boundary`/`depends_on` match the need; S/B/O
+  invariants are satisfiable by this system;
+- *status*: prefer `sealed` (draft/review is not admitted); check version;
+- *implementation*: an implementation exists for this bundle AND is validated
+  (verdict `admit`, evidence chain verified — `/ledger` or `evidence verify`);
+- *policy coherence*: the implementation's language/framework matches the
+  governed stack of the consuming system (this repo: Python 3 stdlib-only
+  candidates, no frameworks, no network/filesystem in candidates, sandboxed
+  docker runtime) and its licenses/dependencies are allowed.
+
+**3. USE.** A sealed protocol with an aligned, admitted implementation is
+adopted as-is. Do NOT re-implement it. Consumers depend on it via
+`depends_on`; the negotiator reconciles the handshake.
+
+**4. NEW IMPLEMENTATION for an existing protocol.** Choose when the protocol
+fits but no implementation does (wrong language/runtime/constraints, or the
+existing one fails validation). Author a new variant under
+`implementations/<bundle>/<variant>/` with its OWN `candidate-manifest.json`,
+tests citing invariant ids, and its own evidence chain. Never modify the
+protocol to make an implementation fit (emit a `protocol-objection`).
+
+**5. UPDATED IMPLEMENTATION (dynamic evidence).** Choose when a runtime
+violation block (RVL) or a validation failure points at an implementation
+defect, or when a fix/improvement lands. Fix the implementation, re-run the
+full loop, build a NEW evidence chain (superseding admission block; the old
+chain stays as re-verifiable history — `pdd-evidence-keeper`). A patch that
+responded to a real failure is NOT trusted: it re-enters admission like any
+candidate (`pdd-remediation-orchestrator`).
+
+**6. NEW VERSION of an existing protocol.** Choose ONLY when the protocol
+itself must change (invariant semantics, boundary, `depends_on`). Bump:
+`1.0.1` patch = metadata/docs only; `1.1.0` minor = additive invariants;
+`2.0.0` major = breaking. Seal + validate + evidence the new version; the old
+version stays published for existing dependents; minutes record migration.
+
+**7. NEW PROTOCOL.** Choose only when NO existing bundle covers the
+capability (search first, including synonyms) AND the gap is documented
+(registry search log / negotiation minutes). Then run the full ADD loop below
+(`pdd-protocol-author` template set → lint → seal → implement → validate →
+evidence).
+
+**Hard fail (never do):** skip the search step; silently re-implement an
+existing admitted implementation; modify a sealed bundle's protocol files
+(that is a new version, item 6); submit an implementation for an unsealed
+bundle; validate a bundle before its `depends_on` leaves admit.
+
 ## ADD — admit a new protocol bundle
 
 ```bash

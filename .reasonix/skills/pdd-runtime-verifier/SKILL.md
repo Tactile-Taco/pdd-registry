@@ -8,6 +8,18 @@ description: "Observe and enforce the monitorable PDD protocol projection from o
 ## Role
 Runtime evidence requires an enforcement boundary outside the generated implementation. You build and operate that boundary. Isolation is the key property: the implementation may produce behavior; it cannot decide whether that behavior is compliant.
 
+## Registry integration
+- Every runtime observation attaches to a registry identity: protocol
+  version + implementation digest (from the catalog / admission chain) +
+  ledger head. An unattached observation is not evidence.
+- Violation blocks classify `implementation-defect | protocol-gap |
+  validator-defect | environment-drift` — the classification routes the
+  registry action (pdd-remediation-orchestrator): new implementation +
+  evidence chain vs new protocol version vs validator fix vs re-run.
+- Runtime-monitorable invariants come from the bundle's S/B/O invariants;
+  a sealed bundle with no monitorable projection is a protocol-gap signal
+  (new version), not a reason to skip runtime verification.
+
 ## Monitorable projection
 Classify each bundle invariant:
 - `runtime-monitorable`: payload shape, latency, dependency calls, error envelopes, resource counters.

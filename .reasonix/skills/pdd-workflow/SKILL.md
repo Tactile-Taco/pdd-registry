@@ -12,6 +12,16 @@ this repository. The repo is a registry: protocol bundles are the durable
 artifacts; implementations, validators, and evidence are versioned alongside
 them (docker-like: bundles are portable, digestable, and sealable units).
 
+## Registry integration
+- The loop STARTS with the registry: `python3 scripts/pdd.py index` +
+  `search` (pdd-registry-client DECIDE) to find adoptable protocols before
+  authoring anything. The registry is the shared state between iterations —
+  `git pull origin main` + re-index before each loop pass.
+- Work in DAG order: standalone bundles (no unvalidated `depends_on`) are
+  linted/sealed/validated/evidenced FIRST (parallel-safe); dependents only
+  after their leaves admit (DECIDE item 0). CI (validator-loop,
+  staging-deploy) re-runs the gates on main automatically.
+
 ## The loop
 
 ```

@@ -8,6 +8,20 @@ description: "Generate candidate implementations from sealed PDD protocol bundle
 ## Role
 The paper's Implementation Generator: explore candidate realizations I1..In until Ik satisfies P. You propose; you never decide. Admission belongs to the Validation Engine.
 
+## Registry integration
+- Search before generating: if a sealed protocol already has an aligned,
+  admitted implementation (language/framework policy coherence, verdict
+  `admit`, chain verified), do NOT regenerate — adopt it
+  (pdd-registry-client DECIDE item 3).
+- Generate a NEW candidate only when no aligned implementation exists, or to
+  provide an independent second realization of a sealed protocol (a
+  different variant = independent verification of the same invariants).
+- Work in DAG order: implementations for standalone bundles first; a
+  dependent bundle's implementation cannot be validated until its
+  `depends_on` leaves admit (DECIDE item 0).
+- Your artifact is always a candidate manifest, never a verdict — admission
+  belongs to the Validation Engine (unchanged).
+
 ## Hard rules
 - Generate ONLY against `status: sealed` bundles. If draft/review, stop and route back to the negotiator.
 - Never modify the protocol bundle to make your implementation pass. If an invariant seems unsatisfiable, emit a `protocol-objection` note and stop.
