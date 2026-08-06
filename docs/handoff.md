@@ -50,6 +50,9 @@ Validator Loop, an HMAC-signed Evidence Chain + ledger, and a small HTTP service
   evidence file, not bundle). This round's honest re-run updated the results
   file to the true digest. Full closure needs a version event (bump +
   re-negotiate + re-sign) or a forced evidence rebuild — deferred, flagged.
+  Same pattern on the O-005 snapshot: user-registry's signed admission still
+  embeds the original benchmark text while the on-disk results carry the
+  regenerated one — read as drift, not tampering.
 - **Self-hosted runner DONE + E2E GREEN:** `m6-pdd` (repo-scoped, label
   `staging-deploy`) on the M6 via nixos-infra `modules/github-runner.nix`
   (nixpkgs-unstable runner v2.335.1; extraPackages now include docker, ssh,

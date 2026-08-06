@@ -296,11 +296,13 @@ def layer_operational_dynamic(bundle: Path, impl: Path, sandbox: bool, pbt_runs:
         results.append({"invariant_id": "O-005", "layer": "operational", "outcome": "skip",
                         "evidence": "no benchmark method declared in candidate-manifest.json"})
         return results
+    bench_catalog = bench.get("catalog")
+    bench_ctor = f"{entry_class}({json.dumps(bench_catalog)})" if bench_catalog else f"{entry_class}()"
     bench_code = (
         "import json, statistics, sys, time\n"
         "sys.path.insert(0, '.')\n"
         f"from {entry_module} import {entry_class}\n"
-        f"reg = {entry_class}({json.dumps(bench.get('catalog') or [])})\n"
+        f"reg = {bench_ctor}\n"
         "lat = []\n"
         f"for i in range({bench.get('iterations', 1000)}):\n"
         f"    args = {json.dumps(bench.get('args_template') or {})}\n"
