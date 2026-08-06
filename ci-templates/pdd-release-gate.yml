@@ -14,9 +14,11 @@ jobs:
       - run: pip install pyyaml==6.0.3 pytest==9.0.3 hypothesis==6.165.0 jsonschema==4.26.0
       - name: All protocols sealed
         run: '! grep -rL "status: sealed" pdd-bundles/*/protocol.yaml && echo "all sealed"'
-      # Candidate execution without the signing key in the environment.
-      - name: Candidate test suites (scrubbed env)
+      # make test runs the candidate suite under env -i (key never visible to
+      # candidate code), then the service verification surface with the key.
+      - name: Candidate suite (scrubbed) + service verification (key)
         run: make test
+        env: { PDD_EVIDENCE_KEY: ${{ secrets.PDD_EVIDENCE_KEY }} }
       - name: Validator loop green on this commit
         run: make validate
       # Key scoped to evidence steps only.

@@ -32,12 +32,12 @@ ci-templates/           # GitHub Actions workflows (install via `make ci-install
 ## Quickstart
 
 ```bash
-export PDD_EVIDENCE_KEY=dev-local-key   # any non-empty value locally; CI uses the repository secret
+export PDD_EVIDENCE_KEY=$(infisical secrets get PDD_EVIDENCE_KEY --projectId 7a2f10fc-2d47-4008-a817-3f5493dc7476 --env prod --plain --silent)  # the key the committed evidence is signed with
 make lint       # hardened bundle linter over pdd-bundles/*
-make test       # candidate test suites (pytest + hypothesis, invariant-lineaged)
+make test       # candidate suites (scrubbed) + service verification surface (uses $PDD_EVIDENCE_KEY)
 make validate   # three-layer Validator Loop -> verdict + validation-results.json
-make evidence   # signed evidence object + genesis ledger block + ledger verify
-make all        # the whole loop (the commit gate)
+make evidence   # signed evidence object + genesis ledger block + ledger verify (needs $PDD_EVIDENCE_KEY)
+make all        # the whole loop (the commit gate; needs $PDD_EVIDENCE_KEY exported)
 ```
 
 The CLI:
@@ -101,7 +101,7 @@ make lint && python3 scripts/pdd.py bundle seal my-protocol
 
 The evidence scripts **fail closed**: signing and verification require the
 `PDD_EVIDENCE_KEY` environment variable (export the same key at sign and verify
-time). Locally any non-empty value works; CI reads the `PDD_EVIDENCE_KEY`
+time). Use the Infisical value (see Quickstart); CI reads the `PDD_EVIDENCE_KEY`
 repository secret. Without the key, evidence operations refuse to run — the
 HMAC default is deliberately not a secret, so no silent "verified" claim is
 possible under the public default.

@@ -17,11 +17,11 @@ jobs:
       - run: pip install pyyaml==6.0.3 pytest==9.0.3 hypothesis==6.165.0 jsonschema==4.26.0
       - name: Bundle lint
         run: for d in pdd-bundles/*/; do python3 .reasonix/skills/pdd-protocol-author/scripts/check_bundle.py "$d"; done
-      # Candidate execution runs WITHOUT PDD_EVIDENCE_KEY in the environment
-      # (scrubbed inside validate_candidate.py too): a hostile candidate must
-      # never be able to read the signing key.
-      - name: Candidate test suites (scrubbed env)
+      # make test runs the candidate suite under env -i (the signing key is
+      # stripped there), then the service verification surface with the key.
+      - name: Candidate suite (scrubbed) + service verification (key)
         run: make test
+        env: { PDD_EVIDENCE_KEY: ${{ secrets.PDD_EVIDENCE_KEY }} }
       - name: Three-layer Validator Loop
         run: make validate
       # The signing key is scoped to the evidence steps only.

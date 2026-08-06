@@ -9,10 +9,12 @@ lint:
 ## Run the candidate test suites with a scrubbed environment: candidate code
 ## under pytest must NEVER see PDD_EVIDENCE_KEY or other caller secrets, and
 ## gets a fresh temp HOME so it cannot read the invoking user's private files.
-## Note: src/tests (service verification surface) needs PDD_EVIDENCE_KEY set
-## (defaults to the dev key matching the committed evidence).
+## Then run the service verification surface (src/tests) which needs the real
+## PDD_EVIDENCE_KEY (the committed evidence is signed with it): export it, e.g.
+##   export PDD_EVIDENCE_KEY=$(infisical secrets get PDD_EVIDENCE_KEY --projectId 7a2f10fc-2d47-4008-a817-3f5493dc7476 --env prod --plain --silent)
 test:
-	env -i PATH="$$PATH" HOME="$$(mktemp -d)" LANG="C.UTF-8" PBT_RUNS=200 PDD_EVIDENCE_KEY="$${PDD_EVIDENCE_KEY:-dev-local-key}" $(PY) -m pytest implementations/ src/tests -q
+	env -i PATH="$$PATH" HOME="$$(mktemp -d)" LANG="C.UTF-8" PBT_RUNS=200 $(PY) -m pytest implementations/ -q
+	env -i PATH="$$PATH" HOME="$$HOME" LANG="C.UTF-8" PDD_EVIDENCE_KEY="$${PDD_EVIDENCE_KEY:?export PDD_EVIDENCE_KEY (the key the committed evidence is signed with; see README)}" $(PY) -m pytest src/tests -q
 
 ## Run the full three-layer Validator Loop on the sealed bundle's candidate
 ## (candidate execution is env-scrubbed inside validate_candidate.py)

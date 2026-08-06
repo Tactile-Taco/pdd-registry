@@ -37,8 +37,10 @@ def _evidence_key():
              "--projectId", INFISICAL_PROJECT, "--env", "prod",
              "--plain", "--silent"],
             capture_output=True, text=True)
-        key = out.stdout.strip()
-    assert key, "no PDD_EVIDENCE_KEY available (set env or run `infisical login`)"
+        if out.returncode == 0:
+            key = out.stdout.strip()
+    if not key:
+        pytest.skip("no PDD_EVIDENCE_KEY available (set env or run `infisical login`)")
     os.environ["PDD_EVIDENCE_KEY"] = key
     yield
 
