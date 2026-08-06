@@ -13,9 +13,14 @@ The paper's Implementation Generator: explore candidate realizations I1..In unti
   admitted implementation (language/framework policy coherence, verdict
   `admit`, chain verified), do NOT regenerate — adopt it
   (pdd-registry-client DECIDE item 3).
-- Generate a NEW candidate only when no aligned implementation exists, or to
-  provide an independent second realization of a sealed protocol (a
-  different variant = independent verification of the same invariants).
+- Generate a NEW candidate when the protocol matches but the desired
+  implementation is not met: no aligned implementation exists, the existing
+  one fails validation, or it has extraneous differences from the desired
+  realization (language/approach/constraints/observable behavior). A
+  matching protocol with a mismatched implementation needs a new
+  implementation — never a new protocol or version. Also generate an
+  independent second realization of a sealed protocol when independent
+  verification of the same invariants is wanted (a different variant).
 - Work in DAG order: implementations for standalone bundles first; a
   dependent bundle's implementation cannot be validated until its
   `depends_on` leaves admit (DECIDE item 0).

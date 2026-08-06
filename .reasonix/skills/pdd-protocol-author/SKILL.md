@@ -13,9 +13,16 @@ Use this skill to turn human intent into a machine-checkable PDD bundle. Treat n
 - Search the registry BEFORE authoring (pdd-registry-client DECIDE):
   `python3 scripts/pdd.py search "<capability>"`. Author a new bundle only
   when no sealed protocol covers the capability and the gap is documented in
-  the ambiguity log. A near-match usually means NEW VERSION (semantic change
-  to an existing protocol) or NEW IMPLEMENTATION (protocol fits, candidate
-  missing) — not a new bundle.
+  the ambiguity log.
+- Apply the DECIDE match taxonomy: a TRUE match means adopt, not author; a
+  protocol that matches while only the implementation differs means a NEW
+  IMPLEMENTATION (never a new bundle). A NEAR match is NOT a true match —
+  decide with critical thinking between NEW VERSION (the requirement extends
+  or refines the same contract: same boundary, additive/tightened invariants,
+  consumers migrate cleanly) and NEW PROTOCOL (a different capability that
+  only shares vocabulary: different boundary, orthogonal invariants, a
+  version bump would mislead consumers). Record the reasoning in the
+  ambiguity log.
 - Declare `depends_on`/`provides` from the live catalog so the dependency
   DAG stays buildable; prefer sealed dependencies. In any multi-bundle
   program, standalone bundles (no unvalidated deps) are authored first

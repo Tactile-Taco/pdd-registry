@@ -48,6 +48,22 @@ ordering is agent-side; parallel per-bundle CI jobs are the roadmap.
 the name; try domain synonyms. Record the search + near-misses in the
 ambiguity/negotiation minutes.
 
+**Match taxonomy (near matches are NOT true matches — apply critical
+thinking):**
+- **TRUE MATCH** — protocol AND implementation both align → USE (item 3).
+- **MATCH, implementation differs** — the protocol matches, but the existing
+  implementation has extraneous differences from the desired one (language,
+  approach, constraints, observable behavior) → NEW IMPLEMENTATION (item 4),
+  never a new protocol and never a new version.
+- **NEAR MATCH** — the protocol itself does not fully match. Decide between
+  NEW VERSION (item 6) and NEW PROTOCOL (item 7):
+  - *higher version* when the requirement extends or refines the same
+    contract: same boundary/purpose, additive or tightened invariants,
+    existing consumers stay satisfied or migrate cleanly;
+  - *new protocol* when it is a different capability that only shares
+    vocabulary or an adjacent domain: different boundary, orthogonal
+    invariant sets, and a version bump would mislead existing consumers.
+
 **2. ALIGN.** Before adopting a found protocol, verify governed alignment:
 - *semantics*: `purpose`/`boundary`/`depends_on` match the need; S/B/O
   invariants are satisfiable by this system;
@@ -60,12 +76,17 @@ ambiguity/negotiation minutes.
   docker runtime) and its licenses/dependencies are allowed.
 
 **3. USE.** A sealed protocol with an aligned, admitted implementation is
-adopted as-is. Do NOT re-implement it. Consumers depend on it via
-`depends_on`; the negotiator reconciles the handshake.
+adopted as-is. Do NOT re-implement it — *provided* the implementation
+matches the desired one (language, constraints, observable behavior).
+Extraneous differences between the existing implementation and the desired
+one are NOT a reason to touch the protocol: generate a new implementation
+(item 4). Consumers depend on the protocol via `depends_on`; the negotiator
+reconciles the handshake.
 
 **4. NEW IMPLEMENTATION for an existing protocol.** Choose when the protocol
-fits but no implementation does (wrong language/runtime/constraints, or the
-existing one fails validation). Author a new variant under
+matches but no implementation does: none exists yet, the existing one fails
+validation, or it has extraneous differences from the desired realization
+(wrong language/runtime/constraints/approach). Author a new variant under
 `implementations/<bundle>/<variant>/` with its OWN `candidate-manifest.json`,
 tests citing invariant ids, and its own evidence chain. Never modify the
 protocol to make an implementation fit (emit a `protocol-objection`).
