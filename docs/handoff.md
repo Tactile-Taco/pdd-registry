@@ -1,6 +1,6 @@
 # pdd-repository — Handoff
 
-**Date:** 2026-08-06 · **Branch:** `pdd-work` — pushed and folded into `main` at `53daf0f` (all commits on origin; `main` == `origin/main` == `origin/pdd-work` == `53daf0f`) · **Worktree:** `/home/TacticalTaco/.reasonix/global-workspace/pdd-repository-wt` · **Main checkout:** `/home/TacticalTaco/.reasonix/global-workspace/pdd-repository` (on `main`, synced)
+**Date:** 2026-08-06 · **Branch:** `pdd-work` — pushed and folded into `main` at `8ab8463` (all commits on origin; `main` == `origin/main` == `origin/pdd-work` == `8ab8463`) · **Worktree:** `/home/TacticalTaco/.reasonix/global-workspace/pdd-repository-wt` · **Main checkout:** `/home/TacticalTaco/.reasonix/global-workspace/pdd-repository` (on `main`, synced)
 
 > ⚠️ This repo is public: real addresses never appear here. Machine addresses
 > (M6 tailscale IP, staging tailscale IP/DNS, ports) live in Infisical
@@ -34,17 +34,19 @@ Validator Loop, an HMAC-signed Evidence Chain + ledger, and a small HTTP service
 - **Tests:** 36 pass (`make test` with the real key: 10 candidate + 26 service,
   incl. the v2 surface; +5 hardening tests from the two review rounds).
   `src/tests/test_registry.py` (23 tests) runs WITHOUT the evidence key.
-- **Self-hosted runner DONE:** `m6-pdd` (repo-scoped, label `staging-deploy`)
-  live on the M6 via nixos-infra `modules/github-runner.nix` (nixpkgs-unstable
-  runner v2.335.1; 25.05's v2.330.0 is deprecated by GitHub). CI workflows
-  installed via `make ci-install` and pushed (workflow scope granted by
-  refresh). `pdd-validator-loop` passed on main (1m23s). `pdd-staging-deploy`
-  E2E was blocked by a GitHub Actions outage (see §8); re-dispatch after it
-  clears.
+- **Self-hosted runner DONE + E2E GREEN:** `m6-pdd` (repo-scoped, label
+  `staging-deploy`) on the M6 via nixos-infra `modules/github-runner.nix`
+  (nixpkgs-unstable runner v2.335.1; extraPackages now include docker, ssh,
+  curl, sed, grep — the first CI run died on `ssh: command not found`).
+  `pdd-validator-loop` passed on main. `pdd-staging-deploy` E2E GREEN on
+  2026-08-06 18:10Z (run 31125371164, 1m1s): checkout → docker build → ghcr
+  push → ssh deploy → verify; staging runs the CI-pushed digest
+  `aff989e7…`, 1/1 ready.
 - **Secrets renamed** to match Infisical: `STAGING_TAILSCALE_IP` /
   `STAGING_TAILSCALE_DNS` (old `STAGING_HOST`/`STAGING_DNS` deleted), plus
-  new `STAGING_SSH_KEY` (runner→guest ed25519, pubkey authorized on the
-  guest; host-key verification disabled for the tailnet-only guest).
+  new `STAGING_SSH_KEY` (key MATERIAL — the workflow materializes it to
+  `$RUNNER_TEMP/ci-staging-key`, 0600) and the guest host key pinned in
+  `deploy/staging-known_hosts` (fail-closed; rotate on guest re-create).
 - **CI workflows** in `ci-templates/` are INSTALLED to `.github/workflows/`
   (commit 53daf0f; workflow scope granted via `gh auth refresh -s workflow`).
 
@@ -104,10 +106,8 @@ make all         # commit gate (lint+test+validate+evidence; needs the key)
 ## 7. Next steps (not done, flagged)
 
 1. ~~Self-hosted runner + CI install~~ **DONE (this session)**: `m6-pdd` on
-   the M6 (nixos-infra 58e57d7), `make ci-install` committed on main
-   (53daf0f), STAGING secrets aligned. Remaining: re-run `pdd-staging-deploy`
-   once the GitHub Actions outage clears (see §8) — the runner itself is
-   online and job-ready.
+   the M6 (nixos-infra 0353393), `make ci-install` committed on main,
+   STAGING secrets aligned, E2E deploy green (see §8).
 2. ~~Fold `pdd-work` → `main`~~ **DONE (this session)**: fast-forwarded
    `dc928e8..492bd01` via `git push origin pdd-work:main` — main carries the
    re-signed evidence chain; primary checkout synced to `origin/main`.
@@ -140,14 +140,16 @@ make all         # commit gate (lint+test+validate+evidence; needs the key)
   (`gh api -X POST repos/Tactile-Taco/pdd-repository/actions/runners/registration-token`)
   and rebuilding — or replace it with a fine-grained PAT (`Administration`
   read on the repo) for durability.
-- **GitHub Actions outage at 15:22Z 2026-08-06** (status: major, partial
-  outage, "workflow runs failing to start"): blocked the first
-  `pdd-staging-deploy` E2E at "Getting action download info". Not our
-  config: first job of the same commit downloaded actions fine before the
-  incident. Re-dispatch after it resolves.
-- During the outage the pipeline itself proved out: run 31117469920 built
-  the image on the runner and failed only at `docker push ghcr.io` with a
-  transient `connect: network is unreachable` (docker daemon egress; WARP
-  route churn). Verified working afterwards: `docker pull` from ghcr and
-  docker hub as the runner user, plus the exact CI ssh path to the guest.
-  The deploy E2E just needs one clean Actions window (see §7 item 1).
+- **GitHub Actions outage at 15:22Z 2026-08-06** (major, partial outage;
+  still 'investigating' as of 18:30Z): affected hosted-runner provisioning
+  and job delivery. Self-hosted runs on `m6-pdd` were unaffected once
+  dispatched; the earlier action-download failures were the incident.
+- **M6 docker daemon egress is intermittently flaky** (ENETUNREACH to
+  ghcr.io, WARP route state `rt_offload_failed`; host curl unaffected).
+  Mitigated in push.sh: docker push retries 3× with 10s sleeps (idempotent;
+  `set -e` gotcha: the login must be guarded with `|| true`). If it gets
+  worse, exclude GitHub ranges from WARP split tunnels server-side.
+- **push.sh digest bug fixed**: RepoDigests already includes `sha256:` — the
+  old `sed 's/.*@//'` produced `@sha256:sha256:…` (invalid reference; the
+  pre-session working deploys pinned the digest manually). Now stripped once.
+- E2E green run: 31125371164 (18:10Z), 1m1s, staging at digest `aff989e7…`.
