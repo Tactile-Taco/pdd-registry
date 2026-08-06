@@ -1,0 +1,30 @@
+name: pdd-staging-deploy
+on:
+  push:
+    branches: [dev]
+permissions:
+  contents: read
+  packages: write
+concurrency:
+  group: pdd-staging-deploy
+  cancel-in-progress: true
+jobs:
+  deploy:
+    # Self-hosted runner on the M6 (nixos-infra: services.github-runners,
+    # repo-scoped, label staging-deploy) — it can reach the tailnet staging
+    # guest and has nix + skopeo. See docs/runner-proposal.md.
+    runs-on: [self-hosted, staging-deploy]
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+      - name: Build OCI image (nix2container)
+        run: nix build .#image --no-link --print-out-paths
+      - name: Push to ghcr + deploy to staging k3s
+        env:
+          GITHUB_TOKEN: ${{ secrets.GHCR_PAT }}
+          STAGING_HOST: ${{ secrets.STAGING_HOST }}
+          STAGING_DNS: ${{ secrets.STAGING_DNS }}
+        run: ./deploy/push.sh
+      - name: Verify service
+        run: |
+          curl -sf "https://pdd-repository.${{ secrets.STAGING_DNS }}/healthz"
+          curl -sf "https://pdd-repository.${{ secrets.STAGING_DNS }}/evidence/verify" | grep -q '"ok": true'

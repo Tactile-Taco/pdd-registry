@@ -1,0 +1,63 @@
+# Applied on the staging cluster (k3s) via deploy/push.sh (or the staging-deploy CI).
+# Traefik (bundled with k3s) routes by the Ingress host rule.
+# Keep the port in sync with flake.nix (PORT env / ExposedPorts).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pdd-repository
+  labels:
+    app: pdd-repository
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: pdd-repository
+  template:
+    metadata:
+      labels:
+        app: pdd-repository
+    spec:
+      containers:
+        - name: pdd-repository
+          image: ghcr.io/tactile-taco/pdd-repository:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8080
+          env:
+            # PDD_EVIDENCE_KEY comes from the cluster Secret created at deploy
+            # time (source: Infisical). Never put the key in this file.
+            - name: PDD_EVIDENCE_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: pdd-evidence-key
+                  key: PDD_EVIDENCE_KEY
+                  optional: true
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: pdd-repository
+spec:
+  selector:
+    app: pdd-repository
+  ports:
+    - port: 8080
+      targetPort: 8080
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: pdd-repository
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: __STAGING_HOST__
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: pdd-repository
+                port:
+                  number: 8080
