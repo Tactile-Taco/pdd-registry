@@ -9,20 +9,37 @@
 #   eval "$(infisical export --projectId <misc-secrets-id> --env prod --format=dotenv-eval --silent)"
 #   GITHUB_TOKEN=<pat with write:packages> PDD_EVIDENCE_KEY=<key> ./deploy/push.sh
 #
-# Machine addresses are NEVER hardcoded in this public repo — STAGING_HOST and
-# STAGING_DNS come from the GitHub Actions secrets (which map to Infisical's
-# STAGING_TAILSCALE_IP / STAGING_TAILSCALE_DNS in misc-secrets; see the
+# Machine addresses are NEVER hardcoded in this public repo — they come from
+# the environment, which the GitHub Actions workflow fills from the
+# STAGING_TAILSCALE_IP / STAGING_TAILSCALE_DNS / STAGING_SSH_KEY secrets
+# (canonical names, matching Infisical misc-secrets; see the
 # m6-agent-workstation skill). The evidence key is passed as env and stored
 # only in the cluster Secret.
 set -euo pipefail
 
 : "${GITHUB_TOKEN:?Set GITHUB_TOKEN to a PAT with write:packages}"
-: "${STAGING_HOST:?Set STAGING_HOST (Infisical misc-secrets)}"
-: "${STAGING_DNS:?Set STAGING_DNS (Infisical misc-secrets)}"
+: "${STAGING_TAILSCALE_IP:?Set STAGING_TAILSCALE_IP (Infisical misc-secrets)}"
+: "${STAGING_TAILSCALE_DNS:?Set STAGING_TAILSCALE_DNS (Infisical misc-secrets)}"
 : "${PDD_EVIDENCE_KEY:?Set PDD_EVIDENCE_KEY (must match the key the evidence was signed with)}"
 
 PROJECT="pdd-repository"
 IMAGE="ghcr.io/tactile-taco/${PROJECT}:latest"
+STAGING_USER="${STAGING_SSH_USER:-tacticaltaco}"
+STAGING_TARGET="${STAGING_USER}@${STAGING_TAILSCALE_IP}"
+
+# ssh to the staging guest. CI path (STAGING_SSH_KEY set, self-hosted runner):
+# the runner has no ssh agent keys and the guest's host key rotates when the
+# microvm is re-created, so host-key verification is disabled for this
+# tailnet-only target. Manual path keeps the caller's default ssh behaviour.
+ssh_guest() {
+  if [ -n "${STAGING_SSH_KEY:-}" ]; then
+    ssh -i "${STAGING_SSH_KEY}" -o BatchMode=yes -o ConnectTimeout=10 \
+      -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+      "${STAGING_TARGET}" "$@"
+  else
+    ssh "${STAGING_TARGET}" "$@"
+  fi
+}
 
 echo "==> Building image (docker)"
 docker build -t "${IMAGE}" .
@@ -36,21 +53,21 @@ docker push "${IMAGE}"
 DIGEST="$(docker inspect --format='{{index .RepoDigests 0}}' "${IMAGE}" | sed 's/.*@//')"
 echo "==> Deploying image digest ${DIGEST}"
 
-echo "==> Creating evidence Secret on ${STAGING_HOST} (idempotent)"
+echo "==> Creating evidence Secret on ${STAGING_TAILSCALE_IP} (idempotent)"
 # The key is piped via stdin (--from-env-file=/dev/stdin) so it never appears
 # in any process listing or shell history.
 printf 'PDD_EVIDENCE_KEY=%s\n' "${PDD_EVIDENCE_KEY}" \
-  | ssh "${STAGING_HOST}" 'sudo k3s kubectl create secret generic pdd-evidence-key \
+  | ssh_guest 'sudo k3s kubectl create secret generic pdd-evidence-key \
       --from-env-file=/dev/stdin --dry-run=client -o yaml | sudo k3s kubectl apply -f -'
 
-echo "==> Applying manifest (host + image digest substituted) to ${STAGING_HOST}"
+echo "==> Applying manifest (host + image digest substituted) to ${STAGING_TAILSCALE_IP}"
 MANIFEST="deploy/k8s.yaml"
-sed -e "s/__STAGING_HOST__/${PROJECT}.${STAGING_DNS}/" \
+sed -e "s/__STAGING_HOST__/${PROJECT}.${STAGING_TAILSCALE_DNS}/" \
     -e "s|image: ghcr.io/tactile-taco/${PROJECT}.*|image: ghcr.io/tactile-taco/${PROJECT}@sha256:${DIGEST}|" \
     "${MANIFEST}" \
-  | ssh "${STAGING_HOST}" 'sudo k3s kubectl apply -f -'
+  | ssh_guest 'sudo k3s kubectl apply -f -'
 echo "==> Bouncing the deployment to pull the new image"
-ssh "${STAGING_HOST}" "sudo k3s kubectl rollout restart deployment/${PROJECT} && \
+ssh_guest "sudo k3s kubectl rollout restart deployment/${PROJECT} && \
   sudo k3s kubectl rollout status deployment/${PROJECT} --timeout=120s"
 
-echo "==> Live at https://${PROJECT}.${STAGING_DNS}"
+echo "==> Live at https://${PROJECT}.${STAGING_TAILSCALE_DNS}"

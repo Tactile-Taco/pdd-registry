@@ -1,48 +1,62 @@
-# Proposal: self-hosted GitHub Actions runner on the M6 for staging deploys
+# Self-hosted GitHub Actions runner on the M6 for staging deploys
 
-Status: **proposal** — requires a change to `nixos-infra` (different repo) and
-provisioning a registration token. Not applied from this sandbox.
+Status: **implemented 2026-08-06** (runner `m6-pdd` on the M6,
+`nixos-infra` `modules/github-runner.nix`, label `staging-deploy`).
 
 ## Why
 
 - pdd-repository is public; staging is tailnet-only. GitHub-hosted runners
   cannot reach it without importing a tailnet credential into CI.
 - A repo-scoped, label-restricted self-hosted runner on the M6 deploys
-  in-network, reuses nix + skopeo + sops/Infisical secrets already there.
+  in-network, reuses docker + sops secrets already there.
 - The M6 is NixOS-declared, so the runner is a flake change with rollback.
 
-## nixos-infra change (draft, no secrets literal)
+## nixos-infra change (implemented)
 
 ```nix
-# host config (agent-workstation)
-services.github-runners.pdd-staging = {
+# modules/github-runner.nix, imported by hosts/agent-workstation/configuration.nix
+sops.secrets.github_runner_pdd_token = { owner = "root"; };
+users.users.github-runner = { isSystemUser = true; group = "github-runner";
+                              extraGroups = [ "docker" ]; };
+services.github-runners.pdd = {
   enable = true;
   url = "https://github.com/Tactile-Taco/pdd-repository";
-  tokenFile = config.age.secrets.github-runner-token.path;  # or sops
-  extraPackages = [ pkgs.nix pkgs.skopeo ];
-  labels = [ "self-hosted" "staging-deploy" ];
-  runnerGroup = "default";
-  # Replace existing services? No: co-exists with any other runners.
+  name = "m6-pdd";
+  tokenFile = config.sops.secrets.github_runner_pdd_token.path;
+  extraLabels = [ "staging-deploy" ];
+  user = "github-runner";
+  group = "docker";
+  extraPackages = [ pkgs.docker ];
+  # 25.05's github-runner (v2.330.0) is deprecated by GitHub; use the
+  # nixpkgs-unstable package (v2.335.1). Unstable dropped node20, so
+  # nodeRuntimes = [ "node24" ].
+  package = inputs.nixpkgs-unstable.legacyPackages.${pkgs.system}.github-runner;
+  nodeRuntimes = [ "node24" ];
 };
 ```
 
-- Registration token: create a fine-grained PAT (repo scope `pdd-repository`,
-  read-only metadata is enough to register a repo-scoped runner) or use the
-  runner-registration token from a script; store in sops/Infisical
-  (`nixos-infra` project), never in the public repo.
-- The runner user needs `nix` (writable store) + `skopeo` + network to
-  ghcr.io (via the M6) — covered by `extraPackages`.
+- Registration token: minted via the GitHub API
+  (`POST /repos/Tactile-Taco/pdd-repository/actions/runners/registration-token`,
+  valid 1h) and stored sops-encrypted in `nixos-infra` `secrets/secrets.yaml`.
+  Note: re-registration (config/token change) needs a fresh token; a durable
+  fine-grained PAT (`Administration: read` on the repo) can replace it later.
+- The runner user needs `docker` (push.sh builds/pushes via docker) and ssh
+  access to the staging guest (dedicated key, `STAGING_SSH_KEY` GitHub secret;
+  the guest host key rotates on microvm re-create, so host-key verification is
+  disabled for this tailnet-only target).
 
-## Secrets needed in GitHub (repo Actions secrets)
+## Secrets in GitHub (repo Actions secrets, names aligned with Infisical)
 
 | Secret | Source |
 |---|---|
-| `GHCR_PAT` | PAT with `write:packages` (Infisical) |
-| `STAGING_HOST` | Infisical misc-secrets |
-| `STAGING_DNS` | Infisical misc-secrets |
+| `GHCR_PAT` | PAT with `write:packages` (Infisical `nixos-infra`) |
+| `STAGING_TAILSCALE_IP` | Infisical misc-secrets (renamed from `STAGING_HOST`) |
+| `STAGING_TAILSCALE_DNS` | Infisical misc-secrets (renamed from `STAGING_DNS`) |
+| `STAGING_SSH_KEY` | dedicated ed25519 key (public half authorized on the guest) |
+| `PDD_EVIDENCE_KEY` | Infisical `nixos-infra` (pre-existing) |
 
-## Fallback (documented in the goal)
+## Trigger
 
-Until the runner exists, deploys run from the laptop via `deploy/push.sh`
-(manual, tailnet + Infisical env). The workflow `pdd-staging-deploy.yml`
-waits for the runner.
+`pdd-staging-deploy.yml` runs on push to `main` (+ `workflow_dispatch`).
+Before the runner existed it had no trigger branch and no runner: deploys ran
+from the laptop via `deploy/push.sh` (manual, tailnet + Infisical env).
