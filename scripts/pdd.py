@@ -118,7 +118,7 @@ def _flag_value(argv: list[str], name: str) -> str | None:
 
 def cmd_validate(argv: list[str]) -> int:
     name = argv[0]
-    impl = Path(_flag_value(argv, "--impl")) if "--impl" in argv else default_impl(name)
+    impl = Path(_flag_value(argv, "--impl")).resolve() if "--impl" in argv else default_impl(name)
     extra = ["--sandbox"] if "--sandbox" in argv else []
     runs = _flag_value(argv, "--pbt-runs")
     if runs:
@@ -132,7 +132,7 @@ def cmd_evidence_build(argv: list[str]) -> int:
     name = argv[0]
     if "--impl" not in argv:
         sys.exit("evidence build requires --impl DIR")
-    impl = Path(_flag_value(argv, "--impl"))
+    impl = Path(_flag_value(argv, "--impl")).resolve()
     proto = bundle_dir(name)
     manifest = json.loads((impl / "candidate-manifest.json").read_text())
     entry_module = manifest.get("entry_module")
@@ -321,7 +321,7 @@ def cmd_evidence_verify(argv: list[str]) -> int:
 
 def cmd_run(argv: list[str]) -> int:
     name = argv[0]
-    impl = Path(_flag_value(argv, "--impl")) if "--impl" in argv else default_impl(name)
+    impl = Path(_flag_value(argv, "--impl")).resolve() if "--impl" in argv else default_impl(name)
     if shutil.which("docker") and "--sandbox" in argv:
         manifest = json.loads((impl / "candidate-manifest.json").read_text())
         entry_module = manifest.get("entry_module")

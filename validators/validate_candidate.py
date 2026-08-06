@@ -220,10 +220,18 @@ def layer_behavioral(bundle: Path, impl: Path, pbt_runs: int, manifest: dict) ->
     if not testdir.exists():
         return [{"invariant_id": "B-*", "layer": "behavioral", "outcome": "fail",
                  "evidence": "no tests/ directory in candidate"}]
-    proc = subprocess.run(
-        [sys.executable, "-m", "pytest", str(testdir), "-q", "--tb=short"],
-        capture_output=True, text=True, env=_scrubbed_env(pbt_runs), timeout=900)
-    summary = proc.stdout.strip().splitlines()[-1] if proc.stdout.strip() else proc.stderr[-200:]
+    # Behavioral pytest runs from a TEMP COPY with cwd outside the repo tree:
+    # candidate tests are excluded from the AST scan, so a hostile candidate
+    # must not be able to write into the repo or read its secrets during the
+    # run (security review: host-side execution containment).
+    with tempfile.TemporaryDirectory(prefix="pdd-behavioral-") as td:
+        run_dir = Path(td) / "candidate"
+        shutil.copytree(impl, run_dir)
+        proc = subprocess.run(
+            [sys.executable, "-m", "pytest", str(run_dir / "tests"), "-q", "--tb=short"],
+            cwd=run_dir, capture_output=True, text=True,
+            env=_scrubbed_env(pbt_runs), timeout=900)
+        summary = proc.stdout.strip().splitlines()[-1] if proc.stdout.strip() else proc.stderr[-200:]
     # Label the behavioral check with the bundle's own invariant ids.
     bid_data = {}
     try:
@@ -246,6 +254,15 @@ def layer_behavioral(bundle: Path, impl: Path, pbt_runs: int, manifest: dict) ->
     # a hostile candidate must not rewrite its manifest mid-validation).
     results.append(mutation_sanity(impl, testdir, pbt_runs, manifest))
     return results
+
+
+def _docker_infra_error(stderr: str) -> bool:
+    """True when a failed sandbox run looks like an infrastructure problem
+    rather than a candidate-side failure (security review: candidate smoke
+    failures must be `fail`, not `skip`)."""
+    return any(marker in stderr for marker in (
+        "Cannot connect to the Docker daemon", "Error response from daemon",
+        "docker: ", "docker: error", "error during connect", "image not found"))
 
 
 def mutation_sanity(impl: Path, testdir: Path, pbt_runs: int, manifest: dict) -> dict:
@@ -303,8 +320,12 @@ def layer_operational_dynamic(bundle: Path, impl: Path, sandbox: bool, pbt_runs:
 
     # Docker sandbox (optional, infra contingency): network none + read-only fs.
     if sandbox and shutil.which("docker"):
-        smoke = manifest.get("smoke") or {}
-        if not smoke.get("method"):
+        smoke = manifest.get("smoke")
+        if not isinstance(smoke, dict):
+            results.append({"invariant_id": "O-001,O-002", "layer": "operational",
+                            "outcome": "skip",
+                            "evidence": "smoke must be a dict in candidate-manifest.json; nothing executed"})
+        elif not smoke.get("method"):
             results.append({"invariant_id": "O-001,O-002", "layer": "operational",
                             "outcome": "skip",
                             "evidence": "no smoke method declared in candidate-manifest.json; "
@@ -339,10 +360,17 @@ def layer_operational_dynamic(bundle: Path, impl: Path, sandbox: bool, pbt_runs:
                     results.append({"invariant_id": "O-001,O-002", "layer": "operational",
                                     "outcome": "pass",
                                     "evidence": "docker sandbox (network none, read-only fs): " + proc.stdout.strip()})
-                else:
+                elif _docker_infra_error(proc.stderr):
                     results.append({"invariant_id": "O-001,O-002", "layer": "operational",
                                     "outcome": "skip",
-                                    "evidence": f"docker sandbox unavailable/failed: {proc.stderr.strip()[:200]}"})
+                                    "evidence": f"docker sandbox infra failure: {proc.stderr.strip()[:200]}"})
+                else:
+                    # The candidate's own smoke failed inside a healthy sandbox:
+                    # fail-closed (a candidate that fails its declared smoke
+                    # must not admit), security review.
+                    results.append({"invariant_id": "O-001,O-002", "layer": "operational",
+                                    "outcome": "fail",
+                                    "evidence": f"sandbox smoke failed: {proc.stderr.strip()[:200]}"})
     else:
         results.append({"invariant_id": "O-001,O-002", "layer": "operational",
                         "outcome": "skip",
@@ -350,7 +378,11 @@ def layer_operational_dynamic(bundle: Path, impl: Path, sandbox: bool, pbt_runs:
 
     # O-005 benchmark (advisory, should-tier): p95 latency over the declared
     # method, in a subprocess with scrubbed env — candidate never sees secrets.
-    raw_bench = manifest.get("benchmark") or {}
+    raw_bench = manifest.get("benchmark")
+    if not isinstance(raw_bench, dict):
+        results.append({"invariant_id": "O-005", "layer": "operational", "outcome": "skip",
+                        "evidence": "benchmark must be a dict in candidate-manifest.json"})
+        return results
     if not raw_bench.get("method"):
         results.append({"invariant_id": "O-005", "layer": "operational", "outcome": "skip",
                         "evidence": "no benchmark method declared in candidate-manifest.json"})
