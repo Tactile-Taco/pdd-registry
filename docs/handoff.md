@@ -93,8 +93,13 @@ make all         # commit gate (lint+test+validate+evidence; needs the key)
    + install `ci-templates/` via `make ci-install`; fix the STAGING_* naming.
 2. Fold `pdd-work` → `main` (PR or fast-forward) so main carries the re-signed
    chain.
-3. Registry server iteration (per the user's roadmap): `pdd search`/index,
-   full registry server design (proposal docs exist in the session history).
+3. ~~Registry server iteration~~ **DONE (commit 56f1aa6 on pdd-work)**: feature
+   enumeration doc first (`docs/service-features-v2.md`), shared search index
+   (`src/registry_index.py`), `pdd index`/`pdd search`, and the v2 read API
+   (`/search`, filterable `/bundles`, `/bundles/{name}` +
+   invariants/capabilities/ledger). Retrospective:
+   `docs/retrospective-registry-v2.md`. `/diff` deferred to a version-event
+   milestone; push/pull + auth still explicitly out of scope.
 4. Optional nits: try/except around the `infisical` subprocess in
    `src/tests/test_server.py:35`; `mktemp -d` HOME cleanup in the Makefile;
    stale generic template in `.reasonix/skills/pdd-ci-architect/assets/`.
