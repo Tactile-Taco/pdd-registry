@@ -1,0 +1,31 @@
+# Docker-based build path for the pdd service image (fallback to the Nix
+# pipeline: flake.nix `.#image` + nix2container). Content-equivalent: same repo
+# layout at /opt/pdd, same pinned toolchain versions.
+FROM python:3.12-slim
+
+ENV PYTHONUNBUFFERED=1 \
+    PORT=8080
+
+WORKDIR /opt/pdd
+
+RUN pip install --no-cache-dir \
+    pytest==9.0.3 \
+    hypothesis==6.165.0 \
+    jsonschema==4.26.0 \
+    pyyaml==6.0.3
+
+COPY src/ src/
+COPY scripts/ scripts/
+COPY validators/ validators/
+COPY pdd-bundles/ pdd-bundles/
+COPY implementations/ implementations/
+COPY evidence/ evidence/
+COPY .reasonix/ .reasonix/
+COPY Makefile README.md ./
+
+EXPOSE 8080
+
+# Keep the image usable both as the service and as an exec-able toolchain:
+# the default command is the HTTP service; `docker run ... python3 scripts/pdd.py ...`
+# (or kubectl exec) reaches the full pdd CLI.
+CMD ["python3", "src/server.py"]
