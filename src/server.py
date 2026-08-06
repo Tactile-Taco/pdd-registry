@@ -70,16 +70,31 @@ def _admission(name: str) -> list[dict]:
     if not adm_dir.exists():
         return result
     ledger = EVIDENCE / name / "runtime-ledger.jsonl"
+    verify_script = SKILLS / "pdd-evidence-keeper" / "scripts" / "evidence_chain.py"
+    # Authenticate the ledger first (chain-link + HMAC): attestation joins
+    # against an unverified ledger would be a forged-verified claim.
+    ledger_valid = False
+    if ledger.exists():
+        lv = subprocess.run(
+            [sys.executable, str(verify_script), "verify", str(ledger)],
+            capture_output=True, text=True, timeout=60, cwd=ROOT)
+        try:
+            ledger_valid = json.loads(lv.stdout).get("ok") is True
+        except Exception:  # noqa: BLE001
+            ledger_valid = False
     blocks = []
     if ledger.exists():
-        blocks = [json.loads(ln) for ln in ledger.read_text().splitlines() if ln.strip()]
-    verify_script = SKILLS / "pdd-evidence-keeper" / "scripts" / "evidence_chain.py"
+        try:
+            blocks = [json.loads(ln) for ln in ledger.read_text().splitlines() if ln.strip()]
+        except Exception:  # noqa: BLE001
+            blocks = []
     for f in sorted(adm_dir.glob("*.evidence.json")):
         try:
             ev = json.loads(f.read_text())
             artifact = (ev.get("implementation") or {}).get("artifact_digest")
             # Real verification: HMAC signature + digest of the evidence object,
-            # then ledger attestation for the same artifact digest.
+            # then ledger attestation for the same artifact digest (only when
+            # the ledger itself verified).
             vp = subprocess.run(
                 [sys.executable, str(verify_script), "verify-evidence", str(f)],
                 capture_output=True, text=True, timeout=60, cwd=ROOT)
@@ -89,11 +104,13 @@ def _admission(name: str) -> list[dict]:
                 sig_ok = False
             ledger_attested = False
             decision = None
-            for b in blocks:
-                obs = b.get("observations") or {}
-                if obs.get("admission") == artifact:
-                    ledger_attested = True
-                    decision = b.get("decision")
+            if ledger_valid:
+                for b in blocks:
+                    obs = b.get("observations") or {}
+                    if obs.get("admission") == artifact:
+                        ledger_attested = True
+                        decision = b.get("decision")
+                        break
             result.append({
                 "bundle": name,
                 "file": f.name,
@@ -101,6 +118,7 @@ def _admission(name: str) -> list[dict]:
                 "decision": decision,
                 "signature_valid": sig_ok,
                 "ledger_attested": ledger_attested,
+                "ledger_valid": ledger_valid,
                 "verified": bool(sig_ok and ledger_attested),
             })
         except Exception as exc:  # noqa: BLE001

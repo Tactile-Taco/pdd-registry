@@ -30,15 +30,16 @@ printf '%s' "${GITHUB_TOKEN}" | docker login ghcr.io -u tactile-taco --password-
 docker push "${IMAGE}"
 
 echo "==> Creating evidence Secret on ${STAGING_HOST} (idempotent)"
-MANIFEST="deploy/k8s.yaml"
-ssh "${STAGING_HOST}" 'sudo k3s kubectl create secret generic pdd-evidence-key \
-  --from-literal=PDD_EVIDENCE_KEY='"${PDD_EVIDENCE_KEY}"' \
-  --dry-run=client -o yaml | sudo k3s kubectl apply -f -'
+# The key is piped via stdin (--from-env-file=/dev/stdin) so it never appears
+# in any process listing or shell history.
+printf 'PDD_EVIDENCE_KEY=%s\n' "${PDD_EVIDENCE_KEY}" \
+  | ssh "${STAGING_HOST}" 'sudo k3s kubectl create secret generic pdd-evidence-key \
+      --from-env-file=/dev/stdin --dry-run=client -o yaml | sudo k3s kubectl apply -f -'
 
 echo "==> Applying manifest (host substituted) to ${STAGING_HOST}"
+MANIFEST="deploy/k8s.yaml"
 sed "s/__STAGING_HOST__/${PROJECT}.${STAGING_DNS}/" "${MANIFEST}" \
   | ssh "${STAGING_HOST}" 'sudo k3s kubectl apply -f -'
-
 echo "==> Bouncing the deployment to pull the new image"
 ssh "${STAGING_HOST}" "sudo k3s kubectl rollout restart deployment/${PROJECT} && \
   sudo k3s kubectl rollout status deployment/${PROJECT} --timeout=120s"
