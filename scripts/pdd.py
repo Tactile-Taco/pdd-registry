@@ -14,6 +14,8 @@ Commands:
   pdd evidence build <name> --impl DIR   signed evidence object + genesis ledger block
   pdd evidence verify <name>        re-walk the runtime ledger, report divergence
   pdd run <name> --impl DIR [--sandbox]  smoke-run a candidate (docker sandbox if available)
+  pdd index                         build the registry catalog over pdd-bundles/*
+  pdd search <query>                search the catalog (names, purpose, invariants, capabilities)
 
 Stdlib only. Reuses the skill scripts under .reasonix/skills/.
 """
@@ -28,6 +30,9 @@ import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+# registry_index.py lives under src/ (shared with the HTTP service); adding it
+# to sys.path keeps `pdd index`/`pdd search` on the same index as /search.
+sys.path.insert(0, str(REPO_ROOT / "src"))
 BUNDLES = REPO_ROOT / "pdd-bundles"
 IMPLS = REPO_ROOT / "implementations"
 EVIDENCE = REPO_ROOT / "evidence"
@@ -303,6 +308,36 @@ def cmd_run(argv: list[str]) -> int:
     return 1
 
 
+def cmd_index(argv: list[str]) -> int:
+    from registry_index import catalog_json, load_catalog  # lazy: keeps other cmds stdlib-only
+    catalog = load_catalog(BUNDLES)
+    errors = [b for b in catalog if "error" in b]
+    if errors:
+        for b in errors:
+            print(f"ERROR: {b['name']}: {b['error']}", file=sys.stderr)
+        return 1
+    print(json.dumps(catalog_json(catalog), indent=2))
+    return 0
+
+
+def cmd_search(argv: list[str]) -> int:
+    if not argv:
+        print("search requires a query, e.g. `pdd search idempotent`")
+        print(__doc__)
+        return 2
+    from registry_index import load_catalog, search  # lazy: keeps other cmds stdlib-only
+    query = argv[0]
+    catalog = load_catalog(BUNDLES)
+    errors = [b for b in catalog if "error" in b]
+    if errors:
+        for b in errors:
+            print(f"ERROR: {b['name']}: {b['error']}", file=sys.stderr)
+        return 1
+    results = search(catalog, query)
+    print(json.dumps({"query": query, "count": len(results), "results": results}, indent=2))
+    return 0 if results else 1
+
+
 COMMANDS = {
     "bundle": {"lint": cmd_bundle_lint, "seal": cmd_bundle_seal},
     "validate": cmd_validate,
@@ -332,6 +367,10 @@ def main(argv: list[str]) -> int:
             print(__doc__)
             return 2
         return COMMANDS[head](rest)
+    if head == "index":
+        return cmd_index(rest)
+    if head == "search":
+        return cmd_search(rest)
     print(f"unknown command: {head}")
     print(__doc__)
     return 2

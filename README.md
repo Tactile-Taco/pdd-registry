@@ -48,7 +48,14 @@ python3 scripts/pdd.py validate user-registry --sandbox --pbt-runs 5000
 python3 scripts/pdd.py evidence build user-registry --impl implementations/user-registry/python-stdlib
 python3 scripts/pdd.py evidence verify user-registry
 python3 scripts/pdd.py run user-registry --sandbox
+python3 scripts/pdd.py index             # registry catalog over pdd-bundles/*
+python3 scripts/pdd.py search idempotent # search names, purpose, invariants, capabilities
 ```
+
+The same index powers the service's v2 read API (docs/service-features-v2.md):
+`/search?q=`, `/bundles?status=&depends_on=`, `/bundles/{name}`,
+`/bundles/{name}/invariants`, `/capabilities`, `/ledger` — all read-only,
+served by `src/server.py`.
 
 ## How a protocol gets admitted
 
