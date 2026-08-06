@@ -407,9 +407,16 @@ def layer_operational_dynamic(bundle: Path, impl: Path, sandbox: bool, pbt_runs:
         "print(json.dumps({'p95_ms': statistics.quantiles(sorted(lat), n=20)[18]}))\n"
     )
     try:
-        proc = subprocess.run([sys.executable, "-c", bench_code], cwd=impl,
-                              capture_output=True, text=True,
-                              env=_scrubbed_env(pbt_runs), timeout=300)
+        # Benchmark runs from a TEMP COPY like the behavioral/mutant layers:
+        # a hostile candidate must not execute with the live repo tree as cwd
+        # (it could rewrite its own source mid-run and break the digest
+        # binding), security review containment.
+        with tempfile.TemporaryDirectory(prefix="pdd-bench-") as td:
+            bench_dir = Path(td) / "candidate"
+            shutil.copytree(impl, bench_dir)
+            proc = subprocess.run([sys.executable, "-c", bench_code], cwd=bench_dir,
+                                  capture_output=True, text=True,
+                                  env=_scrubbed_env(pbt_runs), timeout=300)
         out = json.loads(proc.stdout.strip()) if proc.returncode == 0 else {}
         p95 = out.get("p95_ms")
         results.append({"invariant_id": "O-005", "layer": "operational", "outcome": "observe",
