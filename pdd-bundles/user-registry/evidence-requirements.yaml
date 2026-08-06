@@ -8,7 +8,7 @@ evidence_requirements:
     - discovery_log
   attestations:
     signed: true
-    signer: evidence-keeper (HMAC-SHA256, dev key via PDD_EVIDENCE_KEY)
+    signer: evidence-keeper (HMAC-SHA256, production PDD_EVIDENCE_KEY from Infisical, nixos-infra project)
   replay:
     deterministic_replay_required: true
     required_environment_metadata:

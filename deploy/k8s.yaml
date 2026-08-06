@@ -19,7 +19,7 @@ spec:
     spec:
       containers:
         - name: pdd-repository
-          image: ghcr.io/tactile-taco/pdd-repository:latest
+          image: ghcr.io/tactile-taco/pdd-repository@sha256:c92ae4d042f55e4ee5260ae812dbfaf7a1fb9903c0ffba294b36560f3bbd9803
           imagePullPolicy: Always
           ports:
             - containerPort: 8080
