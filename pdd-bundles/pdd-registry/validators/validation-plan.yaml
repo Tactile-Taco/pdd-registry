@@ -1,0 +1,40 @@
+validation_plan:
+  structural:
+    - id: schema-validation
+      validates: [S-001]
+      method: json_schema_validation
+      validator: schema-validator@1.0.0
+    - id: contract-tests
+      validates: [S-001, S-002]
+      method: contract_tests
+      validator: contract-runner@1.0.0
+    - id: schema-diff
+      validates: [S-003]
+      method: schema_diff_check
+      validator: bundle-linter@1.0.0
+  behavioral:
+    - id: property-tests
+      validates: [B-001, B-002, B-003, B-005]
+      method: property_based_test
+      validator: property-runner@1.0.0
+    - id: mutation-sanity
+      validates: [B-001, B-002]
+      method: mutation_sanity_check
+      validator: mutation-sanity@1.0.0
+    - id: replay-tests
+      validates: [B-004]
+      method: replay_test
+      validator: property-runner@1.0.0
+  operational:
+    - id: import-scan
+      validates: [O-001, O-002, O-003, O-004]
+      method: import_scan
+      validator: import-scanner@1.0.0
+    - id: sandbox-checks
+      validates: [O-001, O-002, O-004]
+      method: sandbox_policy_check
+      validator: capability-monitor@1.0.0
+    - id: benchmark
+      validates: [O-005]
+      method: benchmark
+      validator: benchmark-runner@1.0.0

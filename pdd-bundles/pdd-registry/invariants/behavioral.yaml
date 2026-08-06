@@ -1,0 +1,47 @@
+behavioral_invariants:
+  - id: B-001
+    statement: >
+      Deterministic, non-mutating search: given the same catalog and query,
+      repeated searches must return identical ranked results (including
+      result order) and must not change the catalog in any way.
+    severity: must
+    property: "f(x, s) = f(x, s') with s' = s (purity)"
+    validation:
+      - property_based_test
+      - replay_test
+
+  - id: B-002
+    statement: >
+      Token semantics: every query token must match the entry (AND per
+      entry); name matches must rank above purpose, invariant, and capability
+      matches; scores are stable and deterministic.
+    severity: must
+    validation:
+      - property_based_test
+
+  - id: B-003
+    statement: >
+      Fail closed: a blank query, a non-word query, or a request for an
+      unknown bundle must return the typed error envelope and must not change
+      catalog state.
+    severity: must
+    validation:
+      - fuzz_test
+      - state_transition_test
+
+  - id: B-004
+    statement: >
+      Filters are exact-match: a status filter matches only the exact status
+      string; a depends_on filter matches only exact membership in the
+      depends_on list; results keep the catalog's stable order.
+    severity: must
+    validation:
+      - property_based_test
+
+  - id: B-005
+    statement: >
+      The severity filter on the invariants view accepts only {must, should};
+      any other value returns invalid_request.
+    severity: must
+    validation:
+      - contract_tests

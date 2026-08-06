@@ -1,0 +1,28 @@
+structural_invariants:
+  - id: S-001
+    statement: >
+      Search requests and responses must conform to their referenced JSON
+      Schemas (schemas/request.schema.json, schemas/response.schema.json),
+      including additionalProperties:false strictness.
+    severity: must
+    validation:
+      - json_schema_validation
+      - contract_tests
+
+  - id: S-002
+    statement: >
+      All failures must return the stable error envelope with a kind from the
+      enumerated set {invalid_request, not_found, internal} and a
+      human-readable message.
+    severity: must
+    validation:
+      - contract_tests
+
+  - id: S-003
+    statement: >
+      Handshake versioning: minor versions may add optional fields only; no
+      field may be removed, renamed, or made required within the same major
+      version.
+    severity: must
+    validation:
+      - schema_diff_check

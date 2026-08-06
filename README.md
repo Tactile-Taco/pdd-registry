@@ -20,6 +20,7 @@ next to them. Think of it as *Docker for protocols*:
 ```
 pdd-bundles/            # THE protocol registry (durable, versioned, sealed)
   user-registry/        #   first bundle: idempotent user creation (paper case study)
+  pdd-registry/         #   dogfood bundle: catalog search + read views (registry core)
 implementations/        # candidate realizations (replaceable; never authoritative)
   user-registry/python-stdlib/
 validators/             # the three-layer Validation Engine (S / B / O)

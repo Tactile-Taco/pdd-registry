@@ -1,0 +1,41 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "pdd-registry search response",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["ok", "query", "count", "results"],
+  "properties": {
+    "ok": {"type": "boolean"},
+    "query": {"type": "string"},
+    "count": {"type": "integer", "minimum": 0},
+    "error": {
+      "anyOf": [
+        {"type": "null"},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "message"],
+          "properties": {
+            "kind": {"type": "string", "enum": ["invalid_request", "not_found", "internal"]},
+            "message": {"type": "string"}
+          }
+        }
+      ]
+    },
+    "results": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["bundle", "layer", "id", "text", "score"],
+        "properties": {
+          "bundle": {"type": "string"},
+          "layer": {"type": "string"},
+          "id": {"type": "string"},
+          "text": {"type": "string"},
+          "score": {"type": "number", "minimum": 0}
+        }
+      }
+    }
+  }
+}

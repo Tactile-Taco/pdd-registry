@@ -118,8 +118,16 @@ def cmd_evidence_build(argv: list[str]) -> int:
         sys.exit("evidence build requires --impl DIR")
     impl = Path(_flag_value(argv, "--impl"))
     proto = bundle_dir(name)
-    impl_src = impl / "user_registry.py"
+    manifest = json.loads((impl / "candidate-manifest.json").read_text())
+    entry_module = manifest.get("entry_module")
+    if not entry_module:
+        sys.exit("candidate-manifest.json must declare `entry_module`")
+    impl_src = impl / f"{entry_module}.py"
     impl_digest = "sha256:" + hashlib.sha256(impl_src.read_bytes()).hexdigest()
+    # Version comes from the sealed protocol, not a hardcoded literal.
+    import registry_index  # lazy: pyyaml, same index as pdd index/search
+    _b = registry_index.load_bundle(proto)
+    version = _b.get("version") if _b and "error" not in _b else "1.0.0"
     # The attested results must be for THIS candidate: match by digest prefix.
     results_file = next(
         (EVIDENCE / name / "validation").glob(f"{impl_digest.split(':')[1][:12]}*.results.json"),
@@ -165,7 +173,7 @@ def cmd_evidence_build(argv: list[str]) -> int:
     manifest = json.loads((impl / "candidate-manifest.json").read_text())
 
     evidence = {
-        "protocol": {"name": name, "version": "1.0.0",
+        "protocol": {"name": name, "version": version,
                      "bundle_digest": results["protocol"]["bundle_digest"]},
         "implementation": {"artifact_id": manifest["artifact_id"],
                            "artifact_digest": impl_digest,
@@ -205,7 +213,7 @@ def cmd_evidence_build(argv: list[str]) -> int:
 
     genesis = subprocess.run(
         [sys.executable, str(EVIDENCE_CHAIN), "append", str(ledger),
-         json.dumps({"id": name, "version": "1.0.0"}),
+         json.dumps({"id": name, "version": version}),
          manifest["artifact_id"] + "@" + impl_digest.split(':')[1][:12],
          json.dumps({"admission": impl_digest, "evidence_digest": evidence_digest}),
          "attest-pass"],
@@ -292,15 +300,22 @@ def cmd_run(argv: list[str]) -> int:
     name = argv[0]
     impl = Path(_flag_value(argv, "--impl")) if "--impl" in argv else default_impl(name)
     if shutil.which("docker") and "--sandbox" in argv:
+        manifest = json.loads((impl / "candidate-manifest.json").read_text())
+        entry_module = manifest.get("entry_module")
+        entry_class = manifest.get("entry_class")
+        smoke = manifest.get("smoke") or {}
+        if not (entry_module and entry_class and smoke.get("method")):
+            print("candidate-manifest.json must declare entry_module/entry_class/smoke")
+            return 1
+        code = ("import sys; sys.path.insert(0,'.'); "
+                f"from {entry_module} import {entry_class}; "
+                f"r = {entry_class}().{smoke['method']}(**{json.dumps(smoke.get('args') or {})}); "
+                f"assert {smoke.get('assert_expr', 'True')}; print('run: ok')")
         r = subprocess.run(
             ["docker", "run", "--rm", "--network", "none", "--read-only",
              "-v", f"{impl.resolve()}:/candidate:ro", "-w", "/candidate",
              "python:3.12-slim@sha256:d657ab0ade19f404a6ccc883ab399540de667aff751748ce23c07330c5a89e64",
-             "python", "-c",
-             "import sys; sys.path.insert(0,'.'); from user_registry import UserRegistry; "
-             "reg = UserRegistry(); r1 = reg.create({'client_request_id':'a','email':'x@y.dev','display_name':'X'}); "
-             "r2 = reg.create({'client_request_id':'a','email':'x@y.dev','display_name':'X'}); "
-             "print('run:', r1['outcome'], 'then', r2['outcome'], 'state', len(reg))"],
+             "python", "-c", code],
             capture_output=True, text=True, timeout=300)
         print(r.stdout.strip() or r.stderr.strip()[:500])
         return r.returncode

@@ -177,90 +177,134 @@ def layer_behavioral(bundle: Path, impl: Path, pbt_runs: int) -> list[dict]:
         [sys.executable, "-m", "pytest", str(testdir), "-q", "--tb=short"],
         capture_output=True, text=True, env=_scrubbed_env(pbt_runs), timeout=900)
     summary = proc.stdout.strip().splitlines()[-1] if proc.stdout.strip() else proc.stderr[-200:]
+    # Label the behavioral check with the bundle's own invariant ids.
+    bid_data = {}
+    try:
+        bid_data = load_yaml(bundle / "invariants" / "behavioral.yaml") or {}
+    except Exception:  # noqa: BLE001
+        pass
+    bids = [inv.get("id") for inv in (bid_data.get("behavioral_invariants") or bid_data.get("invariants") or [])
+            if inv.get("id")]
+    label = ",".join(bids) if bids else "B-*"
     if proc.returncode == 0:
-        results.append({"invariant_id": "B-001..B-005", "layer": "behavioral",
+        results.append({"invariant_id": label, "layer": "behavioral",
                         "outcome": "pass", "evidence": f"pytest: {summary}"})
     else:
-        results.append({"invariant_id": "B-001..B-005", "layer": "behavioral",
+        results.append({"invariant_id": label, "layer": "behavioral",
                         "outcome": "fail", "evidence": f"pytest failed: {summary}"})
         # keep going: mutation sanity may still add signal
-    # Mutation sanity: remove the idempotency guard and require the B-001 property to fail.
-    results.append(mutation_sanity(impl, testdir, pbt_runs))
+    # Mutation sanity: remove the primary behavioral guard and require the
+    # declared property (candidate-manifest mutation_sanity) to fail.
+    results.append(mutation_sanity(impl, testdir, pbt_runs, manifest=json.loads(
+        (impl / "candidate-manifest.json").read_text())))
     return results
 
 
-def mutation_sanity(impl: Path, testdir: Path, pbt_runs: int) -> dict:
-    """Hand-built mutant: delete the idempotent early-return; B-001 must FAIL on the mutant."""
-    src_file = impl / "user_registry.py"
-    original = src_file.read_text()
-    mutant_src = original.replace(
-        "existing = self._by_request_id.get(req_id)\n        if existing is not None:\n"
-        "            # B-001: repeat of a committed request id returns the original record.\n"
-        "            return {\"ok\": True, \"outcome\": \"existing\", \"user\": existing.as_dict(), \"error\": None}",
-        "existing = None  # MUTANT: idempotency guard removed")
-    if mutant_src == original:
+def mutation_sanity(impl: Path, testdir: Path, pbt_runs: int, manifest: dict) -> dict:
+    """Manifest-driven mutant: the candidate declares the exact source span to
+    break and the pytest filter that must FAIL against the mutant (proves the
+    property is not vacuous). Missing definition → mutation-suspect (fail-closed)."""
+    mutant_def = manifest.get("mutation_sanity") or {}
+    entry_module = manifest.get("entry_module") or "user_registry"
+    missing = [k for k in ("find", "replace", "pytest_filter") if not mutant_def.get(k)]
+    if missing:
         return {"invariant_id": "B-001", "layer": "behavioral", "outcome": "mutation-suspect",
-                "evidence": "could not build mutant (guard pattern not found in source)"}
+                "evidence": f"candidate-manifest.json mutation_sanity missing: {', '.join(missing)}"}
+    src_file = impl / f"{entry_module}.py"
+    original = src_file.read_text()
+    mutant_src = original.replace(mutant_def["find"], mutant_def["replace"])
+    if mutant_src == original:
+        return {"invariant_id": mutant_def.get("invariant", "B-001"), "layer": "behavioral",
+                "outcome": "mutation-suspect",
+                "evidence": "could not build mutant (pattern not found in source)"}
     with tempfile.TemporaryDirectory() as td:
         mutant_dir = Path(td) / "mutant"
         shutil.copytree(impl, mutant_dir)
-        (mutant_dir / "user_registry.py").write_text(mutant_src)
+        (mutant_dir / f"{entry_module}.py").write_text(mutant_src)
         proc = subprocess.run(
             [sys.executable, "-m", "pytest", str(mutant_dir / "tests"),
-             "-q", "-k", "B001_repeat", "--tb=no"],
+             "-q", "-k", mutant_def["pytest_filter"], "--tb=no"],
             capture_output=True, text=True, env=_scrubbed_env(pbt_runs), timeout=900)
         if proc.returncode != 0:
             if proc.returncode == 5 or "no tests ran" in proc.stdout.lower():
-                return {"invariant_id": "B-001", "layer": "behavioral", "outcome": "mutation-suspect",
-                        "evidence": "mutant run collected no tests (exit 5) — B-001 filter may be stale; "
+                return {"invariant_id": mutant_def.get("invariant", "B-001"), "layer": "behavioral",
+                        "outcome": "mutation-suspect",
+                        "evidence": "mutant run collected no tests (exit 5) — pytest filter may be stale; "
                                     "do not admit until the property runs against the mutant"}
             note = "assertion failure" if "assert" in proc.stdout.lower() else f"exit {proc.returncode}"
-            return {"invariant_id": "B-001", "layer": "behavioral", "outcome": "pass",
-                    "evidence": f"mutant rejected by B-001 property ({note}) — property is not vacuous"}
-        return {"invariant_id": "B-001", "layer": "behavioral", "outcome": "mutation-suspect",
-                "evidence": "B-001 passed against the idempotency-removed mutant — property is vacuous"}
+            return {"invariant_id": mutant_def.get("invariant", "B-001"), "layer": "behavioral",
+                    "outcome": "pass",
+                    "evidence": f"mutant rejected by {mutant_def['pytest_filter']} ({note}) — property is not vacuous"}
+        return {"invariant_id": mutant_def.get("invariant", "B-001"), "layer": "behavioral",
+                "outcome": "mutation-suspect",
+                "evidence": f"{mutant_def['pytest_filter']} passed against the mutant — property is vacuous"}
 
 
-def layer_operational_dynamic(bundle: Path, impl: Path, sandbox: bool, pbt_runs: int) -> list[dict]:
+def layer_operational_dynamic(bundle: Path, impl: Path, sandbox: bool, pbt_runs: int,
+                              manifest: dict) -> list[dict]:
     results = []
+    entry_module = manifest.get("entry_module") or "user_registry"
+    entry_class = manifest.get("entry_class") or "UserRegistry"
 
     # Docker sandbox (optional, infra contingency): network none + read-only fs.
     if sandbox and shutil.which("docker"):
-        proc = subprocess.run(
-            ["docker", "run", "--rm", "--network", "none", "--read-only",
-             "-e", f"PBT_RUNS={os.environ.get('PBT_RUNS', '200')}",
-             "-v", f"{impl.resolve()}:/candidate:ro", "-w", "/candidate",
-             "python:3.12-slim@sha256:d657ab0ade19f404a6ccc883ab399540de667aff751748ce23c07330c5a89e64", "python", "-c",
-             "import sys; sys.path.insert(0,'.'); from user_registry import UserRegistry; "
-             "r = UserRegistry().create({'client_request_id':'x','email':'a@b.com','display_name':'A'}); "
-             "assert r['ok'] is True; print('sandbox smoke ok')"],
-            capture_output=True, text=True, timeout=300)
-        if proc.returncode == 0:
-            results.append({"invariant_id": "O-001,O-002", "layer": "operational",
-                            "outcome": "pass",
-                            "evidence": "docker sandbox (network none, read-only fs): " + proc.stdout.strip()})
-        else:
+        smoke = manifest.get("smoke") or {}
+        if not smoke.get("method"):
             results.append({"invariant_id": "O-001,O-002", "layer": "operational",
                             "outcome": "skip",
-                            "evidence": f"docker sandbox unavailable/failed: {proc.stderr.strip()[:200]}"})
+                            "evidence": "no smoke method declared in candidate-manifest.json; "
+                                        "nothing executed in the sandbox"})
+        else:
+            call_style = smoke.get("call_style", "kwargs")
+            args_lit = json.dumps(smoke.get("args") or {})
+            if call_style == "single_dict":
+                call = f"{entry_class}().{smoke['method']}({args_lit})"
+            else:
+                call = f"{entry_class}().{smoke['method']}(**{args_lit})"
+            code = ("import sys; sys.path.insert(0,'.'); "
+                    f"from {entry_module} import {entry_class}; "
+                    f"r = {call}; "
+                    f"assert {smoke.get('assert_expr', 'True')}; print('sandbox smoke ok')")
+            proc = subprocess.run(
+                ["docker", "run", "--rm", "--network", "none", "--read-only",
+                 "-e", f"PBT_RUNS={os.environ.get('PBT_RUNS', '200')}",
+                 "-v", f"{impl.resolve()}:/candidate:ro", "-w", "/candidate",
+                 "python:3.12-slim@sha256:d657ab0ade19f404a6ccc883ab399540de667aff751748ce23c07330c5a89e64",
+                 "python", "-c", code],
+                capture_output=True, text=True, timeout=300)
+            if proc.returncode == 0:
+                results.append({"invariant_id": "O-001,O-002", "layer": "operational",
+                                "outcome": "pass",
+                                "evidence": "docker sandbox (network none, read-only fs): " + proc.stdout.strip()})
+            else:
+                results.append({"invariant_id": "O-001,O-002", "layer": "operational",
+                                "outcome": "skip",
+                                "evidence": f"docker sandbox unavailable/failed: {proc.stderr.strip()[:200]}"})
     else:
         results.append({"invariant_id": "O-001,O-002", "layer": "operational",
-                        "outcome": "skip" if not sandbox else "skip",
+                        "outcome": "skip",
                         "evidence": "sandbox not requested or docker not found; static scan only"})
 
-    # O-005 benchmark (advisory, should-tier): p95 create latency, in a
-    # subprocess with scrubbed env — candidate code never sees our secrets.
+    # O-005 benchmark (advisory, should-tier): p95 latency over the declared
+    # method, in a subprocess with scrubbed env — candidate never sees secrets.
+    bench = manifest.get("benchmark") or {}
+    if not bench.get("method"):
+        results.append({"invariant_id": "O-005", "layer": "operational", "outcome": "skip",
+                        "evidence": "no benchmark method declared in candidate-manifest.json"})
+        return results
     bench_code = (
         "import json, statistics, sys, time\n"
         "sys.path.insert(0, '.')\n"
-        "from user_registry import UserRegistry\n"
-        "reg = UserRegistry()\n"
+        f"from {entry_module} import {entry_class}\n"
+        f"reg = {entry_class}()\n"
         "lat = []\n"
-        "for i in range(1000):\n"
+        f"for i in range({bench.get('iterations', 1000)}):\n"
+        f"    args = {json.dumps(bench.get('args_template') or {})}\n"
+        "    args = {k: (v % i if isinstance(v, str) and '%d' in v else v) for k, v in args.items()}\n"
         "    t0 = time.perf_counter()\n"
-        "    reg.create({'client_request_id': 'bench-%d' % i, 'email': 'u%d@bench.dev' % i,"
-        " 'display_name': 'User %d' % i})\n"
-        "    lat.append((time.perf_counter() - t0) * 1000)\n"
+        + (f"    reg.{bench['method']}(args)\n" if bench.get("call_style") == "single_dict"
+           else f"    reg.{bench['method']}(**args)\n")
+        + "    lat.append((time.perf_counter() - t0) * 1000)\n"
         "print(json.dumps({'p95_ms': statistics.quantiles(sorted(lat), n=20)[18]}))\n"
     )
     try:
@@ -270,7 +314,8 @@ def layer_operational_dynamic(bundle: Path, impl: Path, sandbox: bool, pbt_runs:
         bench = json.loads(proc.stdout.strip()) if proc.returncode == 0 else {}
         p95 = bench.get("p95_ms")
         results.append({"invariant_id": "O-005", "layer": "operational", "outcome": "observe",
-                        "evidence": f"p95={p95:.2f}ms over 1000 creates (budget 500ms, should-tier)" if p95 is not None
+                        "evidence": f"p95={p95:.2f}ms over {bench.get('iterations', 1000)} calls "
+                                    f"(budget 500ms, should-tier)" if p95 is not None
                         else f"benchmark failed: {proc.stderr.strip()[:120]}"})
     except Exception as exc:  # noqa: BLE001
         results.append({"invariant_id": "O-005", "layer": "operational", "outcome": "skip",
@@ -295,6 +340,16 @@ def main(argv: list[str]) -> int:
         print("usage: validate_candidate.py <bundle-dir> <impl-dir> [--sandbox] [--pbt-runs N]")
         return 2
     bundle, impl = Path(argv[1]), Path(argv[2])
+    manifest_path = impl / "candidate-manifest.json"
+    if not manifest_path.exists():
+        print(f"no candidate-manifest.json in {impl}")
+        return 2
+    manifest = json.loads(manifest_path.read_text())
+    entry_module = manifest.get("entry_module") or "user_registry"
+    proto = load_yaml(bundle / "protocol.yaml") or {}
+    protocol = proto.get("protocol") or proto
+    name = bundle.name
+    version = protocol.get("version") or "1.0.0"
     sandbox = "--sandbox" in argv
     pbt_runs = 200
     if "--pbt-runs" in argv:
@@ -314,13 +369,13 @@ def main(argv: list[str]) -> int:
     results = (layer_structural(bundle, impl)
                + layer_operational_static(bundle, impl)   # static scan BEFORE any execution
                + layer_behavioral(bundle, impl, pbt_runs)
-               + layer_operational_dynamic(bundle, impl, sandbox, pbt_runs))
+               + layer_operational_dynamic(bundle, impl, sandbox, pbt_runs, manifest))
     verdict_text, reason = verdict(results)
 
     out = {
-        "protocol": {"name": "user-registry", "version": "1.0.0",
+        "protocol": {"name": name, "version": version,
                      "bundle_digest": bundle_digest(bundle)},
-        "candidate_digest": file_digest(impl / "user_registry.py"),
+        "candidate_digest": file_digest(impl / f"{entry_module}.py"),
         "validators": [
             {"id": "schema-validator", "version": "1.0.0", "layer": "structural"},
             {"id": "contract-runner", "version": "1.0.0", "layer": "structural"},
@@ -335,7 +390,7 @@ def main(argv: list[str]) -> int:
         "verdict_reason": reason,
         "environment": {"runtime": sys.version.split()[0], "os": sys.platform},
     }
-    out_path = REPO_ROOT / "evidence" / "user-registry" / "validation"
+    out_path = REPO_ROOT / "evidence" / name / "validation"
     out_path.mkdir(parents=True, exist_ok=True)
     (out_path / f"{out['candidate_digest'].split(':')[1][:12]}.results.json").write_text(
         json.dumps(out, indent=2))

@@ -31,9 +31,25 @@ Validator Loop, an HMAC-signed Evidence Chain + ledger, and a small HTTP service
   `PDD_EVIDENCE_KEY`, `STAGING_TAILSCALE_IP`, `STAGING_TAILSCALE_DNS`,
   `STAGING_SSH_KEY` (plus the default `GITHUB_TOKEN` used by the `gh` steps
   in nightly/release-gate).
-- **Tests:** 36 pass (`make test` with the real key: 10 candidate + 26 service,
-  incl. the v2 surface; +5 hardening tests from the two review rounds).
-  `src/tests/test_registry.py` (23 tests) runs WITHOUT the evidence key.
+- **Tests:** 51 pass (`make test` with the real key: 25 candidate — 10
+  user-registry + 15 pdd-registry — + 26 service; +15 from the dogfood
+  bundle). `src/tests/test_registry.py` (23 tests) runs WITHOUT the key.
+- **Dogfood bundle DONE:** `pdd-registry` (v1.0.0, sealed) — catalog search +
+  read views. Pure in-memory candidate (`pdd_registry.py`, 15 invariant-
+  lineage tests), validated `--sandbox` (admit; O-001/O-002 sandbox pass),
+  own evidence chain (genesis block `8a84485b32cf65e7`). The Validation
+  Engine + `pdd evidence build` were generalized to be manifest-driven
+  (`candidate-manifest.json` now declares `entry_module`/`entry_class`/
+  `smoke`/`benchmark`/`mutation_sanity`/`call_style`) — regression-verified
+  on user-registry (same candidate digest; evidence snapshot preserved).
+- **Pre-existing drift surfaced (not caused this round):** `a9d9bc9` changed
+  `pdd-bundles/user-registry/evidence-requirements.yaml` (signer text) AFTER
+  the chain was re-signed, so the attested evidence's embedded
+  `bundle_digest` (52a6dacd…) no longer matches the sealed bundle
+  (ecf72a11…). `pdd evidence verify` stays green (it checks ledger ↔
+  evidence file, not bundle). This round's honest re-run updated the results
+  file to the true digest. Full closure needs a version event (bump +
+  re-negotiate + re-sign) or a forced evidence rebuild — deferred, flagged.
 - **Self-hosted runner DONE + E2E GREEN:** `m6-pdd` (repo-scoped, label
   `staging-deploy`) on the M6 via nixos-infra `modules/github-runner.nix`
   (nixpkgs-unstable runner v2.335.1; extraPackages now include docker, ssh,

@@ -1,10 +1,12 @@
 {
   "protocol": {
-    "name": "user-registry",
+    "name": "pdd-registry",
     "version": "1.0.0",
-    "bundle_digest": "sha256:ecf72a1122d8866b10666833b93f1601d7f26591fdbde1637b602136e6048318"
+    "bundle_digest": "sha256:17bf338a2a97ca75a5b5aff07a5b785078d2817dcb8ddb0493de6dc4ddf524ac"
   },
-  "candidate_digest": "sha256:5614cd8f49224f28f4bed982555e2971d58334590744e57ca75c7f6616676dcf",
+  "implementation": {
+    "artifact_digest": "sha256:8a84485b32cf65e7c0d2d5bad118e0f5b2db0b85e91ff7caf03748de054c214b"
+  },
   "validators": [
     {
       "id": "schema-validator",
@@ -65,7 +67,7 @@
       "invariant_id": "O-003",
       "layer": "operational",
       "outcome": "pass",
-      "evidence": "imports=['__future__', 're', 'time', 'typing', 'uuid']; unapproved=[]"
+      "evidence": "imports=['dataclasses', 'json', 're', 'typing']; unapproved=[]"
     },
     {
       "invariant_id": "O-001,O-002,O-004",
@@ -77,13 +79,13 @@
       "invariant_id": "B-001,B-002,B-003,B-004,B-005",
       "layer": "behavioral",
       "outcome": "pass",
-      "evidence": "pytest: 10 passed in 3.54s"
+      "evidence": "pytest: 15 passed in 0.28s"
     },
     {
       "invariant_id": "B-001",
       "layer": "behavioral",
       "outcome": "pass",
-      "evidence": "mutant rejected by B001_repeat (exit 1) \u2014 property is not vacuous"
+      "evidence": "mutant rejected by B001_deterministic (exit 2) \u2014 property is not vacuous"
     },
     {
       "invariant_id": "O-001,O-002",
@@ -98,10 +100,11 @@
       "evidence": "p95=0.00ms over 1000 calls (budget 500ms, should-tier)"
     }
   ],
-  "verdict": "admit",
-  "verdict_reason": "all must invariants pass; no mutation-suspect flags",
-  "environment": {
-    "runtime": "3.14.6",
-    "os": "linux"
-  }
+  "provenance": {
+    "time": "2026-08-06T19:00:04Z",
+    "manifest": "pdd-registry-python-stdlib",
+    "discovery_digest": "sha256:6bb76f60ef527e90c3174994cefc91df8769e456eb9710dd3feeb8e243f4ba2b"
+  },
+  "digest": "sha256:14f5b2fa51fea9878e52ccaebab98364b938baf89e62ca9e87724e1f94b9b414",
+  "signature": "hmac-sha256:0c94daeb9be2e629638646de9532993fbdcfbf0444c31d72413a25390db39c0e"
 }

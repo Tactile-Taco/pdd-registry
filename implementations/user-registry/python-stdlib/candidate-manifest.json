@@ -8,6 +8,26 @@
     "tests/test_user_registry.py"
   ],
   "dependencies": {"runtime": ["stdlib only"], "dev": ["pytest", "hypothesis"]},
+  "entry_module": "user_registry",
+  "entry_class": "UserRegistry",
+  "smoke": {
+    "method": "create",
+    "call_style": "single_dict",
+    "args": {"client_request_id": "x", "email": "a@b.com", "display_name": "A"},
+    "assert_expr": "r['ok'] is True"
+  },
+  "benchmark": {
+    "method": "create",
+    "call_style": "single_dict",
+    "iterations": 1000,
+    "args_template": {"client_request_id": "bench-%d", "email": "u%d@bench.dev", "display_name": "User %d"}
+  },
+  "mutation_sanity": {
+    "invariant": "B-001",
+    "pytest_filter": "B001_repeat",
+    "find": "existing = self._by_request_id.get(req_id)\n        if existing is not None:\n            # B-001: repeat of a committed request id returns the original record.\n            return {\"ok\": True, \"outcome\": \"existing\", \"user\": existing.as_dict(), \"error\": None}",
+    "replace": "existing = None  # MUTANT: idempotency guard removed"
+  },
   "invariant_lineage": {
     "S-001": ["test_S001_created_user_matches_response_schema_shape"],
     "S-002": ["test_S002_error_envelope_uses_enumerated_kinds"],
