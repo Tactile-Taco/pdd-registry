@@ -109,15 +109,61 @@ def layer_structural(bundle: Path, impl: Path) -> list[dict]:
     return results
 
 
+_SCRUB_HOME: str | None = None
+
+
 def _scrubbed_env(pbt_runs: int) -> dict:
     """Environment for candidate code: NEVER pass secrets (PDD_EVIDENCE_KEY,
     tokens) to code under test — a malicious candidate must not read the
     signing key (security review HIGH). HOME points at a fresh temp dir so
-    candidate code cannot read the invoking user's private files."""
+    candidate code cannot read the invoking user's private files; the dir
+    lives under the per-run scrub root cleaned up by main()."""
+    root = _SCRUB_HOME or tempfile.mkdtemp(prefix="pdd-home-")
     return {"PBT_RUNS": str(pbt_runs),
             "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
-            "HOME": tempfile.mkdtemp(prefix="pdd-home-"),
+            "HOME": tempfile.mkdtemp(prefix="pdd-home-", dir=root),
             "LANG": "C.UTF-8"}
+
+
+_IDENT_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*$")
+_BUNDLE_NAME_RE = re.compile(r"[A-Za-z0-9_-]+$")
+
+
+def _assert_identifier(value, what: str) -> None:
+    """Fail closed before interpolating manifest-provided names into generated
+    code: methods/classes must be plain Python identifiers (security review)."""
+    if not isinstance(value, str) or not _IDENT_RE.fullmatch(value):
+        raise SystemExit(f"candidate-manifest.json {what} must be a Python identifier, got {value!r}")
+
+
+def _assert_bundle_name(name: str) -> None:
+    """Bundle names feed filesystem paths; constrain to [A-Za-z0-9_-] so a
+    hostile name cannot escape evidence/ (security review)."""
+    if not isinstance(name, str) or not _BUNDLE_NAME_RE.fullmatch(name):
+        raise SystemExit(f"invalid bundle name {name!r}")
+
+
+# Resource limits for the docker sandbox: a hostile candidate must not be able
+# to fork-bomb or exhaust the validation host (security review MEDIUM).
+_SANDBOX_DOCKER_FLAGS = ["--memory", "256m", "--pids-limit", "64", "--cpus", "1",
+                         "--cap-drop", "ALL", "--user", "65534:65534"]
+
+
+_BENCH_CODE_BANNED = ("import", "open(", "__", ";", "eval", "exec")
+
+
+def _assert_bench_meta(bench: dict) -> dict:
+    """Coerce/validate manifest benchmark fields before interpolation into
+    host-executed code (security review: code generation)."""
+    _assert_identifier(bench.get("method"), "benchmark.method")
+    try:
+        iterations = int(bench.get("iterations", 1000))
+    except (TypeError, ValueError) as exc:
+        raise SystemExit(f"candidate-manifest.json benchmark.iterations must be an integer, got "
+                         f"{bench.get('iterations')!r}") from exc
+    if not 1 <= iterations <= 1_000_000:
+        raise SystemExit(f"candidate-manifest.json benchmark.iterations out of range: {iterations}")
+    return {**bench, "iterations": iterations}
 
 
 def layer_operational_static(bundle: Path, impl: Path) -> list[dict]:
@@ -211,6 +257,10 @@ def mutation_sanity(impl: Path, testdir: Path, pbt_runs: int, manifest: dict) ->
     if missing:
         return {"invariant_id": "B-001", "layer": "behavioral", "outcome": "mutation-suspect",
                 "evidence": f"candidate-manifest.json mutation_sanity missing: {', '.join(missing)}"}
+    _assert_identifier(mutant_def.get("pytest_filter"), "mutation_sanity.pytest_filter")
+    if not isinstance(mutant_def.get("find"), str) or not isinstance(mutant_def.get("replace"), str):
+        return {"invariant_id": "B-001", "layer": "behavioral", "outcome": "mutation-suspect",
+                "evidence": "mutation_sanity find/replace must be strings"}
     src_file = impl / f"{entry_module}.py"
     original = src_file.read_text()
     mutant_src = original.replace(mutant_def["find"], mutant_def["replace"])
@@ -259,18 +309,25 @@ def layer_operational_dynamic(bundle: Path, impl: Path, sandbox: bool, pbt_runs:
                             "evidence": "no smoke method declared in candidate-manifest.json; "
                                         "nothing executed in the sandbox"})
         else:
-            call_style = smoke.get("call_style", "kwargs")
-            args_lit = json.dumps(smoke.get("args") or {})
-            if call_style == "single_dict":
-                call = f"{entry_class}().{smoke['method']}({args_lit})"
+            _assert_identifier(smoke.get("method"), "smoke.method")
+            assert_expr = smoke.get("assert_expr", "True")
+            if not isinstance(assert_expr, str) or any(b in assert_expr for b in _BENCH_CODE_BANNED):
+                results.append({"invariant_id": "O-001,O-002", "layer": "operational",
+                                "outcome": "skip",
+                                "evidence": "smoke.assert_expr rejected (banned constructs) — nothing executed"})
             else:
-                call = f"{entry_class}().{smoke['method']}(**{args_lit})"
-            code = ("import sys; sys.path.insert(0,'.'); "
-                    f"from {entry_module} import {entry_class}; "
-                    f"r = {call}; "
-                    f"assert {smoke.get('assert_expr', 'True')}; print('sandbox smoke ok')")
+                call_style = smoke.get("call_style", "kwargs")
+                args_lit = json.dumps(smoke.get("args") or {})
+                if call_style == "single_dict":
+                    call = f"{entry_class}().{smoke['method']}({args_lit})"
+                else:
+                    call = f"{entry_class}().{smoke['method']}(**{args_lit})"
+                code = ("import sys; sys.path.insert(0,'.'); "
+                        f"from {entry_module} import {entry_class}; "
+                        f"r = {call}; "
+                        f"assert {assert_expr}; print('sandbox smoke ok')")
             proc = subprocess.run(
-                ["docker", "run", "--rm", "--network", "none", "--read-only",
+                ["docker", "run", "--rm", "--network", "none", "--read-only", *_SANDBOX_DOCKER_FLAGS,
                  "-e", f"PBT_RUNS={os.environ.get('PBT_RUNS', '200')}",
                  "-v", f"{impl.resolve()}:/candidate:ro", "-w", "/candidate",
                  "python:3.12-slim@sha256:d657ab0ade19f404a6ccc883ab399540de667aff751748ce23c07330c5a89e64",
@@ -291,11 +348,12 @@ def layer_operational_dynamic(bundle: Path, impl: Path, sandbox: bool, pbt_runs:
 
     # O-005 benchmark (advisory, should-tier): p95 latency over the declared
     # method, in a subprocess with scrubbed env — candidate never sees secrets.
-    bench = manifest.get("benchmark") or {}
-    if not bench.get("method"):
+    raw_bench = manifest.get("benchmark") or {}
+    if not raw_bench.get("method"):
         results.append({"invariant_id": "O-005", "layer": "operational", "outcome": "skip",
                         "evidence": "no benchmark method declared in candidate-manifest.json"})
         return results
+    bench = _assert_bench_meta(raw_bench)
     bench_catalog = bench.get("catalog")
     bench_ctor = f"{entry_class}({json.dumps(bench_catalog)})" if bench_catalog else f"{entry_class}()"
     bench_code = (
@@ -342,6 +400,15 @@ def verdict(results: list[dict]) -> tuple[str, str]:
 
 
 def main(argv: list[str]) -> int:
+    global _SCRUB_HOME
+    _SCRUB_HOME = tempfile.mkdtemp(prefix="pdd-scrub-")
+    try:
+        return _main(argv)
+    finally:
+        shutil.rmtree(_SCRUB_HOME, ignore_errors=True)
+
+
+def _main(argv: list[str]) -> int:
     if len(argv) < 3:
         print("usage: validate_candidate.py <bundle-dir> <impl-dir> [--sandbox] [--pbt-runs N]")
         return 2
@@ -357,6 +424,7 @@ def main(argv: list[str]) -> int:
         print(f"candidate-manifest.json entry_module/entry_class must be Python identifiers, got "
               f"{entry_module!r}/{entry_class!r}")
         return 2
+    _assert_bundle_name(bundle.name)
     proto = load_yaml(bundle / "protocol.yaml") or {}
     protocol = proto.get("protocol") or proto
     name = bundle.name

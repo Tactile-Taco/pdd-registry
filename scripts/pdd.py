@@ -43,7 +43,14 @@ CHECK_BUNDLE = SKILLS / "pdd-protocol-author" / "scripts" / "check_bundle.py"
 EVIDENCE_CHAIN = SKILLS / "pdd-evidence-keeper" / "scripts" / "evidence_chain.py"
 
 
+_BUNDLE_NAME_RE = re.compile(r"[A-Za-z0-9_-]+$")
+
+
 def bundle_dir(name: str) -> Path:
+    """Bundle dir; names feed filesystem paths, so constrain them (security
+    review: a hostile name must not escape pdd-bundles/ or evidence/)."""
+    if not isinstance(name, str) or not _BUNDLE_NAME_RE.fullmatch(name):
+        sys.exit(f"invalid bundle name {name!r}")
     d = BUNDLES / name
     if not d.exists():
         sys.exit(f"no bundle named {name} under pdd-bundles/")
@@ -318,6 +325,10 @@ def cmd_run(argv: list[str]) -> int:
         if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", entry_module) or not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", entry_class):
             print(f"entry_module/entry_class must be Python identifiers, got {entry_module!r}/{entry_class!r}")
             return 1
+        assert_expr = smoke.get("assert_expr", "True")
+        if not isinstance(assert_expr, str) or any(b in assert_expr for b in ("import", "open(", "__", ";", "eval", "exec")):
+            print("smoke.assert_expr rejected (banned constructs)")
+            return 1
         args_lit = json.dumps(smoke.get("args") or {})
         if smoke.get("call_style") == "single_dict":
             call = f"{entry_class}().{smoke['method']}({args_lit})"
@@ -326,9 +337,11 @@ def cmd_run(argv: list[str]) -> int:
         code = ("import sys; sys.path.insert(0,'.'); "
                 f"from {entry_module} import {entry_class}; "
                 f"r = {call}; "
-                f"assert {smoke.get('assert_expr', 'True')}; print('run: ok')")
+                f"assert {assert_expr}; print('run: ok')")
         r = subprocess.run(
             ["docker", "run", "--rm", "--network", "none", "--read-only",
+             "--memory", "256m", "--pids-limit", "64", "--cpus", "1",
+             "--cap-drop", "ALL", "--user", "65534:65534",
              "-v", f"{impl.resolve()}:/candidate:ro", "-w", "/candidate",
              "python:3.12-slim@sha256:d657ab0ade19f404a6ccc883ab399540de667aff751748ce23c07330c5a89e64",
              "python", "-c", code],
