@@ -188,8 +188,6 @@ def cmd_evidence_build(argv: list[str]) -> int:
                   f"evidence snapshot preserved (re-verify with `pdd evidence verify`)")
             return 0
 
-    manifest = json.loads((impl / "candidate-manifest.json").read_text())
-
     evidence = {
         "protocol": {"name": name, "version": version,
                      "bundle_digest": results["protocol"]["bundle_digest"]},

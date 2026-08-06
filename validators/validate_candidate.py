@@ -125,8 +125,8 @@ def _scrubbed_env(pbt_runs: int) -> dict:
             "LANG": "C.UTF-8"}
 
 
-_IDENT_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*$")
-_BUNDLE_NAME_RE = re.compile(r"[A-Za-z0-9_-]+$")
+_IDENT_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*\Z")
+_BUNDLE_NAME_RE = re.compile(r"[A-Za-z0-9_-]+\Z")
 
 
 def _assert_identifier(value, what: str) -> None:
@@ -214,7 +214,7 @@ def layer_operational_static(bundle: Path, impl: Path) -> list[dict]:
     return results
 
 
-def layer_behavioral(bundle: Path, impl: Path, pbt_runs: int) -> list[dict]:
+def layer_behavioral(bundle: Path, impl: Path, pbt_runs: int, manifest: dict) -> list[dict]:
     results = []
     testdir = impl / "tests"
     if not testdir.exists():
@@ -242,8 +242,9 @@ def layer_behavioral(bundle: Path, impl: Path, pbt_runs: int) -> list[dict]:
         # keep going: mutation sanity may still add signal
     # Mutation sanity: remove the primary behavioral guard and require the
     # declared property (candidate-manifest mutation_sanity) to fail.
-    results.append(mutation_sanity(impl, testdir, pbt_runs, manifest=json.loads(
-        (impl / "candidate-manifest.json").read_text())))
+    # The manifest is the one loaded BEFORE any candidate code ran (no TOCTOU:
+    # a hostile candidate must not rewrite its manifest mid-validation).
+    results.append(mutation_sanity(impl, testdir, pbt_runs, manifest))
     return results
 
 
@@ -328,7 +329,8 @@ def layer_operational_dynamic(bundle: Path, impl: Path, sandbox: bool, pbt_runs:
                         f"assert {assert_expr}; print('sandbox smoke ok')")
                 proc = subprocess.run(
                     ["docker", "run", "--rm", "--network", "none", "--read-only", *_SANDBOX_DOCKER_FLAGS,
-                     "-e", f"PBT_RUNS={os.environ.get('PBT_RUNS', '200')}",
+                     "--security-opt", "no-new-privileges",
+                     "-e", f"PBT_RUNS={pbt_runs}",
                      "-v", f"{impl.resolve()}:/candidate:ro", "-w", "/candidate",
                      "python:3.12-slim@sha256:d657ab0ade19f404a6ccc883ab399540de667aff751748ce23c07330c5a89e64",
                      "python", "-c", code],
@@ -362,7 +364,7 @@ def layer_operational_dynamic(bundle: Path, impl: Path, sandbox: bool, pbt_runs:
         f"from {entry_module} import {entry_class}\n"
         f"reg = {bench_ctor}\n"
         "lat = []\n"
-        f"for i in range({bench.get('iterations', 1000)}):\n"
+        f"for i in range({bench['iterations']}):\n"
         f"    args = {json.dumps(bench.get('args_template') or {})}\n"
         "    args = {k: (v % i if isinstance(v, str) and '%d' in v else v) for k, v in args.items()}\n"
         "    t0 = time.perf_counter()\n"
@@ -378,7 +380,7 @@ def layer_operational_dynamic(bundle: Path, impl: Path, sandbox: bool, pbt_runs:
         bench = json.loads(proc.stdout.strip()) if proc.returncode == 0 else {}
         p95 = bench.get("p95_ms")
         results.append({"invariant_id": "O-005", "layer": "operational", "outcome": "observe",
-                        "evidence": f"p95={p95:.2f}ms over {bench.get('iterations', 1000)} calls "
+                        "evidence": f"p95={p95:.2f}ms over {bench['iterations']} calls "
                                     f"(budget 500ms, should-tier)" if p95 is not None
                         else f"benchmark failed: {proc.stderr.strip()[:120]}"})
     except Exception as exc:  # noqa: BLE001
@@ -447,7 +449,7 @@ def _main(argv: list[str]) -> int:
 
     results = (layer_structural(bundle, impl)
                + layer_operational_static(bundle, impl)   # static scan BEFORE any execution
-               + layer_behavioral(bundle, impl, pbt_runs)
+               + layer_behavioral(bundle, impl, pbt_runs, manifest)
                + layer_operational_dynamic(bundle, impl, sandbox, pbt_runs, manifest))
     verdict_text, reason = verdict(results)
 
