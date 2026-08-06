@@ -1,18 +1,23 @@
 """Tests for the pdd service verification surface (src/server.py).
 
 Run with: python3 -m pytest src/tests -q  (or `make test`, which includes it).
-Requires PDD_EVIDENCE_KEY to match the committed evidence (dev-local-key).
+The committed evidence chain is signed with the PDD_EVIDENCE_KEY held in
+Infisical (nixos-infra, prod); the fixture uses that key (from env if the
+runner already exports it, else fetched via the Infisical CLI) so the tests
+prove the committed chain verifies under the real signing key.
 """
 
 import importlib.util
 import json
 import os
+import subprocess
 import sys
 from pathlib import Path
 
 import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
+INFISICAL_PROJECT = "7a2f10fc-2d47-4008-a817-3f5493dc7476"
 
 _spec = importlib.util.spec_from_file_location("pdd_server", ROOT / "src" / "server.py")
 server = importlib.util.module_from_spec(_spec)
@@ -25,7 +30,16 @@ server.EVIDENCE = ROOT / "evidence"
 
 @pytest.fixture(autouse=True)
 def _evidence_key():
-    os.environ["PDD_EVIDENCE_KEY"] = "dev-local-key"
+    key = os.environ.get("PDD_EVIDENCE_KEY")
+    if not key:
+        out = subprocess.run(
+            ["infisical", "secrets", "get", "PDD_EVIDENCE_KEY",
+             "--projectId", INFISICAL_PROJECT, "--env", "prod",
+             "--plain", "--silent"],
+            capture_output=True, text=True)
+        key = out.stdout.strip()
+    assert key, "no PDD_EVIDENCE_KEY available (set env or run `infisical login`)"
+    os.environ["PDD_EVIDENCE_KEY"] = key
     yield
 
 
