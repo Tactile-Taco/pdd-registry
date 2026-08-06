@@ -161,8 +161,9 @@ def _assert_bench_meta(bench: dict) -> dict:
     except (TypeError, ValueError) as exc:
         raise SystemExit(f"candidate-manifest.json benchmark.iterations must be an integer, got "
                          f"{bench.get('iterations')!r}") from exc
-    if not 1 <= iterations <= 1_000_000:
-        raise SystemExit(f"candidate-manifest.json benchmark.iterations out of range: {iterations}")
+    if not 19 <= iterations <= 1_000_000:
+        raise SystemExit(f"candidate-manifest.json benchmark.iterations out of range "
+                         f"(need >= 19 for the p95 quantile): {iterations}")
     return {**bench, "iterations": iterations}
 
 
@@ -423,7 +424,8 @@ def layer_operational_dynamic(bundle: Path, impl: Path, sandbox: bool, pbt_runs:
                         "evidence": f"p95={p95:.2f}ms over {bench_iterations} calls "
                                     f"(budget 500ms, should-tier)" if p95 is not None
                         else f"benchmark failed: {proc.stderr.strip()[:120]}"})
-    except (json.JSONDecodeError, KeyError, TypeError, ValueError, subprocess.TimeoutExpired) as exc:
+    except (json.JSONDecodeError, KeyError, TypeError, ValueError,
+            subprocess.TimeoutExpired, OSError) as exc:
         results.append({"invariant_id": "O-005", "layer": "operational", "outcome": "skip",
                         "evidence": f"benchmark failed: {exc}"})
     return results
