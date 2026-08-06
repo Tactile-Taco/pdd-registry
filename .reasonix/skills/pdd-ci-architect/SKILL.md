@@ -23,7 +23,7 @@ Translate the Validator Loop into durable, scheduled, enterprise-grade CI. CI is
   `staging-deploy`), never from a laptop shell.
 
 ## Workflow set (templates in assets/)
-1. **pdd-pr-gates.yml** (pull_request): bundle lint per changed bundle; cross-bundle compatibility; block merge on `must` conflicts or unsealed dependencies.
+1. **pdd-pr-gates.yml** (pull_request): bundle lint per changed bundle; cross-bundle compatibility (missing dependencies, unprovided handshakes); block merge on lint/compat failures.
 2. **pdd-validator-loop.yml** (push to main): full three-layer validation (structural / behavioral / operational); upload validation-results.json + evidence as artifacts; commit evidence to the evidence namespace.
 3. **pdd-nightly.yml** (cron 0 3 * * *): extended property runs (>=5000 cases), mutation testing (report), dependency drift audit, full evidence-chain verify, replay spot-checks. Failures open an issue routed to remediation.
 4. **pdd-release-gate.yml** (tag push): all protocols sealed, validators green on this commit, evidence chain verifies; attach evidence bundle to the release.
