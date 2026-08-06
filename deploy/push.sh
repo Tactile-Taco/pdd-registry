@@ -10,8 +10,10 @@
 #   GITHUB_TOKEN=<pat with write:packages> PDD_EVIDENCE_KEY=<key> ./deploy/push.sh
 #
 # Machine addresses are NEVER hardcoded in this public repo — STAGING_HOST and
-# STAGING_DNS come from Infisical (see m6-agent-workstation skill). The
-# evidence key is passed as env and stored only in the cluster Secret.
+# STAGING_DNS come from the GitHub Actions secrets (which map to Infisical's
+# STAGING_TAILSCALE_IP / STAGING_TAILSCALE_DNS in misc-secrets; see the
+# m6-agent-workstation skill). The evidence key is passed as env and stored
+# only in the cluster Secret.
 set -euo pipefail
 
 : "${GITHUB_TOKEN:?Set GITHUB_TOKEN to a PAT with write:packages}"
@@ -29,6 +31,11 @@ echo "==> Pushing ${IMAGE}"
 printf '%s' "${GITHUB_TOKEN}" | docker login ghcr.io -u tactile-taco --password-stdin
 docker push "${IMAGE}"
 
+# Pin the manifest to the digest we just pushed (k8s.yaml must never drift to a
+# stale :latest). RepoDigests[0] is "host/name@sha256:…".
+DIGEST="$(docker inspect --format='{{index .RepoDigests 0}}' "${IMAGE}" | sed 's/.*@//')"
+echo "==> Deploying image digest ${DIGEST}"
+
 echo "==> Creating evidence Secret on ${STAGING_HOST} (idempotent)"
 # The key is piped via stdin (--from-env-file=/dev/stdin) so it never appears
 # in any process listing or shell history.
@@ -36,9 +43,11 @@ printf 'PDD_EVIDENCE_KEY=%s\n' "${PDD_EVIDENCE_KEY}" \
   | ssh "${STAGING_HOST}" 'sudo k3s kubectl create secret generic pdd-evidence-key \
       --from-env-file=/dev/stdin --dry-run=client -o yaml | sudo k3s kubectl apply -f -'
 
-echo "==> Applying manifest (host substituted) to ${STAGING_HOST}"
+echo "==> Applying manifest (host + image digest substituted) to ${STAGING_HOST}"
 MANIFEST="deploy/k8s.yaml"
-sed "s/__STAGING_HOST__/${PROJECT}.${STAGING_DNS}/" "${MANIFEST}" \
+sed -e "s/__STAGING_HOST__/${PROJECT}.${STAGING_DNS}/" \
+    -e "s|image: ghcr.io/tactile-taco/${PROJECT}.*|image: ghcr.io/tactile-taco/${PROJECT}@sha256:${DIGEST}|" \
+    "${MANIFEST}" \
   | ssh "${STAGING_HOST}" 'sudo k3s kubectl apply -f -'
 echo "==> Bouncing the deployment to pull the new image"
 ssh "${STAGING_HOST}" "sudo k3s kubectl rollout restart deployment/${PROJECT} && \
