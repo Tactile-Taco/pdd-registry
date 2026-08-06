@@ -240,6 +240,11 @@ class Handler(BaseHTTPRequestHandler):
         if b is None:
             self._json({"error": f"no bundle named {name}"}, status=404)
             return
+        if "error" in b:
+            # Broken bundle (missing/unparseable protocol.yaml): surface the
+            # catalog error instead of crashing on missing keys.
+            self._json({"error": b["error"]}, status=500)
+            return
         if len(parts) == 2:
             self._json({
                 "name": b["name"], "version": b.get("version"), "status": b.get("status"),

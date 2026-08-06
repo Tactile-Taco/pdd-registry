@@ -77,6 +77,17 @@ per-entry AND semantics. One deliberate behavior change worth noting: v1
 all v2 views) drop them and report per-bundle errors via `pdd index` — the
 fail-closed direction.
 
+**Fresh post-mutation review round** (after handoff re-verification): 3 more
+findings fixed with 3 regression tests (`test_registry.py` now 21 tests):
+`load_bundle` normalizes a string `depends_on` to a list (the
+`/bundles?depends_on=` filter must stay exact-membership) and non-dict
+`capabilities`/`provides` to `{}` (a list previously crashed `pdd index` and
+`/search` with `AttributeError`); `/bundles/{name}` on a broken bundle now
+returns a clear 500 with the catalog error instead of a `KeyError`; and
+`ledger_view` rejects escaping bundle names (`..`, `a/b`) — defense in depth,
+unreachable via HTTP since routes constrain names to real bundle dirs.
+`make test` now 34 pass (10 candidate + 24 service).
+
 ## Registry-server implications (feeding the next iteration)
 
 - v2 confirms the proposal's read-API direction: every endpoint stayed

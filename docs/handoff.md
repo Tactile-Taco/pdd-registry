@@ -1,6 +1,6 @@
 # pdd-repository — Handoff
 
-**Date:** 2026-08-06 · **Branch:** `pdd-work` (ahead of `origin/pdd-work` by 2 unpushed commits: `56f1aa6`, `7846820`) · **Worktree:** `/home/TacticalTaco/.reasonix/global-workspace/pdd-repository-wt` · **Main checkout:** `/home/TacticalTaco/.reasonix/global-workspace/pdd-repository` (on `main`, older)
+**Date:** 2026-08-06 · **Branch:** `pdd-work` (ahead of `origin/pdd-work` by 3 unpushed commits: `56f1aa6`, `7846820`, `1db8c94`) · **Worktree:** `/home/TacticalTaco/.reasonix/global-workspace/pdd-repository-wt` · **Main checkout:** `/home/TacticalTaco/.reasonix/global-workspace/pdd-repository` (on `main`, older)
 
 > ⚠️ This repo is public: real addresses never appear here. Machine addresses
 > (M6 tailscale IP, staging tailscale IP/DNS, ports) live in Infisical
@@ -30,9 +30,13 @@ Validator Loop, an HMAC-signed Evidence Chain + ledger, and a small HTTP service
 - **GitHub secrets** (Tactile-Taco/pdd-repository): `GHCR_PAT`,
   `PDD_EVIDENCE_KEY`, `STAGING_HOST`, `STAGING_DNS` (plus the default
   `GITHUB_TOKEN` used by the `gh` steps in nightly/release-gate).
-- **Tests:** 31 pass (`make test` with the real key: 10 candidate + 21 service,
-  incl. the v2 surface; re-verified this session). `src/tests/test_registry.py`
-  (18 tests) runs WITHOUT the evidence key.
+- **Tests:** 34 pass (`make test` with the real key: 10 candidate + 24 service,
+  incl. the v2 surface; +3 hardening tests from the fresh review round).
+  `src/tests/test_registry.py` (21 tests) runs WITHOUT the evidence key.
+- **Fresh review round DONE:** the interrupted post-mutation review was
+  completed; 3 findings fixed (`depends_on`/`capabilities` shape
+  normalization, broken-bundle route error, `ledger_view` name guard) — see
+  the retrospective addendum. The fix commit is part of the unpushed set.
 - **CI templates** in `ci-templates/` (NOT installed to `.github/workflows/` —
   needs workflow-scope credentials; run `make ci-install`).
 
@@ -102,9 +106,10 @@ make all         # commit gate (lint+test+validate+evidence; needs the key)
    invariants/capabilities/ledger). Retrospective:
    `docs/retrospective-registry-v2.md`. `/diff` deferred to a version-event
    milestone; push/pull + auth still explicitly out of scope. **Re-verified
-   this session**: `make test` 31 pass, `git diff --check` clean, CLI
-   `pdd index`/`pdd search idempotent` run live. The 2 commits are NOT yet
-   pushed to origin/pdd-work.
+   this session**: `make test` 34 pass (10 candidate + 24 service),
+   `git diff --check` clean, CLI `pdd index`/`pdd search idempotent` run
+   live. The commits (incl. the review-fix commit) are NOT yet pushed to
+   origin/pdd-work.
 4. Optional nits: try/except around the `infisical` subprocess in
    `src/tests/test_server.py:35`; `mktemp -d` HOME cleanup in the Makefile;
    stale generic template in `.reasonix/skills/pdd-ci-architect/assets/`.

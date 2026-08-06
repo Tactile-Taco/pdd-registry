@@ -12,6 +12,7 @@ else is read-only catalog data. Run: python3 -m pytest src/tests -q
 import importlib.util
 import json
 import sys
+import tempfile
 import threading
 import urllib.request
 from http.server import HTTPServer
@@ -236,3 +237,50 @@ def test_bundle_route_bad_subpath(client):
 def test_route_not_found(client):
     status, _ = client("/nonsense")
     assert status == 404
+
+
+# --- review hardening (post-mutation review findings) ----------------------
+
+
+def test_load_bundle_normalizes_depends_on_and_capabilities(tmp_path):
+    """A string depends_on and a list capabilities must be normalized so the
+    /bundles?depends_on= filter stays exact-membership and search/index never
+    crash on `.keys()` of a list."""
+    bdir = tmp_path / "shape-bundle"
+    bdir.mkdir()
+    (bdir / "protocol.yaml").write_text(
+        "protocol:\n  name: shape-bundle\n  version: 1.0.0\n  status: draft\n"
+        "depends_on: user-registry\n")  # string, not list
+    (bdir / "invariants").mkdir()
+    (bdir / "invariants" / "structural.yaml").write_text("structural_invariants:\n")
+    (bdir / "capability-manifest.yaml").write_text("capabilities:\n  - one\n  - two\n")
+    b = registry_index.load_bundle(bdir)
+    assert "error" not in b
+    assert b["depends_on"] == ["user-registry"]
+    assert b["capabilities"] == {}
+
+
+def test_ledger_view_rejects_escaping_names():
+    """ledger_view must never read outside evidence_root, even when called
+    directly (the HTTP layer already constrains names to real bundles)."""
+    for bad in ("..", "../evidence", "user-registry/../..", "a/b"):
+        view = registry_index.ledger_view(ROOT / "evidence", bad)
+        assert view["error"] == "invalid bundle name"
+        assert view["blocks"] == []
+
+
+def test_bundle_route_broken_bundle(client, monkeypatch):
+    """A broken bundle (unparseable protocol.yaml) must yield a clear 500 with
+    the catalog error, not a KeyError crash."""
+    with tempfile.TemporaryDirectory() as td:
+        bdir = Path(td) / "broken-bundle"
+        bdir.mkdir()
+        (bdir / "protocol.yaml").write_text("protocol: [unclosed\n")
+        monkeypatch.setattr(server, "BUNDLES", Path(td))
+        status, body = client("/bundles/broken-bundle")
+        assert status == 500
+        assert "unparseable" in body["error"]
+        # other bundles are still served from the real catalog
+        monkeypatch.setattr(server, "BUNDLES", ROOT / "pdd-bundles")
+        status, body = client("/bundles/user-registry")
+        assert status == 200 and body["name"] == "user-registry"

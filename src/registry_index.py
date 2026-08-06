@@ -80,6 +80,19 @@ def load_bundle(bundle_dir: Path) -> dict:
             capabilities = _load_yaml(cap_path).get("capabilities", {}) or {}
         except Exception as exc:  # noqa: BLE001
             return {"name": name, "error": f"unparseable {cap_path.name}: {exc}"}
+        if not isinstance(capabilities, dict):
+            # Non-dict manifest (e.g. a list) would crash search/index later.
+            capabilities = {}
+
+    # Normalize shapes so downstream consumers never see the raw YAML types:
+    # a string depends_on would turn the /bundles?depends_on= filter into
+    # substring matching instead of exact membership.
+    depends_on = proto.get("depends_on", []) or []
+    if isinstance(depends_on, str):
+        depends_on = [depends_on]
+    provides = proto.get("provides", {}) or {}
+    if not isinstance(provides, dict):
+        provides = {}
 
     return {
         "name": name,
@@ -88,9 +101,9 @@ def load_bundle(bundle_dir: Path) -> dict:
         # purpose/boundary/depends_on/provides are top-level keys in
         # protocol.yaml, siblings of `protocol:` (which holds name/version/status).
         "purpose": proto.get("purpose"),
-        "boundary": proto.get("boundary", {}),
-        "depends_on": proto.get("depends_on", []),
-        "provides": proto.get("provides", {}),
+        "boundary": proto.get("boundary", {}) or {},
+        "depends_on": depends_on,
+        "provides": provides,
         "invariants": invariants,
         "capabilities": capabilities,
         "_dir": str(bundle_dir),
@@ -192,6 +205,10 @@ def ledger_view(evidence_root: Path, name: str, limit: int | None = None) -> dic
     ledger verification (fail-closed) and reports it as `verified`. This view
     returns exactly what is on disk, like `pdd evidence verify` reads it.
     """
+    # Defense in depth: this shared function must never escape the evidence
+    # root. The HTTP layer already constrains names to real bundle dirs.
+    if Path(name).name != name or name in (".", ".."):
+        return {"bundle": name, "error": "invalid bundle name", "count": 0, "blocks": []}
     ledger = evidence_root / name / "runtime-ledger.jsonl"
     if not ledger.exists():
         return {"bundle": name, "error": "no runtime-ledger.jsonl", "count": 0, "blocks": []}
