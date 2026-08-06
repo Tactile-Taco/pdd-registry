@@ -1,6 +1,6 @@
 ---
 name: pdd-registry-client
-description: Add, search, pull and query the pdd protocol registry (pdd-bundles/ + v2 HTTP API): bundle admission, pdd index/search, /search and /bundles views.
+description: "Add, search, pull and query the pdd protocol registry (pdd-bundles/ + v2 HTTP API): bundle admission, pdd index/search, /search and /bundles views."
 ---
 
 # pdd-registry-client
