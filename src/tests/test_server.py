@@ -40,6 +40,8 @@ def _evidence_key():
         if out.returncode == 0:
             key = out.stdout.strip()
     if not key:
+        if os.environ.get("GITHUB_ACTIONS"):
+            pytest.fail("no PDD_EVIDENCE_KEY in CI — is the repository secret set?")
         pytest.skip("no PDD_EVIDENCE_KEY available (set env or run `infisical login`)")
     os.environ["PDD_EVIDENCE_KEY"] = key
     yield

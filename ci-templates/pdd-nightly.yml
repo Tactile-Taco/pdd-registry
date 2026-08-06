@@ -27,4 +27,3 @@ jobs:
         run: gh issue create --title "nightly pdd failure $(date +%F)" --body "see run $GITHUB_RUN_ID"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PDD_EVIDENCE_KEY: ${{ secrets.PDD_EVIDENCE_KEY }}

@@ -29,4 +29,3 @@ jobs:
         run: tar czf pdd-evidence.tar.gz evidence/ && gh release upload "$GITHUB_REF_NAME" pdd-evidence.tar.gz --clobber
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PDD_EVIDENCE_KEY: ${{ secrets.PDD_EVIDENCE_KEY }}
