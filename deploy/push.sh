@@ -63,6 +63,9 @@ for attempt in 1 2 3; do
   sleep 10
 done
 [ "${push_ok}" = 1 ] || { echo "docker push failed after 3 attempts" >&2; exit 1; }
+# Don't leave the PAT in the runner's docker config (HOME is under /run, but
+# be explicit).
+docker logout ghcr.io >/dev/null 2>&1 || true
 
 # Pin the manifest to the digest we just pushed (k8s.yaml must never drift to a
 # stale :latest). RepoDigests[0] is "host/name@sha256:…"; strip the scheme so
@@ -88,6 +91,9 @@ SUBSTITUTED="$(sed -e "s/__STAGING_HOST__/${PROJECT}.${DNS_ESC}/" \
 # re-applying a stale pinned digest would silently roll staging back.
 printf '%s' "${SUBSTITUTED}" | grep -q "image: ghcr.io/tactile-taco/${PROJECT}@sha256:${DIGEST}" \
   || { echo "manifest substitution failed for ${MANIFEST}" >&2; exit 1; }
+# Same guard for the host rule: __STAGING_HOST__ must not survive the sed.
+printf '%s' "${SUBSTITUTED}" | grep -q "host: ${PROJECT}." \
+  || { echo "host substitution failed for ${MANIFEST}" >&2; exit 1; }
 printf '%s' "${SUBSTITUTED}" \
   | ssh_guest 'sudo k3s kubectl apply -f -'
 echo "==> Bouncing the deployment to pull the new image"
