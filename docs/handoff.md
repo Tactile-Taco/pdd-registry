@@ -1,6 +1,6 @@
 # pdd-repository — Handoff
 
-**Date:** 2026-08-06 · **Branch:** `pdd-work` (ahead of `origin/pdd-work` by 3 unpushed commits: `56f1aa6`, `7846820`, `1db8c94`) · **Worktree:** `/home/TacticalTaco/.reasonix/global-workspace/pdd-repository-wt` · **Main checkout:** `/home/TacticalTaco/.reasonix/global-workspace/pdd-repository` (on `main`, older)
+**Date:** 2026-08-06 · **Branch:** `pdd-work` — pushed and folded into `main` at `492bd01` (all commits on origin; `main` == `origin/main` == `origin/pdd-work` == `492bd01`) · **Worktree:** `/home/TacticalTaco/.reasonix/global-workspace/pdd-repository-wt` · **Main checkout:** `/home/TacticalTaco/.reasonix/global-workspace/pdd-repository` (on `main`, synced)
 
 > ⚠️ This repo is public: real addresses never appear here. Machine addresses
 > (M6 tailscale IP, staging tailscale IP/DNS, ports) live in Infisical
@@ -96,10 +96,11 @@ make all         # commit gate (lint+test+validate+evidence; needs the key)
 
 ## 7. Next steps (not done, flagged)
 
-1. Self-hosted runner on the M6 (nixos-infra `services.github-runners` module)
-   + install `ci-templates/` via `make ci-install`; fix the STAGING_* naming.
-2. Fold `pdd-work` → `main` (PR or fast-forward) so main carries the re-signed
-   chain.
+1. **Self-hosted runner — IN PROGRESS this session**: M6 runner via nixos-infra
+   `services.github-runners` + `make ci-install`; fix the STAGING_* naming.
+2. ~~Fold `pdd-work` → `main`~~ **DONE (this session)**: fast-forwarded
+   `dc928e8..492bd01` via `git push origin pdd-work:main` — main carries the
+   re-signed evidence chain; primary checkout synced to `origin/main`.
 3. ~~Registry server iteration~~ **DONE (commit 56f1aa6 on pdd-work)**: feature
    enumeration doc first (`docs/service-features-v2.md`), shared search index
    (`src/registry_index.py`), `pdd index`/`pdd search`, and the v2 read API
@@ -109,8 +110,7 @@ make all         # commit gate (lint+test+validate+evidence; needs the key)
    milestone; push/pull + auth still explicitly out of scope. **Re-verified
    this session**: `make test` 36 pass (10 candidate + 26 service),
    `git diff --check` clean, CLI `pdd index`/`pdd search idempotent` run
-   live. The commits (incl. the review-fix commits) are NOT yet pushed to
-   origin/pdd-work.
+   live. All 5 commits pushed to origin and folded into `main`.
 4. Optional nits: try/except around the `infisical` subprocess in
    `src/tests/test_server.py:35`; `mktemp -d` HOME cleanup in the Makefile;
    stale generic template in `.reasonix/skills/pdd-ci-architect/assets/`.
