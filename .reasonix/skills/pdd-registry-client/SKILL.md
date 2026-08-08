@@ -131,7 +131,9 @@ cp -r .reasonix/skills/pdd-protocol-author/assets/templates/* pdd-bundles/my-pro
 # Author: protocol.yaml (name/version/status + namespace + tags + purpose,
 # boundary, depends_on, provides), S/B/O invariants, capability manifest,
 # ambiguity log. namespace = kebab-case owner slug; tags = kebab-case list
-# (<=8, no dupes) from the controlled vocabulary — lint-enforced (S-004/S-005).
+# (<=8, no dupes) — grammar is lint-enforced (S-004/S-005); the tag
+# vocabulary itself is governed, not linted (seeds: engine, input, stats,
+# data-catalog, ui, auth, server).
 make lint                                        # check_bundle.py must pass (gate)
 python3 scripts/pdd.py bundle seal my-protocol   # status: draft → sealed
 
@@ -152,9 +154,9 @@ python3 scripts/pdd.py evidence verify my-protocol
 - The Makefile targets `validate`/`evidence` are hardcoded to `user-registry`;
   for other bundles use `scripts/pdd.py` directly (above).
 - `make all` = lint+test+validate+evidence (the commit gate; needs the key).
-- After commit+push to `dev`, CI runs `pdd-validator-loop` (hosted) and
-  `pdd-staging-deploy` (self-hosted runner `m6-pdd`, label `staging-deploy`)
-  automatically — dev is the deploy trigger (AGENTS.md).
+- After commit+push to `dev`, CI runs `pdd-staging-deploy` (self-hosted
+  runner `m6-pdd`, label `staging-deploy`) automatically — dev is the
+  deploy trigger (AGENTS.md). `pdd-validator-loop` runs on push to `main`.
 
 ## SEARCH — the catalog
 
