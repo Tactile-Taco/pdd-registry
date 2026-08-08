@@ -44,12 +44,35 @@ EVIDENCE_CHAIN = SKILLS / "pdd-evidence-keeper" / "scripts" / "evidence_chain.py
 
 
 _BUNDLE_NAME_RE = re.compile(r"[A-Za-z0-9_-]+$")
+_SHA256_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
 
 
 def _valid_bundle_name(name: str) -> bool:
     """Bundle names feed filesystem paths; constrain to [A-Za-z0-9_-] so a
     hostile name cannot escape pdd-bundles/ or evidence/ (security review)."""
     return isinstance(name, str) and bool(_BUNDLE_NAME_RE.fullmatch(name))
+
+
+def _valid_sha256(digest: str | None) -> bool:
+    """Digests feed evidence filenames; accept only the exact sha256:<hex>
+    shape so a hostile results file cannot inject path separators (security
+    review)."""
+    return isinstance(digest, str) and bool(_SHA256_RE.fullmatch(digest))
+
+
+def _bundle_digest(bundle_dir: Path) -> str:
+    """Recompute the bundle digest exactly like validators/validate_candidate.py
+    (sorted rglob, relative posix paths + bytes, .git excluded) so evidence
+    build can prove the results file attests the bundle ON DISK."""
+    try:
+        h = hashlib.sha256()
+        for p in sorted(bundle_dir.rglob("*")):
+            if p.is_file() and ".git" not in p.parts:
+                h.update(p.relative_to(bundle_dir).as_posix().encode())
+                h.update(p.read_bytes())
+    except OSError as exc:
+        sys.exit(f"cannot digest bundle {bundle_dir.name}: {exc}")
+    return "sha256:" + h.hexdigest()
 
 
 def _assert_safe_expression(expr: str) -> None:
@@ -107,6 +130,12 @@ def cmd_bundle_lint(argv: list[str]) -> int:
             continue
         r = subprocess.run([sys.executable, str(CHECK_BUNDLE), str(d)])
         rc |= r.returncode
+    if target is None:
+        # Cross-bundle S-004: (namespace, name) pairs must be unique. The
+        # catalog mode re-runs per-bundle checks; cheap at this registry size
+        # and keeps one entry point for the whole-catalog gate.
+        r = subprocess.run([sys.executable, str(CHECK_BUNDLE), "--catalog", str(BUNDLES)])
+        rc |= r.returncode
     return rc
 
 
@@ -151,6 +180,31 @@ def cmd_validate(argv: list[str]) -> int:
     return r.returncode
 
 
+def _load_validation_results(path: Path) -> dict:
+    """Load + shape-check a validation-results file (unauthenticated input).
+
+    Fail-closed: unreadable/corrupt JSON, non-object roots, missing verdict,
+    and malformed section shapes all exit cleanly BEFORE the caller can use
+    any value (digests from this file feed evidence filenames).
+    """
+    try:
+        results = json.loads(path.read_text())
+    except (json.JSONDecodeError, UnicodeDecodeError, OSError, RecursionError):
+        sys.exit(f"validation results {path.name} are unreadable or corrupt "
+                 f"(not valid JSON) — run `pdd validate` first")
+    if not isinstance(results, dict):
+        sys.exit(f"validation results {path.name} are not a JSON object "
+                 f"(got {type(results).__name__}) — run `pdd validate` first")
+    if results.get("verdict") != "admit":
+        sys.exit(f"cannot build admission evidence: verdict is {results.get('verdict')}")
+    for key in ("protocol", "validators", "results"):
+        if not isinstance(results.get(key), dict if key == "protocol" else list):
+            sys.exit(f"validation results {path.name} carry a malformed "
+                     f"{key!r} section (got {type(results.get(key)).__name__}) — "
+                     f"run `pdd validate` first")
+    return results
+
+
 def cmd_evidence_build(argv: list[str]) -> int:
     name = argv[0]
     if "--impl" not in argv:
@@ -168,48 +222,101 @@ def cmd_evidence_build(argv: list[str]) -> int:
     # Version comes from the sealed protocol, not a hardcoded literal.
     import registry_index  # lazy: pyyaml, same index as pdd index/search
     _b = registry_index.load_bundle(proto)
-    version = _b.get("version") if _b and "error" not in _b else "1.0.0"
+    if not _b or "error" in _b:
+        sys.exit(f"cannot read protocol for {name}: {(_b or {}).get('error', 'unparseable')} — "
+                 f"refusing to sign evidence for an unknown version")
+    version = _b.get("version")
+    if not isinstance(version, str) or not version:
+        sys.exit(f"protocol for {name} declares no version — refusing to sign evidence")
     # The attested results must be for THIS candidate: match by digest prefix.
     results_file = next(
         (EVIDENCE / name / "validation").glob(f"{impl_digest.split(':')[1][:12]}*.results.json"),
         None)
     if results_file is None:
         sys.exit("no validation results for this candidate digest — run `pdd validate` first")
-    results = json.loads(results_file.read_text())
+    results = _load_validation_results(results_file)
     if results.get("candidate_digest") != impl_digest:
         sys.exit(f"candidate digest mismatch: results attest {results.get('candidate_digest')}, "
                  f"--impl is {impl_digest}; refusing to bind evidence to the wrong artifact")
-    if results["verdict"] != "admit":
-        sys.exit(f"cannot build admission evidence: verdict is {results['verdict']}")
+    # The attested results must also be for THIS bundle: recompute the real
+    # bundle digest and fail on stale results — the results file is an
+    # unauthenticated input and the bundle digest feeds evidence filenames.
+    real_bundle_digest = _bundle_digest(proto)
+    attested_bundle = results["protocol"].get("bundle_digest")
+    if not _valid_sha256(attested_bundle):
+        sys.exit(f"invalid bundle_digest in validation results: {attested_bundle!r}")
+    if attested_bundle != real_bundle_digest:
+        sys.exit(f"stale validation results: they attest bundle digest "
+                 f"{attested_bundle[:16]} but the bundle on disk is "
+                 f"{real_bundle_digest[:16]} — re-run `pdd validate {name}` first")
 
-    # Idempotency: an admission that is already attested keeps its attested
-    # evidence snapshot — provenance `time` is part of the signed body, so a
-    # rebuild would silently overwrite the attested object and force a new
-    # block every run. Gate on the admission (artifact) digest, and confirm the
-    # attested file is actually on disk and matches the ledger before claiming
-    # the snapshot is preserved.
+    # Idempotency + version-event handling. Admission/discovery files are
+    # keyed by BOTH the artifact digest and the bundle digest
+    # ({impl[:16]}-{bundle[:12]}.{evidence,discovery}.json), so a protocol
+    # version event writes a NEW file and never overwrites the attested
+    # object of a previous version — old files and old ledger blocks both
+    # stay (append-only, no silent overwrite). The idempotent-rebuild check:
+    # the file for the CURRENT bundle digest exists on disk and matches the
+    # ledger's latest attestation for this artifact.
     ledger = EVIDENCE / name / "runtime-ledger.jsonl"
+    stem = f"{impl_digest.split(':')[1][:16]}-{results['protocol']['bundle_digest'].split(':')[1][:12]}"
+    adm_path = EVIDENCE / name / "admission" / f"{stem}.evidence.json"
     if ledger.exists():
         existing = [json.loads(line) for line in ledger.read_text().splitlines() if line.strip()]
-        matches = [b for b in existing
-                   if (b.get("observations") or {}).get("admission") == impl_digest]
-        if matches:
-            attested_digest = (matches[-1].get("observations") or {}).get("evidence_digest")
-            adm_file = next(
-                (EVIDENCE / name / "admission").glob(f"{impl_digest.split(':')[1][:16]}*.evidence.json"),
-                None)
-            if adm_file is None or not attested_digest:
-                print(f"FAIL: admission {impl_digest.split(':')[1][:16]} is attested "
-                      f"but its evidence file is missing from disk")
-                return 1
-            on_disk = "sha256:" + hashlib.sha256(adm_file.read_bytes()).hexdigest()
-            if on_disk != attested_digest:
-                print(f"FAIL: attested evidence file differs from the ledger "
-                      f"(on disk {on_disk} != attested {attested_digest}) — re-run validate, then rebuild")
-                return 1
-            print(f"admission {impl_digest.split(':')[1][:16]} already attested and consistent; "
-                  f"evidence snapshot preserved (re-verify with `pdd evidence verify`)")
-            return 0
+        attested = [b for b in existing
+                    if (b.get("observations") or {}).get("admission") == impl_digest
+                    and (b.get("observations") or {}).get("evidence_digest")]
+        if attested:
+            # Legacy-name migration: an admission previously written as
+            # {impl[:16]}.evidence.json is renamed to the stem-keyed name
+            # ONLY when it attests the CURRENT bundle digest (bytes preserved
+            # -> digest preserved -> ledger attestation still matches). A
+            # legacy file attesting an OLDER bundle digest is left in place:
+            # it is a superseded version object and the version-event branch
+            # below builds the new stem file. The discovery log moves with
+            # the renamed file (same base-name convention).
+            legacy = EVIDENCE / name / "admission" / f"{impl_digest.split(':')[1][:16]}.evidence.json"
+            if legacy.exists() and not adm_path.exists():
+                try:
+                    legacy_ev = json.loads(legacy.read_text())
+                except (json.JSONDecodeError, UnicodeDecodeError, OSError, RecursionError):
+                    print(f"FAIL: legacy admission file {legacy.name} is corrupt (unparseable JSON); "
+                          f"refusing to migrate or overwrite")
+                    return 1
+                if not isinstance(legacy_ev, dict):
+                    print(f"FAIL: legacy admission file {legacy.name} is corrupt (not a JSON object); "
+                          f"refusing to migrate or overwrite")
+                    return 1
+                legacy_proto = legacy_ev.get("protocol")
+                if not isinstance(legacy_proto, dict):
+                    print(f"FAIL: legacy admission file {legacy.name} is corrupt "
+                          f"(protocol section is {type(legacy_proto).__name__}); "
+                          f"refusing to migrate or overwrite")
+                    return 1
+                legacy_bundle = legacy_proto.get("bundle_digest")
+                if legacy_bundle == results["protocol"]["bundle_digest"]:
+                    legacy.rename(adm_path)
+                    legacy_disc = EVIDENCE / name / "discovery" / f"{impl_digest.split(':')[1][:16]}.discovery.json"
+                    stem_disc = EVIDENCE / name / "discovery" / f"{stem}.discovery.json"
+                    if legacy_disc.exists() and not stem_disc.exists():
+                        legacy_disc.rename(stem_disc)
+            if adm_path.exists():
+                on_disk = "sha256:" + hashlib.sha256(adm_path.read_bytes()).hexdigest()
+                attested_digest = attested[-1]["observations"]["evidence_digest"]
+                if on_disk != attested_digest:
+                    print(f"FAIL: attested evidence file differs from the ledger "
+                          f"(on disk {on_disk} != attested {attested_digest}) — re-run validate, then rebuild")
+                    return 1
+                print(f"admission {stem} already attested and consistent; "
+                      f"evidence snapshot preserved (re-verify with `pdd evidence verify`)")
+                return 0
+            # An attestation exists for this artifact but no file for the
+            # CURRENT bundle digest -> protocol version event (or the file
+            # was removed): build a new object; any older version's file and
+            # ledger block stay.
+            print(f"admission for {impl_digest.split(':')[1][:16]} is attested under a different "
+                  f"bundle digest (or its file was removed); building {stem}.evidence.json "
+                  f"(older objects + ledger blocks stay, append-only)")
 
     evidence = {
         "protocol": {"name": name, "version": version,
@@ -230,7 +337,7 @@ def cmd_evidence_build(argv: list[str]) -> int:
     }
     disc = EVIDENCE / name / "discovery"
     disc.mkdir(parents=True, exist_ok=True)
-    disc_path = disc / f"{impl_digest.split(':')[1][:16]}.discovery.json"
+    disc_path = disc / f"{stem}.discovery.json"
     disc_path.write_text(json.dumps(evidence["discovery_log"], indent=2))
     # Bind the discovery log into the signed object: digest of the exact bytes on disk.
     disc_digest = "sha256:" + hashlib.sha256(disc_path.read_bytes()).hexdigest()
@@ -246,7 +353,7 @@ def cmd_evidence_build(argv: list[str]) -> int:
 
     adm = EVIDENCE / name / "admission"
     adm.mkdir(parents=True, exist_ok=True)
-    evidence_path = adm / f"{impl_digest.split(':')[1][:16]}.evidence.json"
+    evidence_path = adm / f"{stem}.evidence.json"
     evidence_path.write_text(json.dumps(evidence_obj, indent=2))
     evidence_digest = "sha256:" + hashlib.sha256(evidence_path.read_bytes()).hexdigest()
 
@@ -259,7 +366,7 @@ def cmd_evidence_build(argv: list[str]) -> int:
         capture_output=True, text=True)
     if genesis.returncode != 0:
         sys.exit(f"genesis block failed: {genesis.stderr}")
-    print(f"evidence built: admission/{impl_digest.split(':')[1][:16]}.evidence.json")
+    print(f"evidence built: admission/{stem}.evidence.json")
     print(f"genesis block appended to {ledger.relative_to(REPO_ROOT)}")
     return 0
 
@@ -318,13 +425,15 @@ def cmd_evidence_verify(argv: list[str]) -> int:
             rc = 1
         else:
             print(f"OK: {path.name} digest+signature valid, ledger-attested")
-            # The discovery log is bound into the signed provenance: recompute and compare.
+            # The discovery log is bound into the signed provenance: recompute
+            # and compare. The discovery file shares the admission file's base
+            # name with a .discovery.json suffix ({impl[:16]}-{bundle[:12]}),
+            # so the lookup is an exact path, not a prefix glob.
             disc_digest = (ev.get("provenance") or {}).get("discovery_digest")
             if disc_digest:
-                # Match the discovery file by the artifact-digest prefix used at build.
-                disc_file = next(
-                    (EVIDENCE / name / "discovery").glob(f"{path.name[:16]}*.discovery.json"), None)
-                if disc_file is None:
+                disc_file = EVIDENCE / name / "discovery" / (
+                    path.name[:-len(".evidence.json")] + ".discovery.json")
+                if not disc_file.exists():
                     print("FAIL: evidence binds a discovery digest but no discovery file on disk")
                     rc = 1
                 else:

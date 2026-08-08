@@ -1,6 +1,6 @@
 {
   "artifact_id": "pdd-registry-python-stdlib",
-  "protocol": {"name": "pdd-registry", "version": "1.0.0", "status": "sealed"},
+  "protocol": {"name": "pdd-registry", "version": "1.1.0", "status": "sealed"},
   "language": "python",
   "runtime": "python-3.12",
   "files": [
@@ -43,6 +43,8 @@
   "invariant_lineage": {
     "S-001": ["test_S001_search_response_matches_response_schema", "test_S001_filtered_bundles_are_serializable"],
     "S-002": ["test_S002_error_envelope_uses_enumerated_kinds"],
+    "S-004": ["test_S004_namespace_filter_exact", "test_S004_namespace_filter_exact_property", "test_S004_address_is_namespace_name"],
+    "S-005": ["test_S005_tag_filter_exact_membership", "test_S005_tag_filter_exact_membership_property", "test_S005_tags_are_searchable_entries", "test_S004_S005_combined_filters"],
     "B-001": ["test_B001_deterministic_search", "test_B001_order_stable_across_calls"],
     "B-002": ["test_B002_tokens_and_per_entry", "test_B002_name_matches_rank_above_invariant_matches"],
     "B-003": ["test_B003_blank_or_nonword_query_fails_closed", "test_B003_unknown_bundle_returns_not_found_no_state_change"],

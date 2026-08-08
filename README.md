@@ -53,10 +53,18 @@ python3 scripts/pdd.py index             # registry catalog over pdd-bundles/*
 python3 scripts/pdd.py search idempotent # search names, purpose, invariants, capabilities
 ```
 
-The same index powers the service's v2 read API (docs/service-features-v2.md):
-`/search?q=`, `/bundles?status=&depends_on=`, `/bundles/{name}`,
-`/bundles/{name}/invariants`, `/capabilities`, `/ledger` — all read-only,
-served by `src/server.py`.
+The same index powers the service's read API (docs/service-features-v2.md,
+-v3.md): `/search?q=`, `/bundles?status=&depends_on=&namespace=&tag=`,
+`/bundles/{name}`, `/bundles/{name}/invariants`, `/capabilities`, `/ledger` —
+all read-only, served by `src/server.py`.
+
+Since the **v1.1 version event** (docs/service-features-v3.md) every bundle
+carries `namespace` (kebab-case owner/scope slug) and `tags` (kebab-case
+list, ≤8, no dupes) in `protocol.yaml`: display addressing is
+`namespace/name` (`pdd/pdd-registry`, `user/user-registry`) while directories
+and evidence stay name-keyed. Names are unique **within a namespace**, so
+similar protocols can share a name under different namespaces without
+conflicting — `GET /bundles?namespace=pdd&tag=engine` filters exactly.
 
 ## How a protocol gets admitted
 

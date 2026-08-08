@@ -3,6 +3,12 @@ protocol:
   version: 0.1.0
   status: draft
 
+# Catalog addressing metadata (required since the v1.1 bundle spec):
+# namespace = kebab-case owner/scope slug (Docker-Hub owner / npm scope);
+# tags = kebab-case list from the controlled catalog vocabulary, <=8, no dupes.
+namespace: example
+tags: [server]
+
 purpose: >
   Describe the component's protocol-visible purpose.
 

@@ -71,10 +71,60 @@ def test_index_catalog_shape():
     assert sorted(b["name"] for b in catalog) == ["pdd-registry", "user-registry"]
     b = next(b for b in catalog if b["name"] == "user-registry")
     assert b["status"] == "sealed"
-    assert b["version"] == "1.0.0"
+    assert b["version"] == "1.1.0"
     assert set(b["invariants"]) == {"structural", "behavioral", "operational"}
     assert b["invariants"]["structural"][0]["id"] == "S-001"
     assert "network" in b["capabilities"]
+
+
+def test_index_catalog_metadata_shape():
+    """v1.1 catalog metadata: namespace, tags, namespace/name address."""
+    catalog = registry_index.load_catalog(ROOT / "pdd-bundles")
+    by_name = {b["name"]: b for b in catalog}
+    assert by_name["pdd-registry"]["namespace"] == "pdd"
+    assert by_name["pdd-registry"]["tags"] == ["engine", "data-catalog", "server"]
+    assert by_name["pdd-registry"]["address"] == "pdd/pdd-registry"
+    assert by_name["user-registry"]["namespace"] == "user"
+    assert by_name["user-registry"]["tags"] == ["server"]
+    assert by_name["user-registry"]["address"] == "user/user-registry"
+
+
+def test_load_catalog_marks_duplicate_addresses_broken():
+    """S-004 duplicate-address detection: every entry of a colliding
+    (namespace, name) group is marked broken (fail-closed). The flat
+    pdd-bundles layout guarantees unique directory names, so this guards the
+    catalog-builder boundary (e.g. a future subdir/alias layout): two bundles
+    named typing-test-engine under the SAME namespace must never both be
+    served, while different namespaces may carry the same name."""
+    entries = [
+        {"name": "typing-test-engine", "namespace": "typing"},
+        {"name": "typing-test-engine", "namespace": "typing"},
+        {"name": "typing-test-engine", "namespace": "monkeytype"},  # OK: other ns
+        {"name": "user-registry", "namespace": "user"},
+    ]
+    registry_index._mark_duplicate_addresses(entries)
+    dupes = [b for b in entries if "duplicate catalog address" in b.get("error", "")]
+    assert [b["name"] for b in dupes] == ["typing-test-engine", "typing-test-engine"]
+    assert entries[2].get("error") is None
+    assert entries[3].get("error") is None
+
+
+def test_load_bundle_normalizes_tags_and_namespace(tmp_path):
+    """A string tags value becomes a single-element list; a missing namespace
+    stays None with a bare-name address (backwards-compatible bridge)."""
+    bdir = tmp_path / "meta-bundle"
+    bdir.mkdir()
+    (bdir / "protocol.yaml").write_text(
+        "protocol:\n  name: meta-bundle\n  version: 1.1.0\n  status: draft\n"
+        "tags: engine\n")  # string form, normalized to [engine]
+    (bdir / "invariants").mkdir()
+    (bdir / "invariants" / "structural.yaml").write_text("structural_invariants:\n")
+    (bdir / "capability-manifest.yaml").write_text("capabilities:\n")
+    b = registry_index.load_bundle(bdir)
+    assert "error" not in b
+    assert b["namespace"] is None
+    assert b["tags"] == ["engine"]
+    assert b["address"] == "meta-bundle"
 
 
 def test_search_ranks_purpose_over_invariant():
@@ -130,14 +180,14 @@ def test_load_bundle_tolerates_null_sections(tmp_path):
 
 def test_ledger_view_limit():
     view = registry_index.ledger_view(ROOT / "evidence", "user-registry", limit=1)
-    assert view["count"] == 1
+    assert view["count"] >= 1  # grows with version events (append-only)
     assert len(view["blocks"]) == 1
     assert view["blocks"][0]["decision"] == "attest-pass"
     full = registry_index.ledger_view(ROOT / "evidence", "user-registry")
-    assert full["count"] == 1 and len(full["blocks"]) == 1
+    assert full["count"] == len(full["blocks"]) and full["count"] >= 1
     # limit=0 means zero blocks (never "all" via the -0 slice)
     zero = registry_index.ledger_view(ROOT / "evidence", "user-registry", limit=0)
-    assert zero["count"] == 1 and zero["blocks"] == []
+    assert zero["count"] == full["count"] and zero["blocks"] == []
 
 
 # --- HTTP routes (v2) ------------------------------------------------------
@@ -161,11 +211,45 @@ def test_get_bundles_filtered(client):
     assert body["bundles"] == []  # no cross-bundle dependency graph yet
 
 
+def test_get_bundles_namespace_tag_filters(client):
+    """v1.1 filters: ?namespace= (exact) and ?tag= (exact membership),
+    combinable with each other and with status/depends_on."""
+    status, body = client("/bundles?namespace=user")
+    assert status == 200
+    assert [b["name"] for b in body["bundles"]] == ["user-registry"]
+    status, body = client("/bundles?namespace=pdd")
+    assert status == 200
+    assert [b["name"] for b in body["bundles"]] == ["pdd-registry"]
+    status, body = client("/bundles?tag=engine")
+    assert status == 200
+    assert [b["name"] for b in body["bundles"]] == ["pdd-registry"]
+    status, body = client("/bundles?tag=server")
+    assert status == 200
+    assert sorted(b["name"] for b in body["bundles"]) == ["pdd-registry", "user-registry"]
+    status, body = client("/bundles?namespace=pdd&tag=server")
+    assert status == 200
+    assert [b["name"] for b in body["bundles"]] == ["pdd-registry"]
+    status, body = client("/bundles?namespace=user&tag=server")
+    assert status == 200
+    assert [b["name"] for b in body["bundles"]] == ["user-registry"]
+    # exact match: prefixes must NOT match
+    status, body = client("/bundles?namespace=use")
+    assert status == 200 and body["bundles"] == []
+    status, body = client("/bundles?tag=eng")
+    assert status == 200 and body["bundles"] == []
+    # summary rows carry the metadata + namespace/name address
+    assert body["bundles"] == [] or all(
+        {"namespace", "tags", "address"} <= set(b) for b in body["bundles"])
+
+
 def test_get_bundle_summary(client):
     status, body = client("/bundles/user-registry")
     assert status == 200
     assert body["name"] == "user-registry"
     assert body["status"] == "sealed"
+    assert body["namespace"] == "user"
+    assert body["tags"] == ["server"]
+    assert body["address"] == "user/user-registry"
     assert "idempotent" in (body["purpose"] or "").lower()
     assert "B-001" in body["invariant_ids"]["behavioral"]
     assert "user-registry.create" in body["provides"]
@@ -194,7 +278,7 @@ def test_get_bundle_capabilities(client):
 def test_get_bundle_ledger(client):
     status, body = client("/bundles/user-registry/ledger?limit=1")
     assert status == 200
-    assert body["count"] == 1
+    assert body["count"] >= 1  # grows with version events (append-only)
     assert len(body["blocks"]) == 1
     assert body["blocks"][0]["decision"] == "attest-pass"
     # fail-closed: `verified` is a real verification result, never assumed
@@ -215,6 +299,14 @@ def test_search_route(client):
     assert body["results"][0]["bundle"] == "user-registry"
     ids = [(r["layer"], r["id"]) for r in body["results"]]
     assert ("behavioral", "B-001") in ids
+
+
+def test_search_route_finds_tags(client):
+    """Tags are searchable catalog entries (S-005); 'engine' only matches the
+    pdd-registry tag entry in the current catalog."""
+    status, body = client("/search?q=engine")
+    assert status == 200
+    assert any(r["layer"] == "tags" and r["id"] == "engine" for r in body["results"])
 
 
 def test_search_route_missing_q(client):

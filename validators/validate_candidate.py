@@ -105,7 +105,34 @@ def layer_structural(bundle: Path, impl: Path) -> list[dict]:
                     "outcome": "pass" if "invalid_request" in src else "fail",
                     "evidence": "enumerated error kinds referenced in candidate source"})
     results.append({"invariant_id": "S-003", "layer": "structural", "outcome": "pass",
-                    "evidence": "no schema history yet; v1.0.0 baseline (schema-diff n/a)"})
+                    "evidence": "v1.1.0 baseline: handshake schemas unchanged (schema-diff n/a); "
+                                "catalog metadata (namespace/tags) added at the bundle level "
+                                "per S-003 minor-version rules"})
+    # S-004: catalog addressing — every entry declares a kebab-case namespace
+    # (the cross-bundle (namespace, name) uniqueness half is enforced by the
+    # catalog-wide linter pass, `pdd bundle lint`).
+    proto = load_yaml(bundle / "protocol.yaml") or {}
+    ns = proto.get("namespace")
+    ns_ok = (isinstance(ns, str) and 1 <= len(ns) <= 63
+             and bool(re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", ns)))
+    results.append({"invariant_id": "S-004", "layer": "structural",
+                    "outcome": "pass" if ns_ok else "fail",
+                    "evidence": (f"namespace {ns!r} is kebab-case (1..63 chars)"
+                                 if ns_ok else
+                                 f"namespace {ns!r} violates the kebab-case grammar")})
+    # S-005: tag grammar — list of kebab-case strings, at most 8, no duplicates.
+    tags = proto.get("tags")
+    # `all` short-circuits on the first non-string, so the set() dedupe below
+    # only ever sees strings (hashable) — no TypeError on unhashable elements.
+    tag_ok = (isinstance(tags, list) and len(tags) <= 8
+              and all(isinstance(t, str) and re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", t)
+                      for t in tags)
+              and len(set(tags)) == len(tags))
+    results.append({"invariant_id": "S-005", "layer": "structural",
+                    "outcome": "pass" if tag_ok else "fail",
+                    "evidence": f"{len(tags) if isinstance(tags, list) else type(tags).__name__} "
+                                f"tags, kebab-case, unique, <=8" if tag_ok else
+                                f"tags {tags!r} violate the grammar (kebab-case list, <=8, no dupes)"})
     return results
 
 

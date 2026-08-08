@@ -26,9 +26,16 @@ pdd-bundles/<protocol-name>/
 
 Required fields:
 
-- `protocol.name`: stable slug.
+- `protocol.name`: stable slug (matches the bundle directory name).
 - `protocol.version`: semantic version.
 - `protocol.status`: `draft`, `review`, `sealed`, or `deprecated`.
+- `namespace`: kebab-case owner/scope slug (Docker-Hub owner / npm scope
+  analogy, e.g. `pdd`, `user`, `typing`). Uniqueness: bundle names are unique
+  WITHIN a namespace, not globally — two projects may each own a
+  `typing-test-engine` under different namespaces (S-004).
+- `tags`: list of kebab-case tags from the controlled catalog vocabulary
+  (seeds: `engine`, `input`, `stats`, `data-catalog`, `ui`, `auth`,
+  `server`); at most 8, no duplicates (S-005).
 - `purpose`: one paragraph.
 - `boundary.in_scope`: what the protocol governs.
 - `boundary.out_of_scope`: what it does not govern.
@@ -37,6 +44,10 @@ Required fields:
 - `capabilities`: reference to capability manifest.
 - `validators`: reference to validation plan.
 - `evidence`: reference to evidence requirements.
+
+Display addressing is `namespace/name`; the on-disk layout stays
+`pdd-bundles/<name>` and evidence stays name-keyed — a backwards-compatible
+bridge, not a directory reorganization.
 
 ## Invariant Files
 

@@ -20,8 +20,8 @@ SEVERITIES = ("must", "should")
 LAYERS = ("structural", "behavioral", "operational")
 
 # Field weights — parity with registry_index._FIELD_WEIGHT: name > purpose >
-# invariant > capability. Scores are the weight (no token multiplier).
-WEIGHTS = {"name": 10, "purpose": 5, "invariant": 3, "capability": 2}
+# invariant > capability/tag. Scores are the weight (no token multiplier).
+WEIGHTS = {"name": 10, "purpose": 5, "invariant": 3, "capability": 2, "tag": 2}
 
 _WORD = re.compile(r"[a-z0-9_]+")
 
@@ -29,6 +29,14 @@ _WORD = re.compile(r"[a-z0-9_]+")
 def _error(kind: str, message: str) -> dict:
     """S-002: the stable error envelope with an enumerated kind."""
     return {"ok": False, "error": {"kind": kind, "message": message}}
+
+
+def _address(b: dict) -> str:
+    """S-004: display address namespace/name; bare name without a namespace
+    (backwards-compatible bridge — directories/evidence stay name-keyed)."""
+    ns = b.get("namespace")
+    name = b.get("name")
+    return f"{ns}/{name}" if ns and name else (name or "")
 
 
 @dataclass
@@ -56,6 +64,8 @@ class Registry:
                     out.append((name, layer, iid, text, WEIGHTS["invariant"]))
         for key in b.get("capabilities") or {}:
             out.append((name, "capabilities", str(key), str(key), WEIGHTS["capability"]))
+        for t in b.get("tags") or []:
+            out.append((name, "tags", str(t), str(t), WEIGHTS["tag"]))
         return out
 
     def search(self, query: str = "", limit: int = 20) -> dict:
@@ -87,8 +97,10 @@ class Registry:
         # test_B001_deterministic_search (stable order, no mutation).
         return sorted(results, key=lambda e: (-e["score"], e["bundle"], e["layer"], e["id"]))
 
-    def bundles(self, status: str | None = None, depends_on: str | None = None) -> dict:
-        """Filtered listing; filters are exact-match (B-004)."""
+    def bundles(self, status: str | None = None, depends_on: str | None = None,
+                namespace: str | None = None, tag: str | None = None) -> dict:
+        """Filtered listing; filters are exact-match (B-004, S-004/S-005:
+        namespace exact, tag exact membership)."""
         out = []
         for b in self.catalog:
             if not isinstance(b, dict) or "error" in b:
@@ -97,7 +109,14 @@ class Registry:
                 continue
             if depends_on is not None and depends_on not in (b.get("depends_on") or []):
                 continue
-            out.append({"name": b.get("name"), "version": b.get("version"),
+            if namespace is not None and b.get("namespace") != namespace:
+                continue
+            if tag is not None and tag not in (b.get("tags") or []):
+                continue
+            out.append({"name": b.get("name"), "namespace": b.get("namespace"),
+                        "tags": b.get("tags") or [],
+                        "address": b.get("address") or _address(b),
+                        "version": b.get("version"),
                         "status": b.get("status"),
                         "depends_on": b.get("depends_on") or [],
                         "provides": b.get("provides") or {}})
@@ -108,7 +127,10 @@ class Registry:
         for b in self.catalog:
             if isinstance(b, dict) and b.get("name") == name and "error" not in b:
                 return {"ok": True, "bundle": b.get("name"), "version": b.get("version"),
-                        "status": b.get("status"), "purpose": b.get("purpose"),
+                        "status": b.get("status"),
+                        "namespace": b.get("namespace"), "tags": b.get("tags") or [],
+                        "address": b.get("address") or _address(b),
+                        "purpose": b.get("purpose"),
                         "depends_on": b.get("depends_on") or [],
                         "provides": b.get("provides") or {}, "error": None}
         return _error("not_found", f"no bundle named {name!r}")

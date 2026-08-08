@@ -29,7 +29,7 @@ INVARIANT_KEYS = {
 SEVERITIES = ("must", "should")
 
 # Relevance weights for search ranking (field importance, not severity).
-_FIELD_WEIGHT = {"name": 10, "purpose": 5, "invariant": 3, "capability": 2}
+_FIELD_WEIGHT = {"name": 10, "purpose": 5, "invariant": 3, "capability": 2, "tag": 2}
 
 _WORD = re.compile(r"[a-z0-9_]+")
 
@@ -93,11 +93,30 @@ def load_bundle(bundle_dir: Path) -> dict:
     provides = proto.get("provides", {}) or {}
     if not isinstance(provides, dict):
         provides = {}
+    # v1.1 catalog metadata (S-004/S-005): namespace is a kebab-case owner
+    # slug; tags a kebab-case list. Defensive normalization mirrors
+    # depends_on: a string tags value becomes a single-element list, anything
+    # else degenerates to [] so filters/search never crash on raw types.
+    namespace = proto.get("namespace")
+    if not isinstance(namespace, str) or not namespace:
+        namespace = None
+    tags = proto.get("tags")
+    if isinstance(tags, str):
+        tags = [tags]
+    elif not isinstance(tags, list):
+        tags = []
+    else:
+        tags = [t for t in tags if isinstance(t, str)]
 
     return {
         "name": name,
         "version": protocol.get("version"),
         "status": protocol.get("status"),
+        "namespace": namespace,
+        "tags": tags,
+        # Display address namespace/name (Docker-Hub owner / npm scope style);
+        # falls back to bare name for bundles without a namespace.
+        "address": f"{namespace}/{name}" if namespace else name,
         # purpose/boundary/depends_on/provides are top-level keys in
         # protocol.yaml, siblings of `protocol:` (which holds name/version/status).
         "purpose": proto.get("purpose"),
@@ -110,11 +129,31 @@ def load_bundle(bundle_dir: Path) -> dict:
     }
 
 
+def _mark_duplicate_addresses(entries: list[dict]) -> None:
+    """S-004: flag every entry whose (namespace, name) address is shared with
+    another entry (in place, fail-closed). The flat pdd-bundles layout already
+    guarantees unique directory names, so today this guards the catalog-builder
+    boundary — e.g. a future subdirectory/alias layout must not reintroduce
+    duplicate addresses silently."""
+    from collections import Counter
+    counts = Counter((b.get("namespace"), b["name"]) for b in entries if "error" not in b)
+    for b in entries:
+        if "error" in b:
+            continue
+        key = (b.get("namespace"), b["name"])
+        if counts[key] > 1:
+            b["error"] = f"duplicate catalog address {key[0]}/{key[1]} ({counts[key]} entries)"
+
+
 def load_catalog(bundles_dir: Path) -> list[dict]:
     """Catalog over every pdd-bundles/* directory (sorted, stable order).
 
     A missing bundles dir yields an empty catalog (v1 /bundles behavior),
     not a 500 for every route.
+
+    S-004: catalog entries whose (namespace, name) address collides with
+    another entry are marked broken (error entry) — fail-closed, so a
+    duplicate address is visible to operators and never silently served.
     """
     if not bundles_dir.exists():
         return []
@@ -122,12 +161,15 @@ def load_catalog(bundles_dir: Path) -> list[dict]:
     for d in sorted(bundles_dir.iterdir()):
         if d.is_dir() and (d / "protocol.yaml").exists():
             out.append(load_bundle(d))
+    _mark_duplicate_addresses(out)
     return out
 
 
 def summary(b: dict) -> dict:
-    """The /bundles index shape: {name, version, status, depends_on, provides}."""
-    return {k: b.get(k) for k in ("name", "version", "status", "depends_on", "provides")}
+    """The /bundles index shape: {name, namespace, tags, address, version,
+    status, depends_on, provides}."""
+    return {k: b.get(k) for k in ("name", "namespace", "tags", "address",
+                                  "version", "status", "depends_on", "provides")}
 
 
 def invariants_view(b: dict, severity: str | None = None) -> dict:
@@ -156,6 +198,8 @@ def _index_entries(b: dict) -> list[tuple[str, str, str, str, int]]:
             entries.append((name, layer, it.get("id"), text, _FIELD_WEIGHT["invariant"]))
     for key in (b.get("capabilities") or {}):
         entries.append((name, "capabilities", key, key, _FIELD_WEIGHT["capability"]))
+    for t in b.get("tags") or []:
+        entries.append((name, "tags", t, t, _FIELD_WEIGHT["tag"]))
     return entries
 
 
@@ -197,6 +241,8 @@ def catalog_json(catalog: list[dict]) -> dict:
             continue
         bundles.append({
             "name": b["name"], "version": b["version"], "status": b["status"],
+            "namespace": b.get("namespace"), "tags": b.get("tags") or [],
+            "address": b.get("address"),
             "depends_on": b["depends_on"], "provides": b["provides"],
             "invariant_count": {layer: len(b["invariants"][layer]) for layer in LAYERS},
             "capability_keys": sorted((b.get("capabilities") or {}).keys()),

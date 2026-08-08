@@ -3,7 +3,7 @@
 Client surface (see docs/service-features-v1.md and -v2.md):
   GET /healthz                    liveness
   GET /bundles                    registry index: [{name, version, status}] (v1)
-  GET /bundles?status=&depends_on=  filtered index (v2)
+  GET /bundles?status=&depends_on=&namespace=&tag=  filtered index (v2 + v3 namespace/tag)
   GET /bundles/{name}             full bundle summary (v2)
   GET /bundles/{name}/invariants?severity=  structured S/B/O invariant view (v2)
   GET /bundles/{name}/capabilities         capability manifest view (v2)
@@ -200,10 +200,18 @@ class Handler(BaseHTTPRequestHandler):
                            if "error" not in b]
                 status = (query.get("status") or [None])[0]
                 depends = (query.get("depends_on") or [None])[0]
+                namespace = (query.get("namespace") or [None])[0]
+                tag = (query.get("tag") or [None])[0]
                 if status is not None:
                     bundles = [b for b in bundles if b.get("status") == status]
                 if depends is not None:
                     bundles = [b for b in bundles if depends in (b.get("depends_on") or [])]
+                if namespace is not None:
+                    # S-004: exact namespace match (namespace/name addressing).
+                    bundles = [b for b in bundles if b.get("namespace") == namespace]
+                if tag is not None:
+                    # S-005: exact tag membership, not substring.
+                    bundles = [b for b in bundles if tag in (b.get("tags") or [])]
                 self._json({"bundles": bundles})
                 return
             if path == "/evidence/verify":
@@ -253,6 +261,8 @@ class Handler(BaseHTTPRequestHandler):
         if len(parts) == 2:
             self._json({
                 "name": b["name"], "version": b.get("version"), "status": b.get("status"),
+                "namespace": b.get("namespace"), "tags": b.get("tags") or [],
+                "address": b.get("address"),
                 "purpose": b.get("purpose"), "boundary": b.get("boundary", {}),
                 "depends_on": b.get("depends_on", []), "provides": b.get("provides", {}),
                 "invariant_ids": {layer: [it["id"] for it in b["invariants"][layer]]

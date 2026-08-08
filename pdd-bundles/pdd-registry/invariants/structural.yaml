@@ -26,3 +26,26 @@ structural_invariants:
     severity: must
     validation:
       - schema_diff_check
+
+  - id: S-004
+    statement: >
+      Catalog addressing: every catalog entry must declare a kebab-case
+      namespace; bundle names are unique within a namespace, so the catalog
+      must never contain two entries with the same (namespace, name) pair.
+      The display address is namespace/name; the on-disk directory
+      (pdd-bundles/<name>) and evidence stay name-keyed (backwards-compatible
+      bridge, no directory reorganization).
+    severity: must
+    validation:
+      - linter
+      - contract_tests
+
+  - id: S-005
+    statement: >
+      Tag grammar: tags come from the controlled catalog vocabulary and each
+      tag is kebab-case; at most 8 tags per bundle, no duplicates. Filtering
+      by tag is exact membership.
+    severity: must
+    validation:
+      - linter
+      - contract_tests

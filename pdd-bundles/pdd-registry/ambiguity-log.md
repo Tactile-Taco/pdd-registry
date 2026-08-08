@@ -24,3 +24,13 @@ Open items and recorded decisions for the pdd-registry protocol bundle.
   constrains the pure read core only.
 - **Single variant.** One python-stdlib candidate for v1.0.0; a second
   variant may be added later without a protocol version bump.
+- **Namespace/tags (v1.1.0).** Namespace is a kebab-case owner/scope slug
+  (Docker-Hub-owner / npm-scope analogy); uniqueness is scoped to the
+  (namespace, name) pair, NOT global — a hypothetical second typing project
+  can carry its own `typing-test-engine` under its own namespace without
+  colliding with ours. Tags come from a controlled vocabulary whose seeds are
+  {engine, input, stats, data-catalog, ui, auth, server}; additions are
+  deliberate and documented (see negotiation minutes).
+- **Tag choice for user-registry.** Tagged `server` only; `auth` is reserved
+  for authentication protocols — user-registry's boundary explicitly excludes
+  authentication/authorization, so `auth` would overclaim.

@@ -1,7 +1,7 @@
 name: pdd-staging-deploy
 on:
   push:
-    branches: [main]
+    branches: [dev]
   workflow_dispatch:
 permissions:
   contents: read

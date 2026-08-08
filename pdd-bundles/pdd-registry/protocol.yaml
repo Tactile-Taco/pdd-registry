@@ -1,7 +1,14 @@
 protocol:
   name: pdd-registry
-  version: 1.0.0
+  version: 1.1.0
   status: sealed
+
+# Catalog addressing metadata (v1.1 version event): namespace/name display
+# addressing + controlled tag vocabulary. The on-disk directory stays
+# pdd-bundles/<name> and evidence stays name-keyed — this is a
+# backwards-compatible bridge, not a directory reorganization.
+namespace: pdd
+tags: [engine, data-catalog, server]
 
 purpose: >
   Protocol catalog search and read views. Given an in-memory catalog of sealed
@@ -12,8 +19,9 @@ purpose: >
 
 boundary:
   in_scope:
-    - Ranked keyword search over catalog entries (name, purpose, invariants, capabilities)
-    - Filtered bundle listing (exact status and depends_on membership)
+    - Ranked keyword search over catalog entries (name, purpose, invariants, capabilities, tags)
+    - Filtered bundle listing (exact status, depends_on membership, namespace, tag)
+    - "Namespace/tag metadata: every catalog entry carries a kebab-case namespace and a controlled tag vocabulary; addressing is namespace/name (display) while directories and evidence stay name-keyed"
     - Per-bundle views: summary, invariants (severity-filtered), capabilities
     - Deterministic ordering and strictly non-mutating reads
   out_of_scope:

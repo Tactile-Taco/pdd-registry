@@ -1,10 +1,12 @@
 {
   "protocol": {
-    "name": "user-registry",
+    "name": "pdd-registry",
     "version": "1.1.0",
-    "bundle_digest": "sha256:3d63703e8a7a327e0a620526343b127ecf48a9677f5e9bd019cc8326da991b4e"
+    "bundle_digest": "sha256:29d33509af0b5475b0b7b4b30f8ef50b144af0294a0bdc84ecbf43583db30610"
   },
-  "candidate_digest": "sha256:5614cd8f49224f28f4bed982555e2971d58334590744e57ca75c7f6616676dcf",
+  "implementation": {
+    "artifact_digest": "sha256:ba2e5aa69ef93b427af5be98ea75e781aba338ed49aaf3c14514acd1b99cea39"
+  },
   "validators": [
     {
       "id": "schema-validator",
@@ -59,25 +61,25 @@
       "invariant_id": "S-003",
       "layer": "structural",
       "outcome": "pass",
-      "evidence": "v1.1.0 baseline: handshake schemas unchanged (schema-diff n/a); catalog metadata (namespace/tags) added at the bundle level per S-003 minor-version rules"
+      "evidence": "v1.1.0 baseline: additive optional metadata fields (namespace/tags) only, no field removed/renamed; schema-diff n/a (no stored history)"
     },
     {
       "invariant_id": "S-004",
       "layer": "structural",
       "outcome": "pass",
-      "evidence": "namespace 'user' is kebab-case (1..63 chars)"
+      "evidence": "namespace 'pdd' is kebab-case (1..63 chars)"
     },
     {
       "invariant_id": "S-005",
       "layer": "structural",
       "outcome": "pass",
-      "evidence": "1 tags, kebab-case, unique, <=8"
+      "evidence": "3 tags, kebab-case, unique, <=8"
     },
     {
       "invariant_id": "O-003",
       "layer": "operational",
       "outcome": "pass",
-      "evidence": "imports=['__future__', 're', 'time', 'typing', 'uuid']; unapproved=[]"
+      "evidence": "imports=['dataclasses', 'json', 're']; unapproved=[]"
     },
     {
       "invariant_id": "O-001,O-002,O-004",
@@ -89,13 +91,13 @@
       "invariant_id": "B-001,B-002,B-003,B-004,B-005",
       "layer": "behavioral",
       "outcome": "pass",
-      "evidence": "pytest: 10 passed in 4.52s"
+      "evidence": "pytest: 22 passed in 1.26s"
     },
     {
       "invariant_id": "B-001",
       "layer": "behavioral",
       "outcome": "pass",
-      "evidence": "mutant rejected by B001_repeat (exit 1, assertion failure) \u2014 property is not vacuous"
+      "evidence": "mutant rejected by B001_deterministic (exit 1, assertion failure) \u2014 property is not vacuous"
     },
     {
       "invariant_id": "O-001,O-002",
@@ -107,13 +109,14 @@
       "invariant_id": "O-005",
       "layer": "operational",
       "outcome": "observe",
-      "evidence": "p95=0.00ms over 1000 calls (budget 500ms, should-tier)"
+      "evidence": "p95=0.01ms over 1000 calls (budget 500ms, should-tier)"
     }
   ],
-  "verdict": "admit",
-  "verdict_reason": "all must invariants pass; no mutation-suspect flags",
-  "environment": {
-    "runtime": "3.14.6",
-    "os": "linux"
-  }
+  "provenance": {
+    "time": "2026-08-08T14:43:49Z",
+    "manifest": "pdd-registry-python-stdlib",
+    "discovery_digest": "sha256:5b6c915dcc39b214e2826cbe23c892d1351e607d2210300c7b114488d0239357"
+  },
+  "digest": "sha256:05b0f8b4284cddba268117fbd53f6cbb62d4dcbf0418709571a3760dce69d123",
+  "signature": "hmac-sha256:2f62d4fc313281803d9073d83d98d72c7af7a108ae828c8f52ed84b35b01f2a6"
 }

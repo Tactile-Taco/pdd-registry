@@ -8,6 +8,7 @@ prove the committed chain verifies under the real signing key.
 """
 
 import importlib.util
+import hashlib
 import json
 import os
 import subprocess
@@ -26,6 +27,19 @@ server.ROOT = ROOT
 server.SKILLS = ROOT / ".reasonix" / "skills"
 server.BUNDLES = ROOT / "pdd-bundles"
 server.EVIDENCE = ROOT / "evidence"
+
+
+def _current_admission_file() -> Path:
+    """The admission file the ledger's LATEST block attests — resolved by
+    digest, so filename-scheme renames (e.g. the v1.1 stem-keyed naming)
+    cannot break the fixtures or pick a superseded version's object."""
+    ledger = ROOT / "evidence" / "user-registry" / "runtime-ledger.jsonl"
+    blocks = [json.loads(ln) for ln in ledger.read_text().splitlines() if ln.strip()]
+    cur = (blocks[-1].get("observations") or {}).get("evidence_digest")
+    for p in (ROOT / "evidence" / "user-registry" / "admission").glob("*.evidence.json"):
+        if "sha256:" + hashlib.sha256(p.read_bytes()).hexdigest() == cur:
+            return p
+    raise AssertionError("no admission file matches the ledger's latest attestation")
 
 
 @pytest.fixture(autouse=True)
@@ -49,13 +63,15 @@ def _evidence_key():
 
 def test_admission_verified_true_on_committed_evidence():
     res = server._admission("user-registry")
-    assert len(res) == 1
-    row = res[0]
-    assert row["signature_valid"] is True
-    assert row["ledger_valid"] is True
-    assert row["ledger_attested"] is True
-    assert row["decision"] == "attest-pass"
-    assert row["verified"] is True
+    # Two committed admissions: the v1.0.0 object (restored from git history)
+    # and the v1.1.0 stem-keyed object; both must verify under the real key.
+    assert len(res) == 2
+    for row in res:
+        assert row["signature_valid"] is True
+        assert row["ledger_valid"] is True
+        assert row["ledger_attested"] is True
+        assert row["decision"] == "attest-pass"
+        assert row["verified"] is True
 
 
 def test_admission_tampered_evidence_fails_closed(tmp_path):
@@ -69,7 +85,7 @@ def test_admission_tampered_evidence_fails_closed(tmp_path):
             out = dst / rel
             out.parent.mkdir(parents=True, exist_ok=True)
             out.write_bytes(p.read_bytes())
-    tampered = dst / "admission" / "5614cd8f49224f28.evidence.json"
+    tampered = dst / _current_admission_file().relative_to(src)
     data = json.loads(tampered.read_text())
     data["decision"] = "forged"  # changes the signed body
     tampered.write_text(json.dumps(data))
@@ -79,19 +95,22 @@ def test_admission_tampered_evidence_fails_closed(tmp_path):
         res = server._admission("user-registry")
     finally:
         server.EVIDENCE = ROOT / "evidence"
-    assert len(res) == 1
-    row = res[0]
-    assert row["signature_valid"] is False
-    assert row["verified"] is False
+    assert len(res) == 2  # tampered v1.1 object + untouched v1.0 object
+    tampered_row = next(r for r in res if r["file"] == tampered.name)
+    assert tampered_row["signature_valid"] is False
+    assert tampered_row["verified"] is False
     # The real ledger still verifies and genuinely attested that artifact
     # digest — what broke is the forged file's signature, so verified is False.
-    assert row["ledger_valid"] is True
-    assert row["ledger_attested"] is True
+    assert tampered_row["ledger_valid"] is True
+    assert tampered_row["ledger_attested"] is True
+    # the restored v1.0 object is untouched and still verifies
+    intact = next(r for r in res if r["file"] != tampered.name)
+    assert intact["verified"] is True
 
 
 def test_admission_unattested_file_reports_false(tmp_path):
     # A validly-signed-looking object not present in the ledger must not verify.
-    src = ROOT / "evidence" / "user-registry" / "admission" / "5614cd8f49224f28.evidence.json"
+    src = _current_admission_file()
     dst = tmp_path / "evidence" / "user-registry" / "admission"
     dst.mkdir(parents=True)
     data = json.loads(src.read_text())

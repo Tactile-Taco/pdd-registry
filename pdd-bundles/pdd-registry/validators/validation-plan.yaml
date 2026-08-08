@@ -12,6 +12,14 @@ validation_plan:
       validates: [S-003]
       method: schema_diff_check
       validator: bundle-linter@1.0.0
+    - id: bundle-lint
+      validates: [S-004, S-005]
+      method: linter
+      validator: bundle-linter@1.0.0
+    - id: catalog-contract-tests
+      validates: [S-004, S-005]
+      method: contract_tests
+      validator: contract-runner@1.0.0
   behavioral:
     - id: property-tests
       validates: [B-001, B-002, B-003, B-005]

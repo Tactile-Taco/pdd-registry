@@ -42,6 +42,8 @@ def _catalog():
             "name": "alpha-registry",
             "version": "1.0.0",
             "status": "sealed",
+            "namespace": "alpha",
+            "tags": ["engine", "data-catalog"],
             "purpose": "User creation registry.",
             "depends_on": [],
             "provides": {"alpha.create": "schemas/request.schema.json"},
@@ -56,6 +58,8 @@ def _catalog():
             "name": "idempotent-helper",
             "version": "2.0.0",
             "status": "sealed",
+            "namespace": "beta",
+            "tags": ["server", "engine"],
             "purpose": "Idempotent operations for dependent bundles.",
             "depends_on": ["alpha-registry"],
             "provides": {"idem.guarantee": "schemas/idem.json"},
@@ -213,6 +217,69 @@ def test_B005_severity_filter_accepts_only_must_should():
         assert all(it.get("severity") == ok for layer in r["invariants"].values() for it in layer)
     bad = reg.invariants_view("alpha-registry", severity="always")
     assert bad["ok"] is False and bad["error"]["kind"] == "invalid_request"
+
+
+# --- S-004: namespace/name addressing, exact namespace filter ---------------
+
+
+def test_S004_namespace_filter_exact():
+    r = Registry(_catalog()).bundles(namespace="alpha")
+    assert [b["name"] for b in r["bundles"]] == ["alpha-registry"]
+    # exact match: prefixes must NOT match (S-004 addressing is exact)
+    r2 = Registry(_catalog()).bundles(namespace="alph")
+    assert r2["bundles"] == []
+    r3 = Registry(_catalog()).bundles(namespace="nope")
+    assert r3["bundles"] == []
+
+
+@given(st.sampled_from(["alpha", "beta", "alph", "", "ALPHA"]))
+def test_S004_namespace_filter_exact_property(ns):
+    r = Registry(_catalog()).bundles(namespace=ns)
+    for b in r["bundles"]:
+        assert b["namespace"] == ns
+
+
+def test_S004_address_is_namespace_name():
+    r = Registry(_catalog()).bundles(namespace="alpha")
+    assert r["bundles"][0]["address"] == "alpha/alpha-registry"
+    s = Registry(_catalog()).bundle_summary("idempotent-helper")
+    assert s["address"] == "beta/idempotent-helper"
+    assert s["tags"] == ["server", "engine"]
+    # a bundle without a namespace keeps the bare-name address
+    bare = Registry([{"name": "legacy", "namespace": None, "tags": [],
+                      "version": "1.0.0", "status": "draft"}]).bundle_summary("legacy")
+    assert bare["address"] == "legacy"
+
+
+# --- S-005: tag grammar consumers — exact membership filter, searchable -----
+
+
+def test_S005_tag_filter_exact_membership():
+    r = Registry(_catalog()).bundles(tag="engine")
+    assert sorted(b["name"] for b in r["bundles"]) == ["alpha-registry", "idempotent-helper"]
+    r2 = Registry(_catalog()).bundles(tag="eng")
+    assert r2["bundles"] == []  # substring must NOT match
+    r3 = Registry(_catalog()).bundles(tag="server")
+    assert [b["name"] for b in r3["bundles"]] == ["idempotent-helper"]
+
+
+@given(st.sampled_from(["engine", "server", "data-catalog", "eng", "engine "]))
+def test_S005_tag_filter_exact_membership_property(tag):
+    r = Registry(_catalog()).bundles(tag=tag)
+    for b in r["bundles"]:
+        assert tag in b["tags"]
+
+
+def test_S005_tags_are_searchable_entries():
+    r = Registry(_catalog()).search("engine")
+    assert any(e["layer"] == "tags" and e["id"] == "engine" for e in r["results"])
+
+
+def test_S004_S005_combined_filters():
+    r = Registry(_catalog()).bundles(namespace="alpha", tag="server")
+    assert r["bundles"] == []
+    r2 = Registry(_catalog()).bundles(namespace="beta", tag="server")
+    assert [b["name"] for b in r2["bundles"]] == ["idempotent-helper"]
 
 
 # --- O-001/O-002: no network, no writes (static scan + sandbox attest) -----

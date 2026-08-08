@@ -89,7 +89,9 @@ print('server.py parses OK')
         lint = pkgs.runCommand "pdd-bundle-lint" { nativeBuildInputs = [ pythonEnv ]; } ''
           cp -r ${./pdd-bundles} pdd-bundles
           cp -r ${./.reasonix}/skills/pdd-protocol-author/scripts/check_bundle.py check_bundle.py
-          python3 check_bundle.py pdd-bundles/user-registry
+          # Catalog mode: per-bundle grammar (incl. namespace/tags) + cross-bundle
+          # (namespace, name) uniqueness (S-004).
+          python3 check_bundle.py --catalog pdd-bundles
           touch $out
         '';
       };

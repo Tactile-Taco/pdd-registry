@@ -89,6 +89,9 @@ Every completed bundle should include:
 
 - A short protocol purpose and boundary.
 - Canonical typed handshake(s).
+- Catalog metadata (v1.1 bundle spec): kebab-case `namespace` and `tags`
+  (kebab-case list, ≤8, no duplicates) in protocol.yaml — the linter enforces
+  the grammar and `(namespace, name)` uniqueness (`check_bundle.py --catalog`).
 - At least one invariant in each class: structural, behavioral, operational.
 - An ambiguity log with resolved assumptions and open questions.
 - A validation plan that links invariants to validator mechanisms.

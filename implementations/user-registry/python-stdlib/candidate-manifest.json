@@ -1,6 +1,6 @@
 {
   "artifact_id": "user-registry-python-stdlib",
-  "protocol": {"name": "user-registry", "version": "1.0.0", "status": "sealed"},
+  "protocol": {"name": "user-registry", "version": "1.1.0", "status": "sealed"},
   "language": "python",
   "runtime": "python-3.12",
   "files": [

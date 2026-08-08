@@ -4,7 +4,9 @@
     "version": "1.1.0",
     "bundle_digest": "sha256:3d63703e8a7a327e0a620526343b127ecf48a9677f5e9bd019cc8326da991b4e"
   },
-  "candidate_digest": "sha256:5614cd8f49224f28f4bed982555e2971d58334590744e57ca75c7f6616676dcf",
+  "implementation": {
+    "artifact_digest": "sha256:5614cd8f49224f28f4bed982555e2971d58334590744e57ca75c7f6616676dcf"
+  },
   "validators": [
     {
       "id": "schema-validator",
@@ -59,7 +61,7 @@
       "invariant_id": "S-003",
       "layer": "structural",
       "outcome": "pass",
-      "evidence": "v1.1.0 baseline: handshake schemas unchanged (schema-diff n/a); catalog metadata (namespace/tags) added at the bundle level per S-003 minor-version rules"
+      "evidence": "v1.1.0 baseline: additive optional metadata fields (namespace/tags) only, no field removed/renamed; schema-diff n/a (no stored history)"
     },
     {
       "invariant_id": "S-004",
@@ -89,7 +91,7 @@
       "invariant_id": "B-001,B-002,B-003,B-004,B-005",
       "layer": "behavioral",
       "outcome": "pass",
-      "evidence": "pytest: 10 passed in 4.52s"
+      "evidence": "pytest: 10 passed in 4.16s"
     },
     {
       "invariant_id": "B-001",
@@ -110,10 +112,11 @@
       "evidence": "p95=0.00ms over 1000 calls (budget 500ms, should-tier)"
     }
   ],
-  "verdict": "admit",
-  "verdict_reason": "all must invariants pass; no mutation-suspect flags",
-  "environment": {
-    "runtime": "3.14.6",
-    "os": "linux"
-  }
+  "provenance": {
+    "time": "2026-08-08T14:43:48Z",
+    "manifest": "user-registry-python-stdlib",
+    "discovery_digest": "sha256:feea3c972df5bc8e73157a0476906cf8d2e1b50639eeba90ff65b233a54f8a4e"
+  },
+  "digest": "sha256:469aadabf5731546b9fba9caa287d1e97b49354c4b3975760f4ca5822604cc84",
+  "signature": "hmac-sha256:d3f43d287f24566b27e8545a17e750c5dba81e3e5ad778b2ee29eb3fe31fae7f"
 }

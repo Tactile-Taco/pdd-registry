@@ -1,6 +1,11 @@
-# Ambiguity Log — user-registry v1.0.0
+# Ambiguity Log — user-registry v1.1.0
 
 ## Resolved Assumptions
+
+- **Namespace/tags metadata (v1.1.0 version event).** The bundle carries
+  `namespace: user` and `tags: [server]` per the pdd-registry catalog spec.
+  `auth` was deliberately NOT used — this protocol explicitly excludes
+  authentication/authorization; `auth` is reserved for auth protocols.
 
 - **Identity key.** Idempotency keys on `client_request_id` (client-supplied,
   1..128 chars), not on email. A repeated `client_request_id` returns the

@@ -1,7 +1,14 @@
 protocol:
   name: user-registry
-  version: 1.0.0
+  version: 1.1.0
   status: sealed
+
+# Catalog addressing metadata (v1.1 version event): namespace/name display
+# addressing + controlled tag vocabulary. The on-disk directory stays
+# pdd-bundles/<name> and evidence stays name-keyed — this is a
+# backwards-compatible bridge, not a directory reorganization.
+namespace: user
+tags: [server]
 
 purpose: >
   Idempotent user creation. Create a user record keyed by a client-supplied
