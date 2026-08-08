@@ -25,13 +25,18 @@ Owns the Evidence Store. Guarantees: every admitted artifact is linked to its pr
 Evidence object per paper: `E = H(P, I, V, R, t)` — P protocol bundle digest, I implementation artifact digest, V validator identities+versions, R validation results, t time/environment/provenance.
 - Digest: SHA-256 over canonical JSON (sorted keys), or file bytes for artifacts.
 - Signing: HMAC-SHA256 with an environment key for dev; ed25519 for release gates.
-- Layout:
+- Layout (stem-keyed since the v1.1 version event so a version event
+  appends a NEW object and never overwrites a prior version's attestation):
   ```
   evidence/<protocol>/
-    admission/<artifact-digest>.evidence.json
-    discovery/<artifact-digest>.discovery.json
+    admission/{impl[:16]}-{bundle[:12]}.evidence.json
+    discovery/{impl[:16]}-{bundle[:12]}.discovery.json
     runtime-ledger.jsonl
   ```
+  Pre-v1.1 objects written as `{impl[:16]}.evidence.json` are retained
+  (legacy names are migrated only when they attest the current bundle
+  digest; older-version objects stay in place, ledger blocks stay
+  append-only).
 
 ## Discovery Log contents
 Language/compiler versions; dependency graph + package hashes; generated files + artifact digests; validator identities/versions; property coverage + outcomes; observed resource usage; derived behaviors not enumerated in the protocol (promotion candidates).

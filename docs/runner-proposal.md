@@ -60,6 +60,7 @@ services.github-runners.pdd = {
 
 ## Trigger
 
-`pdd-staging-deploy.yml` runs on push to `main` (+ `workflow_dispatch`).
-Before the runner existed it had no trigger branch and no runner: deploys ran
-from the laptop via `deploy/push.sh` (manual, tailnet + Infisical env).
+`pdd-staging-deploy.yml` runs on push to `dev` (+ `workflow_dispatch`);
+`dev` was created 2026-08-08 and the first automatic deploy ran green.
+Before the runner existed it had no trigger branch and no runner: deploys
+ran from the laptop via `deploy/push.sh` (manual, tailnet + Infisical env).

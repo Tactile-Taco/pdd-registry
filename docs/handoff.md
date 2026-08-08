@@ -34,7 +34,8 @@ Validator Loop, an HMAC-signed Evidence Chain + ledger, and a small HTTP service
 - **Tests:** 51 pass (`make test` with the real key: 25 candidate — 10
   user-registry + 15 pdd-registry — + 26 service; +15 from the dogfood
   bundle). `src/tests/test_registry.py` (23 tests) runs WITHOUT the key.
-- **Dogfood bundle DONE:** `pdd-registry` (v1.0.0, sealed) — catalog search +
+- **Dogfood bundle DONE:** `pdd-registry` (v1.1.0, sealed since the
+  2026-08-08 version event; v1.0.0 in git history) — catalog search +
   read views. Pure in-memory candidate (`pdd_registry.py`, 15 invariant-
   lineage tests), validated `--sandbox` (admit; O-001/O-002 sandbox pass),
   own evidence chain (genesis block `8a84485b32cf65e7`). The Validation
@@ -148,7 +149,8 @@ make all         # commit gate (lint+test+validate+evidence; needs the key)
 
 - Workflows installed: `pdd-pr-gates`, `pdd-validator-loop` (passed on
   main), `pdd-nightly`, `pdd-release-gate`, `pdd-staging-deploy` (trigger:
-  push to `main` + `workflow_dispatch`; was `dev`, which never existed).
+  push to `dev` + `workflow_dispatch`; dev created 2026-08-08 at the v1.1
+  commit, first automatic deploy green).
 - **YAML gotcha fixed**: inline flow maps with `${{ … }}`
   (`env: { PDD_EVIDENCE_KEY: … }`) are invalid — GitHub rejects the whole
   workflow file. All env/with blocks are now block-form.

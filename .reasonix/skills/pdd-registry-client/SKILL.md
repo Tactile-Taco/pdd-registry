@@ -17,13 +17,15 @@ HTTP — a documented decision, see docs/service-features-v2.md).
 |---|---|
 | `pdd-bundles/<name>/` | the registry: sealed protocol bundles (protocol.yaml, invariants/{S,B,O}.yaml, capability-manifest.yaml, evidence-requirements.yaml, validators/, ambiguity-log.md, negotiation-minutes.md) |
 | `implementations/<name>/<variant>/` | candidate realizations (candidate-manifest.json + tests with invariant lineage) |
-| `evidence/<name>/` | signed admission evidence, discovery logs, validation results, `runtime-ledger.jsonl` |
+| `evidence/<name>/` | signed admission evidence + discovery logs (stem-keyed `{impl[:16]}-{bundle[:12]}` since v1.1), validation results, `runtime-ledger.jsonl` |
 | `scripts/pdd.py` | the CLI (`bundle lint/seal`, `validate`, `evidence build/verify`, `run`, `index`, `search`) |
 | `src/server.py` + `src/registry_index.py` | the HTTP service; shares the SAME index as the CLI |
 
 The catalog is built **live** from `pdd-bundles/*` — adding a directory is
-the whole "registration". No auth anywhere (tailnet-only); everything is
-read-only except git+deploy.
+the whole "registration". Since the v1.1 version event every bundle declares
+`namespace` + `tags`; the display address is `namespace/name` (directories
+and evidence stay name-keyed). No auth anywhere (tailnet-only); everything
+is read-only except git+deploy.
 
 ## DECIDE — the registry decision framework (run this BEFORE writing anything)
 
@@ -126,8 +128,10 @@ bundle; validate a bundle before its `depends_on` leaves admit.
 cd <repo>  # pdd-repository worktree
 mkdir pdd-bundles/my-protocol
 cp -r .reasonix/skills/pdd-protocol-author/assets/templates/* pdd-bundles/my-protocol/
-# Author: protocol.yaml (name/version/status + purpose, boundary, depends_on,
-# provides), S/B/O invariants, capability manifest, ambiguity log.
+# Author: protocol.yaml (name/version/status + namespace + tags + purpose,
+# boundary, depends_on, provides), S/B/O invariants, capability manifest,
+# ambiguity log. namespace = kebab-case owner slug; tags = kebab-case list
+# (<=8, no dupes) from the controlled vocabulary — lint-enforced (S-004/S-005).
 make lint                                        # check_bundle.py must pass (gate)
 python3 scripts/pdd.py bundle seal my-protocol   # status: draft → sealed
 
@@ -148,9 +152,9 @@ python3 scripts/pdd.py evidence verify my-protocol
 - The Makefile targets `validate`/`evidence` are hardcoded to `user-registry`;
   for other bundles use `scripts/pdd.py` directly (above).
 - `make all` = lint+test+validate+evidence (the commit gate; needs the key).
-- After commit+push to `main`, CI runs `pdd-validator-loop` (hosted) and
+- After commit+push to `dev`, CI runs `pdd-validator-loop` (hosted) and
   `pdd-staging-deploy` (self-hosted runner `m6-pdd`, label `staging-deploy`)
-  automatically.
+  automatically — dev is the deploy trigger (AGENTS.md).
 
 ## SEARCH — the catalog
 
@@ -172,10 +176,11 @@ curl -sk --resolve pdd-repository.$STAGING_TAILSCALE_DNS:443:$STAGING_TAILSCALE_
   "https://pdd-repository.$STAGING_TAILSCALE_DNS/search?q=idempotent"
 ```
 
-Search semantics (docs/service-features-v2.md): tokens are ANDed **per entry**
-(name, purpose, invariant id+statement, capability keys); ranked by field
-weight (name 10 > purpose 5 > invariant 3 > capability 2), stable tiebreak.
-`idempotent network` finds nothing even if both words appear somewhere.
+Search semantics (docs/service-features-v3.md): tokens are ANDed **per entry**
+(name, purpose, invariant id+statement, capability keys, tags); ranked by
+field weight (name 10 > purpose 5 > invariant 3 > capability/tag 2), stable
+tiebreak. `idempotent network` finds nothing even if both words appear
+somewhere.
 
 ## PULL / INSPECT — fetch and view bundles
 
@@ -188,7 +193,7 @@ HTTP views (all read-only, 404 for unknown bundles):
 
 | Endpoint | Returns |
 |---|---|
-| `/bundles?status=sealed&depends_on=X` | filtered index `{name, version, status, depends_on, provides}` |
+| `/bundles?status=sealed&depends_on=X&namespace=pdd&tag=engine` | filtered index `{name, namespace, tags, address, version, status, depends_on, provides}` — namespace exact, tag exact membership (v1.1) |
 | `/bundles/{name}` | summary + `invariant_ids` per layer |
 | `/bundles/{name}/invariants?severity=must` | full S/B/O invariant items (severity filter: must/should) |
 | `/bundles/{name}/capabilities` | capability manifest (network, filesystem, secrets, …) |

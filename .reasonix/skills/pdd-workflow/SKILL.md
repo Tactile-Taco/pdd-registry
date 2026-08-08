@@ -19,8 +19,9 @@ them (docker-like: bundles are portable, digestable, and sealable units).
   `git pull origin main` + re-index before each loop pass.
 - Work in DAG order: standalone bundles (no unvalidated `depends_on`) are
   linted/sealed/validated/evidenced FIRST (parallel-safe); dependents only
-  after their leaves admit (DECIDE item 0). CI (validator-loop,
-  staging-deploy) re-runs the gates on main automatically.
+  after their leaves admit (DECIDE item 0). CI re-runs the gates
+  automatically: pdd-validator-loop on push to main, pdd-staging-deploy on
+  push to dev.
 
 ## The loop
 
