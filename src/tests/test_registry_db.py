@@ -309,6 +309,58 @@ def test_init_schema_commits_before_alter():
     real.close()
 
 
+def test_evidence_routes_dedupe_includes_digest(db_client):
+    """Security-review MEDIUM: two bundle records with the same
+    (name, namespace, version) but different digests must BOTH be verified
+    — the dedupe key includes the digest."""
+    for d, art in (("a" * 64, "e1"), ("b" * 64, "e2")):
+        status, _ = db_client("/publish", {"bundle": _bundle(digest="sha256:" + d),
+                                           "evidence": _evidence(artifact_id=art)})
+        assert status == 200
+    _, body = db_client("/evidence/verify")
+    assert len(body["results"]) == 2  # both records, both digests
+    _, body = db_client("/evidence/admission")
+    assert len(body["admissions"]) == 2
+
+
+def test_cli_strict_opener_rejects_redirects_and_file_urls():
+    """Security-review LOW: the registry fetcher never follows redirects
+    and has no file:// handler (a malicious registry redirect must not leak
+    the Authorization header or read local files)."""
+    import importlib.util as _u
+    import urllib.error
+
+    spec = _u.spec_from_file_location("pdd_cli", ROOT / "scripts" / "pdd.py")
+    pdd = _u.module_from_spec(spec)
+    spec.loader.exec_module(pdd)
+    opener = pdd._strict_opener()
+    # file:// is not handled at all
+    with pytest.raises(urllib.error.URLError):
+        opener.open("file:///etc/passwd")
+    # a redirect is surfaced as an HTTPError (302), never followed
+    import threading
+    import urllib.request
+    from http.server import BaseHTTPRequestHandler, HTTPServer
+
+    class _Redirector(BaseHTTPRequestHandler):
+        def do_GET(self):
+            self.send_response(302)
+            self.send_header("Location", "file:///etc/passwd")
+            self.end_headers()
+
+        def log_message(self, *a):
+            pass
+
+    httpd = HTTPServer(("127.0.0.1", 0), _Redirector)
+    threading.Thread(target=httpd.serve_forever, daemon=True).start()
+    try:
+        with pytest.raises(urllib.error.HTTPError) as exc:
+            opener.open(f"http://127.0.0.1:{httpd.server_address[1]}/x")
+        assert exc.value.code == 302
+    finally:
+        httpd.shutdown()
+
+
 def test_unsupported_url_scheme_rejected():
     with pytest.raises(ValueError):
         registry_db.connect("mysql://x/y")
@@ -472,16 +524,18 @@ def test_db_mode_bundle_route_semver_max(db_client):
 
 
 def test_db_mode_evidence_routes_dedupe_versions(db_client):
-    """DB-mode /evidence/verify + /evidence/admission must list one row per
-    (name, namespace) — not per published version record."""
-    for d in ("a" * 64, "b" * 64):
-        status, _ = db_client("/publish", {"bundle": _bundle(digest="sha256:" + d),
+    """DB-mode /evidence/verify + /evidence/admission list one row per
+    bundle RECORD (name, namespace, version, digest) — every published
+    record's own evidence, no duplicates."""
+    for v, d in (("1.2.0", "a" * 64), ("1.3.0", "b" * 64)):
+        status, _ = db_client("/publish", {"bundle": _bundle(version=v,
+                                                              digest="sha256:" + d),
                                            "evidence": _evidence()})
         assert status == 200
     _, body = db_client("/evidence/admission")
-    assert len(body["admissions"]) == 1  # two versions, one bundle row
+    assert len(body["admissions"]) == 2  # two version records
     _, body = db_client("/evidence/verify")
-    assert len(body["results"]) == 1
+    assert len(body["results"]) == 2
 
 
 def test_publish_body_must_be_object(db_client):

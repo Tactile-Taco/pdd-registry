@@ -401,13 +401,18 @@ class Handler(BaseHTTPRequestHandler):
                 return
             if path == "/evidence/verify":
                 if DATABASE_URL:
-                    # One row per bundle RECORD (name, namespace, version):
-                    # _bundles() lists every published version, and each
-                    # record's evidence is scoped to its own bundle digest.
+                    # One row per bundle RECORD (name, namespace, version,
+                    # DIGEST): B-006 permits multiple records with the same
+                    # triple and different digests — each record's evidence
+                    # is scoped to its own digest (security review MEDIUM:
+                    # dropping the digest would skip records and could
+                    # verify evidence for a digest other than the one
+                    # /bundles/{name} serves).
                     seen = set()
                     targets = []
                     for b in _bundles():
-                        key = (b["name"], b.get("namespace"), b.get("version"))
+                        key = (b["name"], b.get("namespace"), b.get("version"),
+                               b.get("digest"))
                         if key not in seen:
                             seen.add(key)
                             targets.append(b)
@@ -424,7 +429,10 @@ class Handler(BaseHTTPRequestHandler):
                     all_adm = []
                     seen = set()
                     for b in _bundles():
-                        key = (b["name"], b.get("namespace"), b.get("version"))
+                        # dedupe per bundle RECORD incl. digest (see the
+                        # /evidence/verify branch — same rationale)
+                        key = (b["name"], b.get("namespace"), b.get("version"),
+                               b.get("digest"))
                         if key in seen:
                             continue
                         seen.add(key)

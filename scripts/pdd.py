@@ -29,6 +29,7 @@ import re
 import shutil
 import subprocess
 import sys
+import urllib.request
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -630,14 +631,38 @@ def _remote_registry(argv: list[str]) -> tuple[str | None, list[str]]:
     return url, rest
 
 
+class _NoRedirectHandler(urllib.request.HTTPRedirectHandler):
+    """Never follow redirects for registry fetches (security review LOW):
+    the resource identifier IS the registry — a redirect (or a file://
+    redirect under the default opener's FileHandler) must not be followed,
+    or the Authorization header could leak to another target / local files
+    could be read."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
+def _strict_opener():
+    """urllib opener WITHOUT FileHandler/FTPHandler/ProxyHandler/cookies:
+    only http(s), with redirects disabled."""
+    import urllib.request as _ur
+    opener = _ur.OpenerDirector()
+    opener.add_handler(_ur.UnknownHandler())
+    opener.add_handler(_ur.HTTPHandler())
+    opener.add_handler(_ur.HTTPSHandler())
+    opener.add_handler(_ur.HTTPErrorProcessor())
+    opener.add_handler(_ur.HTTPDefaultErrorHandler())
+    opener.add_handler(_NoRedirectHandler())
+    return opener
+
+
 def _registry_get(url: str, path: str) -> dict:
     """GET a read endpoint on a remote registry (stdlib urllib only)."""
     import urllib.error
     import urllib.parse
-    import urllib.request
     http_url = url[len("pdd+"):].rstrip("/") + path
     try:
-        with urllib.request.urlopen(http_url, timeout=15) as resp:  # noqa: S310
+        with _strict_opener().open(http_url, timeout=15) as resp:  # noqa: S310
             return json.loads(resp.read().decode())
     except urllib.error.HTTPError as err:
         sys.exit(f"registry error {err.code} for {path}: "
@@ -654,7 +679,6 @@ def _registry_post(url: str, path: str, payload: dict) -> dict:
     deploy runner) authenticates the publish — required since the security
     review; without it the registry rejects the write."""
     import urllib.error
-    import urllib.request
     http_url = url[len("pdd+"):].rstrip("/") + path
     headers = {"Content-Type": "application/json"}
     token = os.environ.get("PDD_PUBLISH_TOKEN")
@@ -663,7 +687,7 @@ def _registry_post(url: str, path: str, payload: dict) -> dict:
     req = urllib.request.Request(  # noqa: S310
         http_url, data=json.dumps(payload).encode(), headers=headers, method="POST")
     try:
-        with urllib.request.urlopen(req, timeout=30) as resp:  # noqa: S310
+        with _strict_opener().open(req, timeout=30) as resp:  # noqa: S310
             return json.loads(resp.read().decode())
     except urllib.error.HTTPError as err:
         sys.exit(f"publish rejected ({err.code}): {err.read().decode()[:300]}")
