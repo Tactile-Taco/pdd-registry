@@ -313,6 +313,19 @@ def test_publish_endpoint_idempotent(db_client):
     assert len(body["bundles"]) == 1
 
 
+def test_db_mode_bundle_route_semver_max(db_client):
+    """DB-mode /bundles/{name} serves the semver-max record (1.10.0 over
+    1.9.0 — lexical TEXT order would invert)."""
+    for v, d in (("1.9.0", "e" * 64), ("1.10.0", "f" * 64)):
+        status, _ = db_client("/publish", {"bundle": _bundle(version=v,
+                                                              digest="sha256:" + d),
+                                           "evidence": _evidence()})
+        assert status == 200
+    status, body = db_client("/bundles/pdd-registry")
+    assert status == 200
+    assert body["version"] == "1.10.0"
+
+
 def test_publish_unavailable_in_filesystem_mode():
     """Without PDD_DATABASE_URL the publish endpoint fails closed (S-002
     error envelope, kind=internal) — the filesystem path is author-side and

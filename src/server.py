@@ -425,7 +425,12 @@ class Handler(BaseHTTPRequestHandler):
             self._json({"error": "not found"}, status=404)
             return
         name = parts[1]
-        b = _find_bundle(_catalog_strict(), name)
+        if DATABASE_URL:
+            # DB mode: the semver-max record (registry_db.get_bundle sorts in
+            # Python — lexical TEXT order would serve '1.9.0' over '1.10.0').
+            b = registry_db.get_bundle(_db(), name)
+        else:
+            b = _find_bundle(_catalog_strict(), name)
         if b is None:
             self._json({"error": f"no bundle named {name}"}, status=404)
             return

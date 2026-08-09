@@ -222,6 +222,8 @@ def _validate_bundle(bundle: dict) -> None:
     for key in ("namespace", "name", "version", "status", "digest"):
         if not isinstance(bundle.get(key), str) or not bundle[key]:
             raise ValueError(f"bundle.{key} must be a non-empty string")
+    if not re.fullmatch(r"[A-Za-z0-9_-]+", bundle["name"]):
+        raise ValueError("bundle.name must match ^[A-Za-z0-9_-]+$")
     if not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", bundle["namespace"]):
         raise ValueError("bundle.namespace must be kebab-case")
     if not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", bundle["version"]):
