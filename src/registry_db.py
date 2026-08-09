@@ -23,6 +23,7 @@ imported lazily for the PostgreSQL path so dev/test needs no extra deps.
 from __future__ import annotations
 
 import functools
+import hashlib
 import json
 import re
 import sqlite3
@@ -171,6 +172,38 @@ def list_catalog(conn) -> list[dict]:
 
 
 @_serialized
+def _block_digest(block: dict) -> str:
+    return "sha256:" + hashlib.sha256(
+        json.dumps({k: v for k, v in block.items() if k != "digest"},
+                   sort_keys=True).encode()).hexdigest()
+
+
+def _append_ledger_block(conn, namespace: str, name: str, version: str,
+                         bundle_digest: str, resource_id: str, now: str) -> None:
+    """Append one hash-chained block to the registry-side ledger (S-006:
+    the DB-mode /bundles/{name}/ledger route's producer). Chained by sha256
+    (previous block digest + seq); the author-side evidence chain carries
+    the HMAC signatures — this is the registry's append-only event log, not
+    a signed chain. Called from publish() on the FIRST publish of a
+    (namespace, name, version, digest) record only (B-006: re-publishes are
+    no-ops and append nothing)."""
+    prev = "sha256:" + "0" * 64
+    seq = 1
+    cur = _exec(conn, "SELECT block_digest, seq FROM ledger ORDER BY seq DESC LIMIT 1")
+    row = cur.fetchone()
+    if row:
+        prev = row["block_digest"]
+        seq = row["seq"] + 1
+    block = {"previous": prev, "namespace": namespace, "name": name,
+             "version": version, "bundle_digest": bundle_digest,
+             "resource_identifier": resource_id, "published_at": now}
+    block["digest"] = _block_digest(block)
+    _exec(conn,
+          "INSERT INTO ledger (bundle_ref, block, block_digest, seq) "
+          "VALUES (?, ?, ?, ?)",
+          (name, json.dumps(block), block["digest"], seq))
+
+
 def publish(conn, bundle: dict, evidence: dict) -> dict:
     """Idempotent publish (B-006). Validates shape + digests + S-007
     resource_identifier, inserts atomically; re-publishing the same
@@ -183,7 +216,7 @@ def publish(conn, bundle: dict, evidence: dict) -> dict:
     # ON CONFLICT DO NOTHING: portable to sqlite3 (>=3.24) AND postgres
     # (INSERT OR IGNORE is sqlite-only). The PK IS the idempotency key
     # (namespace, name, version, digest) — B-006.
-    _exec(conn,
+    cur = _exec(conn,
         "INSERT INTO bundles "
         "(namespace, name, version, status, digest, address, purpose, tags, "
         " depends_on, provides, invariants, capabilities, boundary, published_at) "
@@ -196,6 +229,12 @@ def publish(conn, bundle: dict, evidence: dict) -> dict:
          _j(bundle.get("provides", {})), _j(bundle.get("invariants", {})),
          _j(bundle.get("capabilities", {})), _j(bundle.get("boundary", {})),
          now))
+    first_publish = cur.rowcount > 0
+    if first_publish:
+        # Registry-side ledger block only for the FIRST publish of this
+        # record (B-006: a re-publish is a no-op and appends nothing).
+        _append_ledger_block(conn, ns, name, version, digest,
+                             evidence["resource_identifier"], now)
     _exec(conn,
         "INSERT INTO evidence "
         "(namespace, name, version, artifact_id, resource_identifier, "

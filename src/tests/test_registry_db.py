@@ -81,6 +81,11 @@ def test_publish_roundtrip(conn):
     ev = registry_db.evidence_records(conn, "pdd-registry")
     assert len(ev) == 1
     assert ev[0]["resource_identifier"].startswith("https://")
+    # the registry-side ledger gains exactly one block per first publish
+    blocks = registry_db.ledger_blocks(conn, "pdd-registry")
+    assert len(blocks) == 1
+    assert blocks[0]["bundle_digest"] == "sha256:" + "a" * 64
+    assert blocks[0]["previous"].startswith("sha256:")
 
 
 def test_B006_publish_idempotent_by_digest(conn):
@@ -91,12 +96,14 @@ def test_B006_publish_idempotent_by_digest(conn):
     again = registry_db.publish(conn, _bundle(), _evidence())
     assert again["ok"] is True
     assert len(registry_db.list_catalog(conn)) == 1  # no duplicate
+    assert len(registry_db.ledger_blocks(conn, "pdd-registry")) == 1  # B-006: no-op
     # distinct digest -> distinct record (new version of the same bundle)
     registry_db.publish(conn, _bundle(digest="sha256:" + "b" * 64), _evidence())
     catalog = registry_db.list_catalog(conn)
     assert len(catalog) == 2
     digests = {b["version"] for b in catalog}
     assert digests == {"1.2.0"}
+    assert len(registry_db.ledger_blocks(conn, "pdd-registry")) == 2  # new block
 
 
 def test_S007_evidence_requires_resource_identifier(conn):
@@ -439,11 +446,12 @@ def test_db_mode_evidence_and_ledger_routes(db_client):
     adm = body["admissions"][0]
     assert adm["resource_identifier"].startswith("https://")
     assert adm["decision"] == "attest-pass"
-    # ledger route in DB mode (ledger table empty until the deployment
-    # records blocks): honest empty list, no KeyError on dict rows
+    # ledger route in DB mode: publish() appends one registry-side block
+    # per first publish (hash-chained, S-006) — no KeyError on dict rows
     status, body = db_client("/bundles/pdd-registry/ledger")
     assert status == 200
-    assert body["count"] == 0 and body["blocks"] == []
+    assert body["count"] == 1 and len(body["blocks"]) == 1
+    assert body["blocks"][0]["name"] == "pdd-registry"
     # evidence/verify in DB mode: signature check over the stored object —
     # the stored signed_object is a stub here, so it must NOT report a fake
     # pass (honor-system honesty).
@@ -460,17 +468,18 @@ def test_db_mode_ledger_limit_semantics(db_client):
     limit>0 = last N, limit=0 = zero blocks (a -0 slice would return all)."""
     status, _ = db_client("/publish", {"bundle": _bundle(),
                                        "evidence": _evidence()})
-    assert status == 200
+    assert status == 200  # publish appends ledger block seq 1
     conn = server._db()
-    for i in (1, 2, 3):
+    for i in (2, 3, 4):
         conn.execute(
             "INSERT INTO ledger (bundle_ref, block, block_digest, seq) "
             "VALUES (?, ?, ?, ?)",
             ("pdd-registry", json.dumps({"i": i}), f"digest{i}", i))
     conn.commit()
     _, body = db_client("/bundles/pdd-registry/ledger")
-    assert body["count"] == 3 and [b["i"] for b in body["blocks"]] == [1, 2, 3]
+    assert body["count"] == 4
+    assert [b["i"] for b in body["blocks"][1:]] == [2, 3, 4]  # direct rows after the publish block
     _, body = db_client("/bundles/pdd-registry/ledger?limit=2")
-    assert [b["i"] for b in body["blocks"]] == [2, 3]
+    assert [b["i"] for b in body["blocks"]] == [3, 4]
     _, body = db_client("/bundles/pdd-registry/ledger?limit=0")
-    assert body["count"] == 3 and body["blocks"] == []
+    assert body["count"] == 4 and body["blocks"] == []
