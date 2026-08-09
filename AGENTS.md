@@ -56,6 +56,10 @@ eval "$(infisical export --projectId <misc-secrets-id> --env prod --format=doten
 GITHUB_TOKEN=<pat with write:packages> ./deploy/push.sh
 ```
 
+Access to the tokens these commands need, and the onboarding path for new
+agents/users: see `docs/onboarding.md`. Deferred ideas and known gaps:
+`docs/future-plans/`.
+
 Service: `https://pdd-repository.<STAGING_DNS>` (tailnet only). CI path:
 push to `dev` → pdd-staging-deploy workflow (see ci-templates/ and
 .reasonix/skills/repo-workflow).

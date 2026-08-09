@@ -114,7 +114,6 @@ make lint && python3 scripts/pdd.py bundle seal my-protocol
 ```
 
 ## Evidence chain integrity
-
 The evidence scripts **fail closed**: signing and verification require the
 `PDD_EVIDENCE_KEY` environment variable (export the same key at sign and verify
 time). Use the Infisical value (see Quickstart); CI reads the `PDD_EVIDENCE_KEY`
@@ -128,6 +127,14 @@ python3 .reasonix/skills/pdd-evidence-keeper/scripts/evidence_chain.py verify ev
 
 The ledger is append-only; corrections are new blocks. A `verify` failure is a
 governance incident: quarantine, notify remediation (`pdd-remediation-orchestrator`).
+
+## Access & future plans
+
+- **Access & onboarding** (tokens, keys, who can read what, how to get
+  publish access): `docs/onboarding.md`
+- **Future plans & known gaps** (per-agent token mint, validator attestation
+  for registry entries, protocol-bundle taxonomies, language-agnostic
+  candidate harness): `docs/future-plans/`
 
 ## Reference
 
