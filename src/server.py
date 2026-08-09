@@ -115,6 +115,14 @@ def _find_bundle(catalog: list[dict], name: str) -> dict | None:
 
 
 def _bundles() -> list[dict]:
+    """The bundle name/version list for the evidence routes. In DB mode the
+    catalog is the database (S-006: serving must not require the on-disk
+    layout — a bundle published from outside the pod's image must be
+    visible); otherwise the filesystem bundle layout."""
+    if DATABASE_URL:
+        return [{"name": b["name"], "version": b.get("version"),
+                 "namespace": b.get("namespace")}
+                for b in registry_db.list_catalog(_db())]
     result = []
     for proto in sorted(BUNDLES.glob("*/protocol.yaml")):
         p = _load_protocol(proto)

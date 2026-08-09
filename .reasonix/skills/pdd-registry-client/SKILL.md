@@ -67,7 +67,8 @@ whose `depends_on` targets are draft/unsealed/unvalidated is blocked until
 its leaves admit; validate leaves first, then dependents, in DAG order.
 `pdd-contract-negotiator` reconciles the handshakes between them before
 sealing. CI today runs the loop as one sequential job on main (and
-`make validate`/`make evidence` are hardcoded to user-registry) — the DAG
+`make validate`/`make evidence` cover BOTH sealed bundles — user-registry
+and pdd-registry, each with its own candidate impl) — the DAG
 ordering is agent-side; parallel per-bundle CI jobs are the roadmap.
 
 **1. SEARCH.** `python3 scripts/pdd.py search "<capability terms>"` (or the

@@ -736,15 +736,22 @@ def cmd_publish(argv: list[str]) -> int:
     if not rest:
         print("publish requires a bundle dir, e.g. pdd-bundles/pdd-registry")
         return 2
-    from registry_index import load_bundle  # lazy: pyyaml
     bundle_dir = Path(rest[0])
+    try:
+        ev = json.loads(Path(evidence_file).read_text())
+    except (OSError, json.JSONDecodeError) as exc:
+        print(f"cannot read evidence file {evidence_file}: {exc}")
+        return 2
+    if not isinstance(ev, dict):
+        print(f"evidence file {evidence_file} must contain a JSON object")
+        return 2
     if not bundle_dir.is_dir() or not (bundle_dir / "protocol.yaml").exists():
         print(f"not a bundle directory: {bundle_dir}")
         return 2
+    from registry_index import load_bundle  # lazy: pyyaml
     b = load_bundle(bundle_dir)
     if "error" in b:
         sys.exit(f"cannot read bundle: {b['error']}")
-    ev = json.loads(Path(evidence_file).read_text())
     payload = {"bundle": {
         "namespace": b.get("namespace"), "name": b["name"],
         "version": b.get("version"), "status": b.get("status"),

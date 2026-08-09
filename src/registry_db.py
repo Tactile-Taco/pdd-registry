@@ -226,6 +226,9 @@ def _validate_bundle(bundle: dict) -> None:
         raise ValueError("bundle.namespace must be kebab-case")
     if not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", bundle["version"]):
         raise ValueError("bundle.version must be semver x.y.z")
+    if bundle["status"] not in ("sealed", "review", "draft", "deprecated"):
+        raise ValueError("bundle.status must be one of "
+                         "sealed/review/draft/deprecated")
     if not _SHA256_RE.fullmatch(bundle["digest"]):
         raise ValueError("bundle.digest must be sha256:<64 hex>")
     tags = bundle.get("tags") or []
