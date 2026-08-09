@@ -276,6 +276,11 @@ class Handler(BaseHTTPRequestHandler):
         storage adapter, then persists idempotently. Only available in
         DB-backed mode (PDD_DATABASE_URL) — the filesystem path is
         author-side (git + CLI) and never accepts writes over HTTP."""
+        # Slow-dribble hardening (security review MEDIUM): the token lives
+        # in the HEADERS — check it BEFORE reading the body, and cap the
+        # socket read, so unauthenticated clients cannot pin threads by
+        # trickling bytes (ThreadingHTTPServer spawns unbounded threads).
+        self.connection.settimeout(30)
         try:
             parsed = urlparse(self.path)
             if parsed.path != "/publish":
@@ -287,23 +292,10 @@ class Handler(BaseHTTPRequestHandler):
                                       "message": "publish requires PDD_DATABASE_URL "
                                                  "(DB-backed mode)"}}, status=500)
                 return
-            length = int(self.headers.get("Content-Length", "0"))
-            if length <= 0 or length > 8 * 1024 * 1024:
-                self._json({"error": {"kind": "invalid_request",
-                                      "message": "publish payload too large "
-                                                 "(max 8 MiB)"}}, status=400)
-                return
-            payload = json.loads(self.rfile.read(length).decode() or "{}")
-            if not isinstance(payload, dict):
-                self._json({"error": {"kind": "invalid_request",
-                                      "message": "publish body must be a JSON "
-                                                 "object {bundle, evidence}"}},
-                           status=400)
-                return
-            # Publish authn (security review HIGH): any client that can reach
-            # the Ingress may write catalog rows — require the shared-secret
-            # bearer token (PDD_PUBLISH_TOKEN env from the pdd-publish-token
-            # Secret; push.sh seeds with it). Fail closed when unset.
+            # Publish authn: any client that can reach the Ingress may write
+            # catalog rows — require the shared-secret bearer token
+            # (PDD_PUBLISH_TOKEN env from the pdd-publish-token Secret;
+            # push.sh seeds with it). Fail closed when unset.
             expected = os.environ.get("PDD_PUBLISH_TOKEN")
             if not expected:
                 self._json({"error": {"kind": "internal",
@@ -324,6 +316,19 @@ class Handler(BaseHTTPRequestHandler):
                                       "message": "publish requires a valid "
                                                  "Authorization: Bearer token"}},
                            status=401)
+                return
+            length = int(self.headers.get("Content-Length", "0"))
+            if length <= 0 or length > 8 * 1024 * 1024:
+                self._json({"error": {"kind": "invalid_request",
+                                      "message": "publish payload too large "
+                                                 "(max 8 MiB)"}}, status=400)
+                return
+            payload = json.loads(self.rfile.read(length).decode() or "{}")
+            if not isinstance(payload, dict):
+                self._json({"error": {"kind": "invalid_request",
+                                      "message": "publish body must be a JSON "
+                                                 "object {bundle, evidence}"}},
+                           status=400)
                 return
             # Belt: adapter shape checks always run; suspenders: strict schema
             # validation when jsonschema is available.
@@ -540,7 +545,29 @@ class Handler(BaseHTTPRequestHandler):
                                                fmt % args))
 
 
+class _BoundedThreadingHTTPServer(ThreadingHTTPServer):
+    """Bounded concurrency (security review MEDIUM): ThreadingHTTPServer
+    spawns unbounded threads — an attacker who can reach the Ingress could
+    starve /healthz with many slow connections. The semaphore blocks the
+    accept loop while MAX_HANDLERS are busy (backpressure instead of
+    unbounded threads)."""
+
+    MAX_HANDLERS = 32
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._slots = threading.BoundedSemaphore(self.MAX_HANDLERS)
+        self.daemon_threads = True
+
+    def process_request(self, request, client_address):
+        self._slots.acquire()
+        try:
+            super().process_request(request, client_address)
+        finally:
+            self._slots.release()
+
+
 if __name__ == "__main__":
     # Threading: subprocess routes (/evidence/*, /bundles/{name}/ledger) can
     # take seconds; one slow request must not block /healthz for every client.
-    ThreadingHTTPServer(("0.0.0.0", PORT), Handler).serve_forever()
+    _BoundedThreadingHTTPServer(("0.0.0.0", PORT), Handler).serve_forever()
