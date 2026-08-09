@@ -222,19 +222,25 @@ def _db_evidence_verify(name: str, namespace: str | None = None) -> list[dict]:
     out = []
     import tempfile
     import importlib.util as _iu
+    # Load the verifier once (exec_module re-executes on every call — the
+    # per-row load in the original code re-read the module each time).
+    chain = None
+    try:
+        spec = _iu.spec_from_file_location(
+            "evidence_chain_db",
+            SKILLS / "pdd-evidence-keeper" / "scripts" / "evidence_chain.py")
+        chain = _iu.module_from_spec(spec)
+        spec.loader.exec_module(chain)
+    except Exception:  # noqa: BLE001 — per-record 'unavailable' below
+        chain = None
     for row in rows:
         row_ok, reason = True, None
         if not registry_db.RESOURCE_ID_RE.fullmatch(row["resource_identifier"]):
             row_ok, reason = False, "resource_identifier format"
         if row["decision"] != "attest-pass":
             row_ok, reason = False, "decision"
-        if row_ok:
+        if row_ok and chain is not None:
             try:
-                spec = _iu.spec_from_file_location(
-                    "evidence_chain_db",
-                    SKILLS / "pdd-evidence-keeper" / "scripts" / "evidence_chain.py")
-                chain = _iu.module_from_spec(spec)
-                spec.loader.exec_module(chain)
                 with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as f:
                     f.write(row["signed_object"])
                     tmp = f.name
@@ -246,6 +252,8 @@ def _db_evidence_verify(name: str, namespace: str | None = None) -> list[dict]:
                     os.unlink(tmp)
             except Exception:  # noqa: BLE001
                 row_ok, reason = False, "verification unavailable"
+        elif row_ok:
+            row_ok, reason = False, "verification unavailable"
         out.append({"bundle": name, "artifact_id": row["artifact_id"],
                     "resource_identifier": row["resource_identifier"],
                     "decision": row["decision"], "signature_valid": row_ok,

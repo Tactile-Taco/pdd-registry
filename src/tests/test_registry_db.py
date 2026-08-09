@@ -379,6 +379,27 @@ def test_db_mode_evidence_routes_dedupe_versions(db_client):
     assert len(body["results"]) == 1
 
 
+def test_publish_body_must_be_object(db_client):
+    """A non-dict JSON body (e.g. []) is a 400 invalid_request — never a
+    jsonschema-dependent 500 (the isinstance guard runs before any schema
+    work)."""
+    import urllib.error
+    import urllib.request
+
+    req = urllib.request.Request(db_client.base_url + "/publish",
+                                 data=b"[]",
+                                 headers={"Authorization": "Bearer test-token",
+                                          "Content-Type": "application/json"},
+                                 method="POST")
+    try:
+        with urllib.request.urlopen(req) as resp:
+            status, body = resp.status, json.loads(resp.read().decode())
+    except urllib.error.HTTPError as err:
+        status, body = err.code, json.loads(err.read().decode())
+    assert status == 400
+    assert body["error"]["kind"] == "invalid_request"
+
+
 def test_publish_unavailable_in_filesystem_mode():
     """Without PDD_DATABASE_URL the publish endpoint fails closed (S-002
     error envelope, kind=internal) — the filesystem path is author-side and
