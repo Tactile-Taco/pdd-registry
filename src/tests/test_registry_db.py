@@ -367,6 +367,18 @@ def test_cli_strict_opener_rejects_redirects_and_file_urls():
         httpd.shutdown()
 
 
+def test_evidence_only_republish_appends_ledger_block(conn):
+    """A re-publish inserting a NEW evidence row (different artifact_id for
+    the same bundle record) is a write event — the ledger records it;
+    identical re-publishes stay no-ops (B-006)."""
+    registry_db.publish(conn, _bundle(), _evidence(artifact_id="e1"))
+    assert len(registry_db.ledger_blocks(conn, "pdd/pdd-registry")) == 1
+    registry_db.publish(conn, _bundle(), _evidence(artifact_id="e2"))
+    assert len(registry_db.ledger_blocks(conn, "pdd/pdd-registry")) == 2
+    registry_db.publish(conn, _bundle(), _evidence(artifact_id="e2"))
+    assert len(registry_db.ledger_blocks(conn, "pdd/pdd-registry")) == 2  # no-op
+
+
 def test_unsupported_url_scheme_rejected():
     with pytest.raises(ValueError):
         registry_db.connect("mysql://x/y")

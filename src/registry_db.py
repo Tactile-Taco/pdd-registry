@@ -260,10 +260,10 @@ def publish(conn, bundle: dict, evidence: dict) -> dict:
 def _publish_unlocked(conn, bundle: dict, evidence: dict) -> dict:
     ns, name, version = bundle["namespace"], bundle["name"], bundle["version"]
     digest = bundle["digest"]
-    # published_at: server-stamped when neither side carries one — an empty
-    # timestamp would make ordering/auditing meaningless (review finding).
-    now = (bundle.get("published_at") or evidence.get("published_at")
-           or time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()))
+    # published_at is ALWAYS server-stamped: the strict publish schema
+    # forbids client-supplied timestamps (additionalProperties: false), so
+    # a client-side fallback would be dead code and diverge from the schema.
+    now = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     # ON CONFLICT DO NOTHING: portable to sqlite3 (>=3.24) AND postgres
     # (INSERT OR IGNORE is sqlite-only). The PK IS the idempotency key
     # (namespace, name, version, digest) — B-006.
@@ -281,12 +281,7 @@ def _publish_unlocked(conn, bundle: dict, evidence: dict) -> dict:
          _j(bundle.get("capabilities", {})), _j(bundle.get("boundary", {})),
          now))
     first_publish = cur.rowcount > 0
-    if first_publish:
-        # Registry-side ledger block only for the FIRST publish of this
-        # record (B-006: a re-publish is a no-op and appends nothing).
-        _append_ledger_block(conn, ns, name, version, digest,
-                             evidence["resource_identifier"], now)
-    _exec(conn,
+    ev_cur = _exec(conn,
         "INSERT INTO evidence "
         "(namespace, name, version, bundle_digest, artifact_id, "
         " resource_identifier, decision, signed_object, digest, published_at) "
@@ -296,6 +291,14 @@ def _publish_unlocked(conn, bundle: dict, evidence: dict) -> dict:
          evidence["resource_identifier"], evidence["decision"],
          json.dumps(evidence.get("signed_object", {})),
          evidence.get("digest", ""), now))
+    first_evidence = ev_cur.rowcount > 0
+    if first_publish or first_evidence:
+        # Registry-side ledger block per WRITE EVENT: first publish of a
+        # bundle record, OR an evidence insert for an existing record (a
+        # new artifact_id is a change B-006's no-op wording does not
+        # cover). Identical re-publishes insert nothing and append nothing.
+        _append_ledger_block(conn, ns, name, version, digest,
+                             evidence["resource_identifier"], now)
     conn.commit()
     cur = _exec(conn,
         "SELECT * FROM bundles WHERE namespace = ? AND name = ? "
