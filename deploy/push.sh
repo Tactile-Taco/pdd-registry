@@ -80,21 +80,21 @@ printf 'PDD_EVIDENCE_KEY=%s\n' "${PDD_EVIDENCE_KEY}" \
   | ssh_guest 'sudo k3s kubectl create secret generic pdd-evidence-key \
       --from-env-file=/dev/stdin --dry-run=client -o yaml | sudo k3s kubectl apply -f -'
 
-echo "==> Creating pdd-postgres Secret on ${STAGING_TAILSCALE_IP} (idempotent)"
+echo "==> Creating pdd-postgres Secret on ${STAGING_TAILSCALE_IP} (idempotent, self-healing)"
 # v1.2: the registry runs DB-backed. The password is generated ONCE and lives
-# only in the cluster Secret (tailnet-only staging); PDD_DATABASE_URL carries
-# the full URL so the registry Deployment needs no password material of its
-# own. Exists -> untouched (a re-roll would need a postgres restart + re-seed).
-# Generation is runner-side with coreutils (the guest's ssh shell has no
-# openssl) and the secret content flows via stdin only.
-ssh_guest 'sudo k3s kubectl get secret pdd-postgres >/dev/null 2>&1' \
-  || {
-    PG_PW="$(od -An -tx1 -N24 /dev/urandom | tr -d ' \n')"
-    printf 'POSTGRES_PASSWORD=%s\nPDD_DATABASE_URL=postgresql://pdd:%s@postgres:5432/pdd\n' \
-      "${PG_PW}" "${PG_PW}" \
-      | ssh_guest 'sudo k3s kubectl create secret generic pdd-postgres \
-          --from-env-file=/dev/stdin --dry-run=client -o yaml | sudo k3s kubectl apply -f -'
-  }
+# only in the cluster Secret (tailnet-only staging); the secret is re-applied
+# on every deploy with the CURRENT password so the URL (host pdd-postgres =
+# the Service name) self-heals without rotating the password (a rotation
+# would need a postgres restart + re-seed). Generation is runner-side with
+# coreutils (the guest's ssh shell has no openssl); content flows via stdin.
+PG_PW="$(ssh_guest 'sudo k3s kubectl get secret pdd-postgres -o jsonpath={.data.POSTGRES_PASSWORD}' 2>/dev/null | base64 -d)"
+if [ -z "${PG_PW}" ]; then
+  PG_PW="$(od -An -tx1 -N24 /dev/urandom | tr -d ' \n')"
+fi
+printf 'POSTGRES_PASSWORD=%s\nPDD_DATABASE_URL=postgresql://pdd:%s@pdd-postgres:5432/pdd\n' \
+  "${PG_PW}" "${PG_PW}" \
+  | ssh_guest 'sudo k3s kubectl create secret generic pdd-postgres \
+      --from-env-file=/dev/stdin --dry-run=client -o yaml | sudo k3s kubectl apply -f -'
 
 echo "==> Applying postgres manifest (v1.2 DB-backed registry, S-006)"
 ssh_guest 'sudo k3s kubectl apply -f -' < deploy/postgres.yaml
