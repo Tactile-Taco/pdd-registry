@@ -141,7 +141,7 @@ gained a publish handshake. This section documents the v1.2 contract.
 
 | Surface | Shape |
 |---|---|
-| `POST /publish` | `{bundle, evidence}` validated against `schemas/publish.schema.json`; idempotent by `(namespace, name, version, digest)` (B-006); evidence requires `resource_identifier` (S-007); only available in DB mode — the filesystem path never accepts writes over HTTP |
+| `POST /publish` | `{bundle, evidence}` validated against `schemas/publish.schema.json`; idempotent by `(namespace, name, version, digest)` (B-006); evidence requires `resource_identifier` (S-007); requires `Authorization: Bearer <PDD_PUBLISH_TOKEN>` (pdd-publish-token Secret, created idempotently by push.sh) — unauthenticated publishes are rejected 401; only available in DB mode — the filesystem path never accepts writes over HTTP |
 | `GET /bundles` (DB mode) | same v3 shape, materialized from the database (S-006) |
 | `GET /search?q=` (DB mode) | same ranking, over the DB catalog |
 | `GET /evidence/verify` (DB mode) | per stored record: presence + resource_identifier format + decision + signature (honor system) |

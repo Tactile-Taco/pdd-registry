@@ -16,6 +16,7 @@ Runs with cwd=/opt/pdd in the container; PDD_EVIDENCE_KEY must be present for
 evidence verification (fail-closed: no key -> explicit ok:false, never a fake pass).
 """
 
+import hmac
 import json
 import os
 import subprocess
@@ -271,10 +272,29 @@ class Handler(BaseHTTPRequestHandler):
                                                  "(DB-backed mode)"}}, status=500)
                 return
             length = int(self.headers.get("Content-Length", "0"))
-            if length > 8 * 1024 * 1024:
+            if length <= 0 or length > 8 * 1024 * 1024:
                 self._json({"error": {"kind": "invalid_request",
                                       "message": "publish payload too large "
                                                  "(max 8 MiB)"}}, status=400)
+                return
+            # Publish authn (security review HIGH): any client that can reach
+            # the Ingress may write catalog rows — require the shared-secret
+            # bearer token (PDD_PUBLISH_TOKEN env from the pdd-publish-token
+            # Secret; push.sh seeds with it). Fail closed when unset.
+            expected = os.environ.get("PDD_PUBLISH_TOKEN")
+            if not expected:
+                self._json({"error": {"kind": "internal",
+                                      "message": "publish disabled: "
+                                                 "PDD_PUBLISH_TOKEN is not set"}},
+                           status=500)
+                return
+            auth = self.headers.get("Authorization", "")
+            supplied = auth[7:] if auth.startswith("Bearer ") else ""
+            if not supplied or not hmac.compare_digest(supplied, expected):
+                self._json({"error": {"kind": "invalid_request",
+                                      "message": "publish requires a valid "
+                                                 "Authorization: Bearer token"}},
+                           status=401)
                 return
             payload = json.loads(self.rfile.read(length).decode() or "{}")
             # Belt: adapter shape checks always run; suspenders: strict schema
@@ -300,8 +320,10 @@ class Handler(BaseHTTPRequestHandler):
             self._json({"error": {"kind": "invalid_request",
                                   "message": f"publish rejected: {exc}"}},
                        status=400)
-        except Exception as exc:  # noqa: BLE001
-            self._json({"error": {"kind": "internal", "message": str(exc)}},
+        except Exception:  # noqa: BLE001 — never leak internals to clients
+            traceback.print_exc()
+            self._json({"error": {"kind": "internal",
+                                  "message": "internal error (see server log)"}},
                        status=500)
 
     def do_GET(self):

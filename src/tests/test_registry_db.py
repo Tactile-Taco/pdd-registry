@@ -180,16 +180,19 @@ def db_client(monkeypatch):
     registry_db.init_schema(conn)
     monkeypatch.setattr(server, "DATABASE_URL", "sqlite:///:memory:")
     monkeypatch.setenv("PDD_EVIDENCE_KEY", "test-key")  # evidence verify path
+    monkeypatch.setenv("PDD_PUBLISH_TOKEN", "test-token")  # publish authn
     server._db_conn = conn
     httpd = HTTPServer(("127.0.0.1", 0), server.Handler)
     thread = threading.Thread(target=httpd.serve_forever, daemon=True)
     thread.start()
     base = f"http://127.0.0.1:{httpd.server_address[1]}"
 
-    def request(path, payload=None):
+    def request(path, payload=None, token="test-token"):
         data = json.dumps(payload).encode() if payload is not None else None
-        req = urllib.request.Request(base + path, data=data,
-                                     headers={"Content-Type": "application/json"},
+        headers = {"Content-Type": "application/json"}
+        if token is not None and payload is not None:
+            headers["Authorization"] = f"Bearer {token}"
+        req = urllib.request.Request(base + path, data=data, headers=headers,
                                      method="POST" if payload is not None else "GET")
         try:
             with urllib.request.urlopen(req) as resp:
@@ -228,6 +231,41 @@ def test_publish_endpoint_rejects_bad_evidence(db_client):
                                               resource_identifier="nope")})
     assert status == 400
     assert body["error"]["kind"] == "invalid_request"
+
+
+def test_publish_requires_bearer_token(db_client):
+    """Publish authn (security review HIGH): without a valid bearer token the
+    registry rejects the write — no fake catalog rows from the tailnet."""
+    payload = {"bundle": _bundle(), "evidence": _evidence()}
+    status, body = db_client("/publish", payload, token=None)
+    assert status == 401
+    assert body["error"]["kind"] == "invalid_request"
+    status, body = db_client("/publish", payload, token="wrong-token")
+    assert status == 401
+    # nothing was written
+    _, body = db_client("/bundles")
+    assert body["bundles"] == []
+    # the valid token still works
+    status, _ = db_client("/publish", payload)
+    assert status == 200
+
+
+def test_publish_body_cap_rejects_nonpositive_length(db_client):
+    """Content-Length must be within (0, 8 MiB] — a 0/-1 length must not
+    reach the reader (security review MEDIUM: rfile.read(-1) reads to EOF)."""
+    import http.client as _hc
+    from urllib.parse import urlparse
+
+    u = urlparse(db_client.base_url)
+    conn = _hc.HTTPConnection(u.hostname, u.port, timeout=5)
+    conn.request("POST", "/publish", body=b"{}",
+                 headers={"Authorization": "Bearer test-token",
+                          "Content-Type": "application/json",
+                          "Content-Length": "0"})
+    resp = conn.getresponse()
+    resp.read()
+    assert resp.status == 400
+    conn.close()
 
 
 def test_publish_endpoint_idempotent(db_client):

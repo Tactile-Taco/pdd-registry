@@ -36,9 +36,12 @@ M6 mini-pc, `deploy/postgres.yaml`; pdd-registry protocol 1.2.0, S-006):
   resource is the registry URL, not the filesystem.
 - **Publishing**: `pdd publish <bundle-dir> --evidence <file>
   --registry pdd+http(s)://…` submits a bundle + its signed evidence
-  (idempotent by (namespace, name, version, digest), B-006). The registry
-  does NOT own a git repo of protocols; the author-side git chain stays
-  the source of truth and `deploy/push.sh` seeds the DB on deploy
+  (idempotent by (namespace, name, version, digest), B-006). Publishes are
+  authenticated with a bearer token: the CLI sends `PDD_PUBLISH_TOKEN` when
+  set (the registry pod + deploy runner have it from the pdd-publish-token
+  Secret); unauthenticated publishes are rejected 401. The registry does
+  NOT own a git repo of protocols; the author-side git chain stays the
+  source of truth and `deploy/push.sh` seeds the DB on deploy
   (via `pdd evidence latest <name>`).
 - **Author-owned validation (honor system)**: the registry does not run
   the validator loop and does not prove validation. Every evidence record

@@ -44,6 +44,14 @@ spec:
                   name: pdd-postgres
                   key: PDD_DATABASE_URL
                   optional: false
+            # Publish authn (POST /publish bearer token; the in-cluster seed
+            # sends it via this env). Created idempotently by push.sh.
+            - name: PDD_PUBLISH_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: pdd-publish-token
+                  key: PDD_PUBLISH_TOKEN
+                  optional: false
 ---
 apiVersion: v1
 kind: Service

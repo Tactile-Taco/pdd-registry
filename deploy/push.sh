@@ -96,6 +96,19 @@ printf 'POSTGRES_PASSWORD=%s\nPDD_DATABASE_URL=postgresql://pdd:%s@pdd-postgres:
   | ssh_guest 'sudo k3s kubectl create secret generic pdd-postgres \
       --from-env-file=/dev/stdin --dry-run=client -o yaml | sudo k3s kubectl apply -f -'
 
+echo "==> Creating pdd-publish-token Secret on ${STAGING_TAILSCALE_IP} (idempotent, self-healing)"
+# Publish authn (security review HIGH): POST /publish requires the bearer
+# token; the registry pod reads it from this Secret, the in-cluster seed
+# sends it via the env the pod inherits. Re-applied every deploy with the
+# current token (generated once, like the postgres password).
+PUB_TOK="$(ssh_guest 'sudo k3s kubectl get secret pdd-publish-token -o jsonpath={.data.PDD_PUBLISH_TOKEN}' 2>/dev/null | base64 -d || true)"
+if [ -z "${PUB_TOK}" ]; then
+  PUB_TOK="$(od -An -tx1 -N24 /dev/urandom | tr -d ' \n')"
+fi
+printf 'PDD_PUBLISH_TOKEN=%s\n' "${PUB_TOK}" \
+  | ssh_guest 'sudo k3s kubectl create secret generic pdd-publish-token \
+      --from-env-file=/dev/stdin --dry-run=client -o yaml | sudo k3s kubectl apply -f -'
+
 echo "==> Applying postgres manifest (v1.2 DB-backed registry, S-006)"
 ssh_guest 'sudo k3s kubectl apply -f -' < deploy/postgres.yaml
 
@@ -133,6 +146,12 @@ echo "==> Seeding the DB-backed registry (git -> DB on deploy, brownfield sync)"
 # publishing avoids both.
 for BUNDLE_DIR in pdd-bundles/*/; do
   BNAME="$(basename "${BUNDLE_DIR}")"
+  # The name is interpolated into the in-pod sh -c string: validate it
+  # locally first (security review LOW — a hostile dir name could execute
+  # commands in the pod).
+  case "${BNAME}" in
+    *[!A-Za-z0-9_-]*|"") echo "invalid bundle dir name: ${BNAME}" >&2; exit 1 ;;
+  esac
   echo "==> seeding ${BNAME}"
   ssh_guest "sudo k3s kubectl exec deploy/${PROJECT} -- sh -c '
     EV=\$(python3 /opt/pdd/scripts/pdd.py evidence latest ${BNAME}) &&

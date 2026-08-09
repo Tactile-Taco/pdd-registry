@@ -594,9 +594,10 @@ def _remote_registry(argv: list[str]) -> tuple[str | None, list[str]]:
         else:
             rest.append(argv[i])
             i += 1
-    if url is not None and not url.startswith("pdd+http://"):
+    if url is not None and not (url.startswith("pdd+http://")
+                                or url.startswith("pdd+https://")):
         sys.exit(f"invalid registry resource identifier {url!r} "
-                 f"(expected pdd+http://<host>/... )")
+                 f"(expected pdd+http(s)://<host>/... )")
     return url, rest
 
 
@@ -619,13 +620,19 @@ def _registry_get(url: str, path: str) -> dict:
 
 
 def _registry_post(url: str, path: str, payload: dict) -> dict:
-    """POST a write endpoint on a remote registry (publish handshake)."""
+    """POST a write endpoint on a remote registry (publish handshake). The
+    bearer token (PDD_PUBLISH_TOKEN env, set in the registry pod / by the
+    deploy runner) authenticates the publish — required since the security
+    review; without it the registry rejects the write."""
     import urllib.error
     import urllib.request
     http_url = url[len("pdd+"):].rstrip("/") + path
+    headers = {"Content-Type": "application/json"}
+    token = os.environ.get("PDD_PUBLISH_TOKEN")
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
     req = urllib.request.Request(  # noqa: S310
-        http_url, data=json.dumps(payload).encode(),
-        headers={"Content-Type": "application/json"}, method="POST")
+        http_url, data=json.dumps(payload).encode(), headers=headers, method="POST")
     try:
         with urllib.request.urlopen(req, timeout=30) as resp:  # noqa: S310
             return json.loads(resp.read().decode())
