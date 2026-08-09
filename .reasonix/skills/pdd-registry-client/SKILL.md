@@ -24,8 +24,9 @@ HTTP — a documented decision, see docs/service-features-v2.md).
 The catalog is built **live** from `pdd-bundles/*` — adding a directory is
 the whole "registration". Since the v1.1 version event every bundle declares
 `namespace` + `tags`; the display address is `namespace/name` (directories
-and evidence stay name-keyed). No auth anywhere (tailnet-only); everything
-is read-only except git+deploy.
+and evidence stay name-keyed). Reads are unauthenticated (tailnet-only);
+the only write surface is the v1.2 publish handshake, which requires the
+bearer token (see below).
 
 Since **v1.2 the registry is DB-backed** (PostgreSQL in staging k3s on the
 M6 mini-pc, `deploy/postgres.yaml`; pdd-registry protocol 1.2.0, S-006):

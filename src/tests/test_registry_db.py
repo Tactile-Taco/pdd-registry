@@ -326,6 +326,19 @@ def test_db_mode_bundle_route_semver_max(db_client):
     assert body["version"] == "1.10.0"
 
 
+def test_db_mode_evidence_routes_dedupe_versions(db_client):
+    """DB-mode /evidence/verify + /evidence/admission must list one row per
+    (name, namespace) — not per published version record."""
+    for d in ("a" * 64, "b" * 64):
+        status, _ = db_client("/publish", {"bundle": _bundle(digest="sha256:" + d),
+                                           "evidence": _evidence()})
+        assert status == 200
+    _, body = db_client("/evidence/admission")
+    assert len(body["admissions"]) == 1  # two versions, one bundle row
+    _, body = db_client("/evidence/verify")
+    assert len(body["results"]) == 1
+
+
 def test_publish_unavailable_in_filesystem_mode():
     """Without PDD_DATABASE_URL the publish endpoint fails closed (S-002
     error envelope, kind=internal) — the filesystem path is author-side and

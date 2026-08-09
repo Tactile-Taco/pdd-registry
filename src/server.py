@@ -374,8 +374,17 @@ class Handler(BaseHTTPRequestHandler):
                 return
             if path == "/evidence/verify":
                 if DATABASE_URL:
+                    # One row per (name, namespace), not per version record
+                    # (_bundles() lists every published version).
+                    seen = set()
+                    targets = []
+                    for b in _bundles():
+                        key = (b["name"], b.get("namespace"))
+                        if key not in seen:
+                            seen.add(key)
+                            targets.append(b)
                     self._json({"ok": True,
-                                "results": [r for b in _bundles()
+                                "results": [r for b in targets
                                             for r in _db_evidence_verify(
                                                 b["name"], b.get("namespace"))]})
                 else:
