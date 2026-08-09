@@ -130,6 +130,8 @@ def test_publish_rejects_malformed_bundle(conn):
     with pytest.raises(ValueError):
         registry_db.publish(conn, _bundle(status="bogus"), _evidence())
     with pytest.raises(ValueError):
+        registry_db.publish(conn, _bundle(purpose=""), _evidence())
+    with pytest.raises(ValueError):
         registry_db.publish(conn, _bundle(tags=["engine", "engine"]), _evidence())
     with pytest.raises(ValueError):
         registry_db.publish(conn, _bundle(tags=[1]), _evidence())
