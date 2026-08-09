@@ -1,8 +1,8 @@
 {
   "protocol": {
     "name": "pdd-registry",
-    "version": "1.3.0",
-    "bundle_digest": "sha256:74e7b47206b53cd6c2177729b6288393d909d39c397d6be192a13adec22216b5"
+    "version": "1.4.0",
+    "bundle_digest": "sha256:b2fd091c8ac382ce659f254f01f70a7eb15bde1ed1d425cf7f552ff200b14262"
   },
   "candidate_digest": "sha256:ba2e5aa69ef93b427af5be98ea75e781aba338ed49aaf3c14514acd1b99cea39",
   "validators": [
@@ -86,6 +86,18 @@
       "evidence": "evidence-requirements declares resource_identifier"
     },
     {
+      "invariant_id": "S-009",
+      "layer": "structural",
+      "outcome": "skip",
+      "evidence": "registry-side ledger durability/append-only is enforced by the service contract tests (src/tests/test_registry_db.py), not by the pure-core candidate"
+    },
+    {
+      "invariant_id": "S-010",
+      "layer": "structural",
+      "outcome": "skip",
+      "evidence": "version-event preservation is enforced by the service contract tests (src/tests/test_registry_db.py), not by the pure-core candidate"
+    },
+    {
       "invariant_id": "O-003",
       "layer": "operational",
       "outcome": "pass",
@@ -101,7 +113,7 @@
       "invariant_id": "B-001,B-002,B-003,B-004,B-005",
       "layer": "behavioral",
       "outcome": "pass",
-      "evidence": "pytest: 22 passed in 1.19s"
+      "evidence": "pytest: 22 passed in 1.16s"
     },
     {
       "invariant_id": "B-006",

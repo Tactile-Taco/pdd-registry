@@ -1,6 +1,6 @@
 protocol:
   name: pdd-registry
-  version: 1.3.0
+  version: 1.4.0
   status: sealed
 
 # Catalog addressing metadata (v1.1 version event): namespace/name display
@@ -10,6 +10,9 @@ protocol:
 # v1.3.0 version event: S-008 evidence-freshness gate — the latest admission
 # must attest the on-disk bundle digest; drift without re-attestation is a
 # violation (enforced keylessly in CI + make all).
+# v1.4.0 version event: S-009 registry-side ledger durability/append-only and
+# S-010 version-event preservation (lossless migration) — the migration and
+# persistence gaps surfaced by the v1.3 deploy are sealed as structural musts.
 namespace: pdd
 tags: [engine, data-catalog, server]
 

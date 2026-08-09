@@ -416,6 +416,43 @@ def ledger_blocks(conn, bundle_ref: str) -> list[dict]:
 
 
 @_serialized
+def verify_ledger_chain(conn) -> dict:
+    """Verify the registry-side ledger (S-009 append-only + tamper
+    detection). The ledger is ONE global append-only log: `seq` is a global
+    monotonic counter, each block's digest is the sha256 of its own fields
+    (excluding 'digest'), and each block's `previous` must equal the digest
+    of the preceding block (zero hash for the genesis block). Any modified,
+    deleted, or reordered block anywhere breaks the chain and is reported
+    at the first divergent seq. Returns {"ok", "blocks", "seq", "reason"}.
+    """
+    rows = _exec(conn, "SELECT block, block_digest, seq FROM ledger ORDER BY seq")
+    blocks = [dict(r) for r in rows.fetchall()]
+    expected_prev = "sha256:" + "0" * 64
+    expected_seq = 1
+    for b in blocks:
+        if b["seq"] != expected_seq:
+            return {"ok": False, "blocks": len(blocks), "seq": b["seq"],
+                    "reason": "ledger seq is not contiguous (a block was "
+                              "deleted or reordered)"}
+        try:
+            parsed = json.loads(b["block"])
+        except (json.JSONDecodeError, TypeError):
+            return {"ok": False, "blocks": len(blocks), "seq": b["seq"],
+                    "reason": "block JSON is unparseable"}
+        recomputed = _block_digest(parsed)
+        if recomputed != b["block_digest"] or parsed.get("digest") != recomputed:
+            return {"ok": False, "blocks": len(blocks), "seq": b["seq"],
+                    "reason": "block content does not match the stored "
+                              "block_digest (tampered)"}
+        if parsed.get("previous") != expected_prev:
+            return {"ok": False, "blocks": len(blocks), "seq": b["seq"],
+                    "reason": "previous-link broken (reorder or deletion)"}
+        expected_prev = recomputed
+        expected_seq += 1
+    return {"ok": True, "blocks": len(blocks), "seq": None, "reason": None}
+
+
+@_serialized
 def get_bundle(conn, name: str, namespace: str | None = None) -> Optional[dict]:
     """Newest version record of a bundle. ORDER BY on TEXT sorts lexically
     ('1.10.0' < '1.9.0'), so the semver max is computed in Python; the SQL

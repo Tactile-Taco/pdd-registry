@@ -63,3 +63,20 @@ Open items and recorded decisions for the pdd-registry protocol bundle.
 - **Staleness vs. un-attested bundles.** A bundle with no evidence chain
   is SKIPPED, not failed — the gate is about drift of attested bundles;
   the seal + evidence-build flow covers first-time attestation.
+- **"Queryable prior version" (v1.4.0, S-010).** A prior version's catalog
+  record is "queryable" when it remains addressable through the catalog
+  surface: `list_catalog` returns every published (namespace, name,
+  version, digest) record; `get_bundle` resolves the semver-max record
+  (newest) while every older record stays in the `bundles` table with its
+  original digest; evidence and ledger lookups return rows for every
+  version. Nothing is moved, renamed, overwritten, or deleted on a
+  re-publish — preservation is lossless at the row level.
+- **Ledger ordering semantics (v1.4.0, S-009).** The registry-side ledger
+  is ONE global append-only log: `seq` is a global monotonic counter and
+  each block's `previous` links the preceding GLOBAL block (the per-
+  (namespace/name) view is a filtered subsequence of that chain). Chain
+  verification therefore walks the whole ledger by seq — a modified,
+  deleted, or reordered block anywhere breaks the chain, not just within
+  one bundle's own view. (Recorded here so the verification contract is
+  unambiguous: per-bundle `ledger_blocks()` results are not self-contained
+  chains.)

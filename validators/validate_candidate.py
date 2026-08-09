@@ -150,6 +150,14 @@ def layer_structural(bundle: Path, impl: Path) -> list[dict]:
                         "outcome": "skip",
                         "evidence": "bundle does not declare pdd-registry.publish; "
                                     "S-007 applies to the registry bundle only"})
+        results.append({"invariant_id": "S-009", "layer": "structural",
+                        "outcome": "skip",
+                        "evidence": "bundle does not declare pdd-registry.publish; "
+                                    "S-009 applies to the registry bundle only"})
+        results.append({"invariant_id": "S-010", "layer": "structural",
+                        "outcome": "skip",
+                        "evidence": "bundle does not declare pdd-registry.publish; "
+                                    "S-010 applies to the registry bundle only"})
         return results
     # S-006: DB-backed storage — the bundle must declare the publish handshake
     # and its schema must exist in the bundle. The adapter itself is
@@ -180,6 +188,24 @@ def layer_structural(bundle: Path, impl: Path) -> list[dict]:
                     "evidence": ("evidence-requirements declares resource_identifier"
                                  if s7_ok else
                                  "evidence-requirements.yaml lacks resource_identifier")})
+    # S-009/S-010 are registry-side STORAGE invariants (ledger durability/
+    # append-only, version-event preservation). They are enforced by the
+    # service contract tests (src/tests/test_registry_db.py), not by the
+    # pure-core candidate (which has no ledger or persistence). Honest
+    # skip-with-reason — a pass label must never imply enforcement that
+    # does not exist (B-006 precedent).
+    results.append({"invariant_id": "S-009", "layer": "structural",
+                    "outcome": "skip",
+                    "evidence": "registry-side ledger durability/append-only is "
+                                "enforced by the service contract tests "
+                                "(src/tests/test_registry_db.py), not by the "
+                                "pure-core candidate"})
+    results.append({"invariant_id": "S-010", "layer": "structural",
+                    "outcome": "skip",
+                    "evidence": "version-event preservation is enforced by the "
+                                "service contract tests "
+                                "(src/tests/test_registry_db.py), not by the "
+                                "pure-core candidate"})
     return results
 
 

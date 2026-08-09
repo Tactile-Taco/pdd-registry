@@ -21,7 +21,7 @@ validation_plan:
       method: contract_tests
       validator: contract-runner@1.0.0
     - id: storage-contract-tests
-      validates: [S-006, S-007]
+      validates: [S-006, S-007, S-009, S-010]
       method: contract_tests
       validator: contract-runner@1.0.0
   behavioral:

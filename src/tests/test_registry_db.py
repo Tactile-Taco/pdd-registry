@@ -181,7 +181,8 @@ def test_all_public_ops_serialized():
     race the ledger seq or hit psycopg's 'connection already in use')."""
     import inspect
     for fn_name in ("init_schema", "list_catalog", "publish",
-                    "evidence_records", "ledger_blocks", "get_bundle"):
+                    "evidence_records", "ledger_blocks", "get_bundle",
+                    "verify_ledger_chain"):
         fn = getattr(registry_db, fn_name)
         assert getattr(fn, "__wrapped__", None) is not None, fn_name
     # helpers that must NOT take the lock (stateless) or are internal
@@ -377,6 +378,133 @@ def test_evidence_only_republish_appends_ledger_block(conn):
     assert len(registry_db.ledger_blocks(conn, "pdd/pdd-registry")) == 2
     registry_db.publish(conn, _bundle(), _evidence(artifact_id="e2"))
     assert len(registry_db.ledger_blocks(conn, "pdd/pdd-registry")) == 2  # no-op
+
+
+# --- S-009: registry-side ledger durability / append-only -------------------
+
+
+def test_S009_ledger_chain_verifies_after_publish(conn):
+    """S-009 positive: after publishes the registry-side ledger chain
+    verifies — every block's digest matches its content and the
+    previous-links form one unbroken chain."""
+    registry_db.publish(conn, _bundle(version="1.2.0",
+                                      digest="sha256:" + "a" * 64), _evidence())
+    registry_db.publish(conn, _bundle(version="1.3.0",
+                                      digest="sha256:" + "b" * 64), _evidence())
+    res = registry_db.verify_ledger_chain(conn)
+    assert res["ok"] is True and res["blocks"] == 2
+
+
+def test_S009_ledger_tamper_modify_detected(conn):
+    """S-009: rewriting a stored block's content via raw SQL is detected —
+    the recomputed digest no longer matches the stored block_digest."""
+    registry_db.publish(conn, _bundle(), _evidence())
+    blocks = registry_db.ledger_blocks(conn, "pdd/pdd-registry")
+    tampered = dict(blocks[0])
+    tampered["bundle_digest"] = "sha256:" + "f" * 64
+    conn.execute("UPDATE ledger SET block = ? WHERE seq = ?",
+                 (json.dumps(tampered), 1))
+    conn.commit()
+    res = registry_db.verify_ledger_chain(conn)
+    assert res["ok"] is False
+    assert res["seq"] == 1
+    assert "block_digest" in res["reason"]
+
+
+def test_S009_ledger_tamper_delete_detected(conn):
+    """S-009: deleting a stored block breaks the chain — the seq sequence
+    is no longer contiguous and the next block's previous-link dangles.
+    (Tail-truncation — deleting the LAST block — is outside a hash chain's
+    detection envelope: without an external anchor the remaining chain
+    still verifies. The adapter's append-only surface, which exposes no
+    delete path at all, is the enforcement for that.)"""
+    for d in ("a" * 64, "b" * 64, "c" * 64):
+        registry_db.publish(conn, _bundle(digest="sha256:" + d), _evidence())
+    assert registry_db.verify_ledger_chain(conn)["ok"] is True
+    conn.execute("DELETE FROM ledger WHERE seq = 2")
+    conn.commit()
+    res = registry_db.verify_ledger_chain(conn)
+    assert res["ok"] is False
+    assert res["seq"] == 3
+    assert "contiguous" in res["reason"]
+
+
+def test_S009_ledger_tamper_reorder_detected(conn):
+    """S-009: reordering stored blocks (seq swap) breaks the chain — the
+    block now first no longer links to the zero genesis hash."""
+    registry_db.publish(conn, _bundle(), _evidence())
+    registry_db.publish(conn, _bundle(digest="sha256:" + "b" * 64), _evidence())
+    conn.execute("UPDATE ledger SET seq = 99 WHERE seq = 2")
+    conn.execute("UPDATE ledger SET seq = 2 WHERE seq = 1")
+    conn.execute("UPDATE ledger SET seq = 1 WHERE seq = 99")
+    conn.commit()
+    assert registry_db.verify_ledger_chain(conn)["ok"] is False
+
+
+def test_S009_adapter_ledger_surface_is_append_only(conn):
+    """S-009 honesty: the adapter's ledger surface is append-only — no
+    public function updates, deletes, or removes stored blocks; the only
+    ledger write is the internal append."""
+    public = {n for n in dir(registry_db) if not n.startswith("_")}
+    writes = {n for n in public
+              if any(k in n.lower() for k in ("update", "delete", "remove"))}
+    assert writes == set()
+    assert callable(registry_db._append_ledger_block)
+    # an empty ledger is trivially consistent (verify never fails-closed
+    # on "no blocks")
+    assert registry_db.verify_ledger_chain(conn)["ok"] is True
+
+
+# --- S-010: version-event preservation (lossless migration) -----------------
+
+
+def test_S010_version_event_preserves_prior_versions(conn):
+    """S-010 positive: publishing a NEW VERSION for an existing
+    (namespace, name) preserves the prior version's catalog record, its
+    evidence rows, and its ledger blocks — both stay queryable and the
+    chain still verifies (lossless migration)."""
+    registry_db.publish(conn, _bundle(version="1.2.0",
+                                      digest="sha256:" + "a" * 64),
+                        _evidence(artifact_id="e1"))
+    registry_db.publish(conn, _bundle(version="1.3.0",
+                                      digest="sha256:" + "b" * 64),
+                        _evidence(artifact_id="e2"))
+    # both catalog records queryable via list_catalog
+    catalog = registry_db.list_catalog(conn)
+    assert {(b["version"], b["digest"]) for b in catalog} == {
+        ("1.2.0", "sha256:" + "a" * 64), ("1.3.0", "sha256:" + "b" * 64)}
+    # get_bundle resolves the newest; the old record is still in the table
+    newest = registry_db.get_bundle(conn, "pdd-registry")
+    assert newest["version"] == "1.3.0" and newest["digest"] == "sha256:" + "b" * 64
+    # both evidence rows exist, each attributed to its own bundle digest
+    ev = registry_db.evidence_records(conn, "pdd-registry", "pdd")
+    assert {(r["version"], r["bundle_digest"], r["artifact_id"]) for r in ev} == {
+        ("1.2.0", "sha256:" + "a" * 64, "e1"),
+        ("1.3.0", "sha256:" + "b" * 64, "e2")}
+    # ledger has blocks for BOTH versions; the full chain still verifies
+    blocks = registry_db.ledger_blocks(conn, "pdd/pdd-registry")
+    assert [b["version"] for b in blocks] == ["1.2.0", "1.3.0"]
+    assert registry_db.verify_ledger_chain(conn)["ok"] is True
+    # row-level: nothing overwritten or deleted
+    rows = conn.execute("SELECT version, digest FROM bundles ORDER BY version")
+    assert [tuple(r) for r in rows.fetchall()] == [
+        ("1.2.0", "sha256:" + "a" * 64), ("1.3.0", "sha256:" + "b" * 64)]
+
+
+def test_S010_different_digest_same_version_preserves_prior(conn):
+    """S-010: a re-publish of the same version with a DIFFERENT bundle
+    digest (the B-006 never-silent-overwrite case) also preserves the prior
+    record, its evidence row, and its ledger block."""
+    registry_db.publish(conn, _bundle(digest="sha256:" + "a" * 64),
+                        _evidence(artifact_id="e1"))
+    registry_db.publish(conn, _bundle(digest="sha256:" + "b" * 64),
+                        _evidence(artifact_id="e2"))
+    assert len(registry_db.list_catalog(conn)) == 2
+    assert len(registry_db.evidence_records(conn, "pdd-registry", "pdd")) == 2
+    blocks = registry_db.ledger_blocks(conn, "pdd/pdd-registry")
+    assert [b["bundle_digest"] for b in blocks] == [
+        "sha256:" + "a" * 64, "sha256:" + "b" * 64]
+    assert registry_db.verify_ledger_chain(conn)["ok"] is True
 
 
 def test_resource_identifier_length_cap(conn):
@@ -745,3 +873,41 @@ def test_db_mode_ledger_limit_semantics(db_client):
     assert [b["i"] for b in body["blocks"]] == [3, 4]
     _, body = db_client("/bundles/pdd-registry/ledger?limit=0")
     assert body["count"] == 4 and body["blocks"] == []
+
+
+def test_S009_http_publish_tamper_detected(db_client):
+    """HTTP-level S-009: a /publish lands ledger blocks in the DB; a
+    raw-SQL tamper of a stored block is detected by the chain verification
+    over the server's shared connection."""
+    status, _ = db_client("/publish", {"bundle": _bundle(),
+                                       "evidence": _evidence()})
+    assert status == 200
+    conn = server._db()
+    assert registry_db.verify_ledger_chain(conn)["ok"] is True
+    blocks = registry_db.ledger_blocks(conn, "pdd/pdd-registry")
+    tampered = dict(blocks[0])
+    tampered["bundle_digest"] = "sha256:" + "f" * 64
+    conn.execute("UPDATE ledger SET block = ? WHERE seq = ?",
+                 (json.dumps(tampered), 1))
+    conn.commit()
+    assert registry_db.verify_ledger_chain(conn)["ok"] is False
+
+
+def test_S010_http_version_event_preserves_prior_versions(db_client):
+    """HTTP-level S-010: publishing a new version over /publish keeps the
+    old catalog record, its evidence, and its ledger blocks live — /bundles
+    lists both, the ledger holds both blocks, /evidence/admission serves
+    both records, and the chain still verifies."""
+    for v, d, art in (("1.2.0", "a" * 64, "e1"), ("1.3.0", "b" * 64, "e2")):
+        status, _ = db_client("/publish", {"bundle": _bundle(version=v,
+                                                              digest="sha256:" + d),
+                                           "evidence": _evidence(artifact_id=art)})
+        assert status == 200
+    _, body = db_client("/bundles")
+    assert [b["version"] for b in body["bundles"]] == ["1.2.0", "1.3.0"]
+    _, body = db_client("/bundles/pdd-registry/ledger")
+    assert body["count"] == 2
+    assert [b["version"] for b in body["blocks"]] == ["1.2.0", "1.3.0"]
+    _, body = db_client("/evidence/admission")
+    assert len(body["admissions"]) == 2
+    assert registry_db.verify_ledger_chain(server._db())["ok"] is True

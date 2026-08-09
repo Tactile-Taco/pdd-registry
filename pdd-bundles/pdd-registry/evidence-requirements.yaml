@@ -11,6 +11,12 @@ evidence_requirements:
     - freshness             # S-008 (v1.3.0): the latest admission must
                             # attest the current on-disk bundle digest
                             # (keyless `pdd evidence staleness` gate)
+    - ledger_append_only    # S-009 (v1.4.0): registry-side ledger blocks are
+                            # persisted in the backing database, append-only,
+                            # tamper-detected by the hash-chained digest
+    - version_preservation  # S-010 (v1.4.0): a re-publish (new version or
+                            # bundle_digest) preserves the prior version's
+                            # catalog record, evidence rows, and ledger blocks
   attestations:
     signed: true
     signer: evidence-keeper (HMAC-SHA256, production PDD_EVIDENCE_KEY from Infisical, nixos-infra project)

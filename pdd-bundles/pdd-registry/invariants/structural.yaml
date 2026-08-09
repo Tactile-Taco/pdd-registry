@@ -86,3 +86,34 @@ structural_invariants:
     validation:
       - staleness_gate   # keyless `pdd evidence staleness`; wired into
                          # make all + pdd-pr-gates + pdd-validator-loop CI
+
+  - id: S-009
+    statement: >
+      Registry-side ledger durability and append-only: ledger blocks are
+      persisted in the backing database and are append-only — existing
+      blocks are never modified, deleted, or reordered; the hash-chained
+      block digest detects any tampering; a write that would alter a prior
+      block must fail.
+    severity: must
+    validation:
+      - contract_tests   # src/tests/test_registry_db.py: tamper/delete/
+                         # reorder a stored ledger block via raw SQL and
+                         # assert the chain verification detects it; the
+                         # adapter's ledger surface exposes no update/
+                         # delete path (only append)
+
+  - id: S-010
+    statement: >
+      Version-event preservation (lossless migration): publishing a new
+      version or bundle_digest for an existing (namespace, name) must
+      preserve the prior version's catalog record, its evidence rows, and
+      its ledger blocks — prior versions remain queryable and verifiable;
+      nothing is overwritten or deleted.
+    severity: must
+    validation:
+      - contract_tests   # src/tests/test_registry_db.py: publish one
+                         # version then a new version/digest of the same
+                         # (namespace, name) and assert BOTH catalog
+                         # records, both evidence rows, and both ledger
+                         # blocks survive; the prior admission still
+                         # verifies in the chain

@@ -87,3 +87,41 @@ No open conflicts; lint passed; versions pinned.
 - **Dogfood**: the version event itself changed the bundle digest — the
   gate failed on our own change until validate + evidence build re-ran,
   exactly as designed.
+
+## v1.4.0 version event (ledger durability + version-event preservation)
+
+- **Decision (2026-08-09)**: two migration/persistence gaps surfaced by the
+  v1.3 staging deploy are sealed as structural `must` invariants. Gap 1: the
+  registry-side ledger's durability/append-only property was only implicit
+  (under S-006's generic "persisted"); the author-side evidence chain's
+  append-only was explicit, the DB ledger's was not. Gap 2: B-006 guarantees
+  "never a silent overwrite" only in the negative (no overwrite); nothing
+  stated the positive requirement that a prior version stays fully queryable
+  and verifiable after a version event re-publishes the same (namespace,
+  name).
+- **Version**: 1.4.0 minor (additive invariants only — no handshake/surface
+  change, nothing removed/renamed/made-required; same precedent as v1.1.0
+  adding S-004/S-005 and v1.3.0 adding S-008).
+- **Invariants**: S-009 (must, structural) — registry-side ledger blocks are
+  persisted in the backing database and append-only; existing blocks are
+  never modified, deleted, or reordered; the hash-chained digest detects any
+  tampering; a write that would alter a prior block must fail. S-010 (must,
+  structural) — publishing a new version or bundle_digest for an existing
+  (namespace, name) preserves the prior version's catalog record, evidence
+  rows, and ledger blocks; prior versions stay queryable and verifiable.
+- **Enforcement (honesty rule — never pass what isn't enforced)**: both are
+  enforced by storage contract tests (`src/tests/test_registry_db.py`), not
+  by the pure-core candidate (the candidate has no ledger/persistence). The
+  adapter gains a public `verify_ledger_chain` that recomputes every block
+  digest and re-walks the previous-links; tests tamper (UPDATE/DELETE/
+  reorder) stored blocks via raw SQL and assert the chain verification fails.
+  The candidate validator labels S-009/S-010 `skip`-with-reason pointing at
+  the service contract tests (B-006 precedent), so no pass label implies
+  enforcement that does not exist.
+- **Compatibility matrix**: pdd-registry 1.4.0 (1.3.0 in git history),
+  sealed, same provides (search, bundle-views, publish); no dependents; no
+  conflicts. The DB-mode client surface is unchanged.
+- **Dogfood**: the version event itself is the migration being exercised —
+  validate + evidence build re-attest the new bundle digest (S-008 gate
+  fails on our own change first, exactly as designed), and the staging
+  deploy seeds the DB with the new digest + fresh evidence.
