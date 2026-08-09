@@ -597,16 +597,19 @@ def cmd_run(argv: list[str]) -> int:
 
 
 def _remote_registry(argv: list[str]) -> tuple[str | None, list[str]]:
-    """Extract --registry <pdd+http://host/> (or $PDD_REGISTRY) from argv.
+    """Extract --registry <pdd+http(s)://host/> (or $PDD_REGISTRY) from argv.
 
     Returns (registry_url, remaining_argv). The resource identifier scheme
-    is pdd+http:// (v1.2): the CLI talks to a registry server whose catalog
-    is served from the backing database on the mini-pc."""
+    is pdd+http(s):// (v1.2): the CLI talks to a registry server whose
+    catalog is served from the backing database on the mini-pc."""
     rest: list[str] = []
     url = os.environ.get("PDD_REGISTRY")
     i = 0
     while i < len(argv):
-        if argv[i] == "--registry" and i + 1 < len(argv):
+        if argv[i] == "--registry":
+            if i + 1 >= len(argv):
+                sys.exit("--registry requires a value, e.g. "
+                         "--registry pdd+https://registry.example")
             url = argv[i + 1]
             i += 2
         else:

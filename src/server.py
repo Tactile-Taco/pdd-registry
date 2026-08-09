@@ -214,19 +214,19 @@ def _db_evidence_verify(name: str, namespace: str | None = None) -> list[dict]:
     out = []
     import tempfile
     import importlib.util as _iu
-    spec = _iu.spec_from_file_location(
-        "evidence_chain_db",
-        SKILLS / "pdd-evidence-keeper" / "scripts" / "evidence_chain.py")
-    chain = _iu.module_from_spec(spec)
-    spec.loader.exec_module(chain)
     for row in rows:
         row_ok, reason = True, None
-        if not registry_db._RESOURCE_ID_RE.fullmatch(row["resource_identifier"]):
+        if not registry_db.RESOURCE_ID_RE.fullmatch(row["resource_identifier"]):
             row_ok, reason = False, "resource_identifier format"
         if row["decision"] != "attest-pass":
             row_ok, reason = False, "decision"
         if row_ok:
             try:
+                spec = _iu.spec_from_file_location(
+                    "evidence_chain_db",
+                    SKILLS / "pdd-evidence-keeper" / "scripts" / "evidence_chain.py")
+                chain = _iu.module_from_spec(spec)
+                spec.loader.exec_module(chain)
                 with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as f:
                     f.write(row["signed_object"])
                     tmp = f.name

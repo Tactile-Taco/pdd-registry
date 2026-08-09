@@ -352,7 +352,7 @@ def layer_behavioral(bundle: Path, impl: Path, pbt_runs: int, manifest: dict) ->
     # (a pass label must never imply enforcement that does not exist).
     lineage = manifest.get("invariant_lineage") or {}
     covered, uncovered = _behavioral_coverage(bids, lineage)
-    label = ",".join(covered) if covered else "B-*"
+    label = ",".join(covered) if covered else "B-(none)"
     if proc.returncode == 0:
         results.append({"invariant_id": label, "layer": "behavioral",
                         "outcome": "pass", "evidence": f"pytest: {summary}"})

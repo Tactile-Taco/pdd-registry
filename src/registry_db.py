@@ -29,7 +29,7 @@ import sqlite3
 import threading
 from typing import Any, Optional
 
-_RESOURCE_ID_RE = re.compile(r"^(https?://|urn:)[A-Za-z0-9._~:/?#\[\]@!$&'()*+,;=%-]+$")
+RESOURCE_ID_RE = re.compile(r"^(https?://|urn:)[A-Za-z0-9._~:/?#\[\]@!$&'()*+,;=%-]+$")
 _SHA256_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
 
 # The server shares ONE connection across request threads (ThreadingHTTPServer).
@@ -243,7 +243,7 @@ def _validate_evidence(evidence: dict) -> None:
     for key in ("artifact_id", "resource_identifier", "decision"):
         if not isinstance(evidence.get(key), str) or not evidence[key]:
             raise ValueError(f"evidence.{key} must be a non-empty string")
-    if not _RESOURCE_ID_RE.fullmatch(evidence["resource_identifier"]):
+    if not RESOURCE_ID_RE.fullmatch(evidence["resource_identifier"]):
         raise ValueError("evidence.resource_identifier must be an http(s) "
                          "URL or urn: URN (S-007)")
     if evidence["decision"] != "attest-pass":
