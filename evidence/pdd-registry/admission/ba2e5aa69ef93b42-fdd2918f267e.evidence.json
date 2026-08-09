@@ -4,7 +4,9 @@
     "version": "1.2.0",
     "bundle_digest": "sha256:fdd2918f267e19be9b0759672032ee65739231f16770aac699c96da3e46ada7e"
   },
-  "candidate_digest": "sha256:ba2e5aa69ef93b427af5be98ea75e781aba338ed49aaf3c14514acd1b99cea39",
+  "implementation": {
+    "artifact_digest": "sha256:ba2e5aa69ef93b427af5be98ea75e781aba338ed49aaf3c14514acd1b99cea39"
+  },
   "validators": [
     {
       "id": "schema-validator",
@@ -128,10 +130,12 @@
       "evidence": "p95=0.01ms over 1000 calls (budget 500ms, should-tier)"
     }
   ],
-  "verdict": "admit",
-  "verdict_reason": "no must-invariant failures; no mutation-suspect flags",
-  "environment": {
-    "runtime": "3.14.6",
-    "os": "linux"
-  }
+  "provenance": {
+    "time": "2026-08-09T15:24:40Z",
+    "manifest": "pdd-registry-python-stdlib",
+    "discovery_digest": "sha256:5b6c915dcc39b214e2826cbe23c892d1351e607d2210300c7b114488d0239357",
+    "validation_resource": "https://github.com/Tactile-Taco/pdd-repository/actions/workflows/pdd-validator-loop.yml"
+  },
+  "digest": "sha256:2551a2de3f4d16e84fd8b4d7b60ea1d4000bb993a77991b0caa9815168fc8275",
+  "signature": "hmac-sha256:bec985169f07a16e0ccb420caf4037fcc335e15b838febcbfd5d8add77275351"
 }
