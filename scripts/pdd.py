@@ -219,6 +219,11 @@ def cmd_evidence_build(argv: list[str]) -> int:
             r"(https?://|urn:)[A-Za-z0-9._~:/?#\[\]@!$&'()*+,;=%-]+",
             validation_resource):
         sys.exit("--validation-resource must be an http(s) URL or urn: URN (S-007)")
+    # --force: re-attest the CURRENT (impl, bundle) snapshot with new
+    # provenance (e.g. a first-time validation_resource). A signed object
+    # cannot be edited (signature + ledger digest), so a new object + ledger
+    # block are appended; older objects and blocks stay (append-only).
+    force = "--force" in argv
     proto = bundle_dir(name)
     manifest = json.loads((impl / "candidate-manifest.json").read_text())
     entry_module = manifest.get("entry_module")
@@ -269,6 +274,13 @@ def cmd_evidence_build(argv: list[str]) -> int:
     # ledger's latest attestation for this artifact.
     ledger = EVIDENCE / name / "runtime-ledger.jsonl"
     stem = f"{impl_digest.split(':')[1][:16]}-{results['protocol']['bundle_digest'].split(':')[1][:12]}"
+    # --force re-attestation of the SAME (impl, bundle) snapshot: the signed
+    # object cannot be edited (signature + ledger digest), so a NEW object is
+    # built — but it must never overwrite the attested object that occupies
+    # the canonical stem name (append-only). The suffix is derived from the
+    # new object's OWN digest (the object embeds a second-resolution
+    # timestamp, so it is only known after the chain build); a counter
+    # guards the pathological same-object case.
     adm_path = EVIDENCE / name / "admission" / f"{stem}.evidence.json"
     if ledger.exists():
         existing = [json.loads(line) for line in ledger.read_text().splitlines() if line.strip()]
@@ -310,22 +322,34 @@ def cmd_evidence_build(argv: list[str]) -> int:
                     if legacy_disc.exists() and not stem_disc.exists():
                         legacy_disc.rename(stem_disc)
             if adm_path.exists():
-                on_disk = "sha256:" + hashlib.sha256(adm_path.read_bytes()).hexdigest()
-                attested_digest = attested[-1]["observations"]["evidence_digest"]
-                if on_disk != attested_digest:
-                    print(f"FAIL: attested evidence file differs from the ledger "
-                          f"(on disk {on_disk} != attested {attested_digest}) — re-run validate, then rebuild")
-                    return 1
-                print(f"admission {stem} already attested and consistent; "
-                      f"evidence snapshot preserved (re-verify with `pdd evidence verify`)")
-                return 0
-            # An attestation exists for this artifact but no file for the
-            # CURRENT bundle digest -> protocol version event (or the file
-            # was removed): build a new object; any older version's file and
-            # ledger block stay.
-            print(f"admission for {impl_digest.split(':')[1][:16]} is attested under a different "
-                  f"bundle digest (or its file was removed); building {stem}.evidence.json "
-                  f"(older objects + ledger blocks stay, append-only)")
+                if force:
+                    # Re-attestation: the canonical name is occupied by an
+                    # attested object — never overwrite it (append-only); the
+                    # digest-suffix logic below gives the new object its own
+                    # name. The on-disk mismatch check is deliberately skipped:
+                    # after a prior --force build the canonical file legitimately
+                    # differs from the LATEST attestation (the suffixed one).
+                    print(f"admission {stem} already attested and consistent; "
+                          f"--force: re-attesting with the current provenance "
+                          f"(building a NEW object; older objects + blocks stay, append-only)")
+                else:
+                    on_disk = "sha256:" + hashlib.sha256(adm_path.read_bytes()).hexdigest()
+                    attested_digest = attested[-1]["observations"]["evidence_digest"]
+                    if on_disk != attested_digest:
+                        print(f"FAIL: attested evidence file differs from the ledger "
+                              f"(on disk {on_disk} != attested {attested_digest}) — re-run validate, then rebuild")
+                        return 1
+                    print(f"admission {stem} already attested and consistent; "
+                          f"evidence snapshot preserved (re-verify with `pdd evidence verify`)")
+                    return 0
+            else:
+                # An attestation exists for this artifact but no file for the
+                # CURRENT bundle digest -> protocol version event (or the file
+                # was removed): build a new object; any older version's file and
+                # ledger block stay.
+                print(f"admission for {impl_digest.split(':')[1][:16]} is attested under a different "
+                      f"bundle digest (or its file was removed); building {stem}.evidence.json "
+                      f"(older objects + ledger blocks stay, append-only)")
 
     evidence = {
         "protocol": {"name": name, "version": version,
@@ -346,8 +370,9 @@ def cmd_evidence_build(argv: list[str]) -> int:
     }
     disc = EVIDENCE / name / "discovery"
     disc.mkdir(parents=True, exist_ok=True)
+    disc_content = json.dumps(evidence["discovery_log"], indent=2)
     disc_path = disc / f"{stem}.discovery.json"
-    disc_path.write_text(json.dumps(evidence["discovery_log"], indent=2))
+    disc_path.write_text(disc_content)
     # Bind the discovery log into the signed object: digest of the exact bytes on disk.
     disc_digest = "sha256:" + hashlib.sha256(disc_path.read_bytes()).hexdigest()
     provenance = {"manifest": manifest["artifact_id"],
@@ -363,6 +388,21 @@ def cmd_evidence_build(argv: list[str]) -> int:
     if chain.returncode != 0:
         sys.exit(f"evidence build failed: {chain.stderr}")
     evidence_obj = json.loads(chain.stdout)
+
+    # --force + occupied canonical name: give the new object its own name
+    # (digest-suffixed) so the attested older object is never overwritten.
+    # The discovery log is content-identical, so the suffixed discovery file
+    # carries the same bytes (and the same digest the object binds).
+    if force and (EVIDENCE / name / "admission" / f"{stem}.evidence.json").exists():
+        base = stem
+        stem += "-" + evidence_obj["digest"].split(":")[1][:8]
+        n = 1
+        while (EVIDENCE / name / "admission" / f"{stem}.evidence.json").exists():
+            stem = f"{base}-{evidence_obj['digest'].split(':')[1][:8]}-{n}"
+            n += 1
+        print(f"--force: canonical name occupied; re-attesting as {stem}.evidence.json "
+              f"(older objects + ledger blocks stay, append-only)")
+        (disc / f"{stem}.discovery.json").write_text(disc_content)
 
     adm = EVIDENCE / name / "admission"
     adm.mkdir(parents=True, exist_ok=True)
