@@ -357,6 +357,12 @@ def test_cli_strict_opener_rejects_redirects_and_file_urls():
         with pytest.raises(urllib.error.HTTPError) as exc:
             opener.open(f"http://127.0.0.1:{httpd.server_address[1]}/x")
         assert exc.value.code == 302
+        # the CLI's fetch path surfaces the redirect with the explanatory
+        # note (pinned: a message regression would fail here)
+        with pytest.raises(SystemExit) as exc2:
+            pdd._registry_get(
+                f"pdd+http://127.0.0.1:{httpd.server_address[1]}", "/x")
+        assert "redirects are disabled" in str(exc2.value)
     finally:
         httpd.shutdown()
 
