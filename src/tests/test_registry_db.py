@@ -82,7 +82,7 @@ def test_publish_roundtrip(conn):
     assert len(ev) == 1
     assert ev[0]["resource_identifier"].startswith("https://")
     # the registry-side ledger gains exactly one block per first publish
-    blocks = registry_db.ledger_blocks(conn, "pdd-registry")
+    blocks = registry_db.ledger_blocks(conn, "pdd/pdd-registry")
     assert len(blocks) == 1
     assert blocks[0]["bundle_digest"] == "sha256:" + "a" * 64
     assert blocks[0]["previous"].startswith("sha256:")
@@ -96,14 +96,14 @@ def test_B006_publish_idempotent_by_digest(conn):
     again = registry_db.publish(conn, _bundle(), _evidence())
     assert again["ok"] is True
     assert len(registry_db.list_catalog(conn)) == 1  # no duplicate
-    assert len(registry_db.ledger_blocks(conn, "pdd-registry")) == 1  # B-006: no-op
+    assert len(registry_db.ledger_blocks(conn, "pdd/pdd-registry")) == 1  # B-006: no-op
     # distinct digest -> distinct record (new version of the same bundle)
     registry_db.publish(conn, _bundle(digest="sha256:" + "b" * 64), _evidence())
     catalog = registry_db.list_catalog(conn)
     assert len(catalog) == 2
     digests = {b["version"] for b in catalog}
     assert digests == {"1.2.0"}
-    assert len(registry_db.ledger_blocks(conn, "pdd-registry")) == 2  # new block
+    assert len(registry_db.ledger_blocks(conn, "pdd/pdd-registry")) == 2  # new block
 
 
 def test_S007_evidence_requires_resource_identifier(conn):
@@ -169,6 +169,20 @@ def test_get_bundle_semver_ordering(conn):
         registry_db.publish(conn, _bundle(version=v, digest="sha256:" + d),
                             _evidence())
     assert registry_db.get_bundle(conn, "pdd-registry")["version"] == "1.10.0"
+
+
+def test_all_public_ops_serialized():
+    """The module contract: every public DB op is @_serialized (the server
+    shares ONE connection across threads — a concurrent publish must never
+    race the ledger seq or hit psycopg's 'connection already in use')."""
+    import inspect
+    for fn_name in ("init_schema", "list_catalog", "publish",
+                    "evidence_records", "ledger_blocks", "get_bundle"):
+        fn = getattr(registry_db, fn_name)
+        assert getattr(fn, "__wrapped__", None) is not None, fn_name
+    # helpers that must NOT take the lock (stateless) or are internal
+    assert getattr(registry_db._block_digest, "__wrapped__", None) is None
+    assert getattr(registry_db._append_ledger_block, "__wrapped__", None) is not None
 
 
 def test_unsupported_url_scheme_rejected():
@@ -474,7 +488,7 @@ def test_db_mode_ledger_limit_semantics(db_client):
         conn.execute(
             "INSERT INTO ledger (bundle_ref, block, block_digest, seq) "
             "VALUES (?, ?, ?, ?)",
-            ("pdd-registry", json.dumps({"i": i}), f"digest{i}", i))
+            ("pdd/pdd-registry", json.dumps({"i": i}), f"digest{i}", i))
     conn.commit()
     _, body = db_client("/bundles/pdd-registry/ledger")
     assert body["count"] == 4

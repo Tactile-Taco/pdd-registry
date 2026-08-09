@@ -171,13 +171,13 @@ def list_catalog(conn) -> list[dict]:
     return [_entry_from_row(r) for r in cur.fetchall()]
 
 
-@_serialized
 def _block_digest(block: dict) -> str:
     return "sha256:" + hashlib.sha256(
         json.dumps({k: v for k, v in block.items() if k != "digest"},
                    sort_keys=True).encode()).hexdigest()
 
 
+@_serialized
 def _append_ledger_block(conn, namespace: str, name: str, version: str,
                          bundle_digest: str, resource_id: str, now: str) -> None:
     """Append one hash-chained block to the registry-side ledger (S-006:
@@ -198,12 +198,15 @@ def _append_ledger_block(conn, namespace: str, name: str, version: str,
              "version": version, "bundle_digest": bundle_digest,
              "resource_identifier": resource_id, "published_at": now}
     block["digest"] = _block_digest(block)
+    # bundle_ref is namespace-qualified: S-004 permits the same name in
+    # different namespaces, and each (namespace, name) keeps its own chain.
     _exec(conn,
           "INSERT INTO ledger (bundle_ref, block, block_digest, seq) "
           "VALUES (?, ?, ?, ?)",
-          (name, json.dumps(block), block["digest"], seq))
+          (f"{namespace}/{name}", json.dumps(block), block["digest"], seq))
 
 
+@_serialized
 def publish(conn, bundle: dict, evidence: dict) -> dict:
     """Idempotent publish (B-006). Validates shape + digests + S-007
     resource_identifier, inserts atomically; re-publishing the same
@@ -319,11 +322,13 @@ def evidence_records(conn, name: str, namespace: str | None = None) -> list[dict
 
 
 @_serialized
-def ledger_blocks(conn, name: str) -> list[dict]:
+def ledger_blocks(conn, bundle_ref: str) -> list[dict]:
+    """Blocks of one (namespace/name) chain (bundle_ref is
+    namespace-qualified — S-004 keeps same-name chains apart)."""
     cur = _exec(conn,
         "SELECT block FROM ledger WHERE bundle_ref = ? "
         "ORDER BY seq, block_digest",
-        (name,))
+        (bundle_ref,))
     # r["block"] works for both sqlite3.Row and psycopg dict_row (r[0] would
     # KeyError on dict rows — psycopg rows are dicts, not tuples).
     return [json.loads(r["block"]) for r in cur.fetchall()]

@@ -491,11 +491,17 @@ class Handler(BaseHTTPRequestHandler):
                     return
             if DATABASE_URL:
                 # DB-backed ledger view: the registry's own ledger table
-                # (append-only blocks recorded by the registry deployment).
+                # (append-only blocks recorded by publish()). The chain is
+                # per (namespace, name) — S-004 keeps same-name chains apart.
                 # limit semantics match the filesystem mode: None = all,
                 # limit>0 = last N, limit=0 = zero blocks (a -0 slice would
                 # return everything — never slice with limit=0).
-                blocks = registry_db.ledger_blocks(_db(), name)
+                b = registry_db.get_bundle(_db(), name)
+                if b is None:
+                    self._json({"error": f"no bundle named {name}"}, status=404)
+                    return
+                blocks = registry_db.ledger_blocks(
+                    _db(), f"{b['namespace']}/{name}")
                 if limit is None:
                     shown = blocks
                 elif limit > 0:
