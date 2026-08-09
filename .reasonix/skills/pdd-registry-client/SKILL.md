@@ -39,7 +39,9 @@ M6 mini-pc, `deploy/postgres.yaml`; pdd-registry protocol 1.2.0, S-006):
   (idempotent by (namespace, name, version, digest), B-006). Publishes are
   authenticated with a bearer token: the CLI sends `PDD_PUBLISH_TOKEN` when
   set (the registry pod + deploy runner have it from the pdd-publish-token
-  Secret); unauthenticated publishes are rejected 401. The registry does
+  Secret); unauthenticated publishes are rejected 401. The token travels in
+  the header — use `pdd+https://` for remote registries, `pdd+http://` only
+  for localhost/tailnet-LAN (the in-cluster seed uses localhost). The registry does
   NOT own a git repo of protocols; the author-side git chain stays the
   source of truth and `deploy/push.sh` seeds the DB on deploy
   (via `pdd evidence latest <name>`).

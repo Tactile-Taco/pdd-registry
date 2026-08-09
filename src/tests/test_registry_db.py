@@ -134,6 +134,34 @@ def test_get_bundle_and_consistent_read(conn):
     assert registry_db.get_bundle(conn, "nope") is None
 
 
+def test_namespace_keeps_same_name_apart(conn):
+    """S-004 permits the same name in different namespaces: evidence and
+    bundle lookups must not mix rows across namespaces."""
+    registry_db.publish(conn, _bundle(), _evidence(artifact_id="a"))
+    registry_db.publish(conn, _bundle(namespace="other",
+                                      digest="sha256:" + "d" * 64),
+                        _evidence(artifact_id="b"))
+    # namespace-scoped evidence lookup returns only that namespace's rows
+    rows = registry_db.evidence_records(conn, "pdd-registry", "pdd")
+    assert [r["artifact_id"] for r in rows] == ["a"]
+    rows = registry_db.evidence_records(conn, "pdd-registry", "other")
+    assert [r["artifact_id"] for r in rows] == ["b"]
+    assert len(registry_db.evidence_records(conn, "pdd-registry")) == 2
+    # get_bundle picks the newest version within the requested namespace
+    b = registry_db.get_bundle(conn, "pdd-registry", "pdd")
+    assert b["namespace"] == "pdd"
+    b = registry_db.get_bundle(conn, "pdd-registry", "other")
+    assert b["namespace"] == "other"
+
+
+def test_get_bundle_semver_ordering(conn):
+    """'1.10.0' must sort AFTER '1.9.0' (lexical TEXT order would invert)."""
+    for v, d in (("1.9.0", "e" * 64), ("1.10.0", "f" * 64), ("1.2.0", "a" * 64)):
+        registry_db.publish(conn, _bundle(version=v, digest="sha256:" + d),
+                            _evidence())
+    assert registry_db.get_bundle(conn, "pdd-registry")["version"] == "1.10.0"
+
+
 def test_unsupported_url_scheme_rejected():
     with pytest.raises(ValueError):
         registry_db.connect("mysql://x/y")

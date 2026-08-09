@@ -205,12 +205,12 @@ def _admission(name: str) -> list[dict]:
     return result
 
 
-def _db_evidence_verify(name: str) -> list[dict]:
+def _db_evidence_verify(name: str, namespace: str | None = None) -> list[dict]:
     """DB-backed evidence verification (v1.2, S-007): the registry stores the
     author's signed evidence records; verification is limited to presence,
     resource_identifier format, decision, and signature — the honor system.
     The registry does NOT re-run validation."""
-    rows = registry_db.evidence_records(_db(), name)
+    rows = registry_db.evidence_records(_db(), name, namespace)
     out = []
     import tempfile
     import importlib.util as _iu
@@ -368,7 +368,8 @@ class Handler(BaseHTTPRequestHandler):
                 if DATABASE_URL:
                     self._json({"ok": True,
                                 "results": [r for b in _bundles()
-                                            for r in _db_evidence_verify(b["name"])]})
+                                            for r in _db_evidence_verify(
+                                                b["name"], b.get("namespace"))]})
                 else:
                     self._json({"results": [_verify_bundle(b["name"]) for b in _bundles()]})
                 return
@@ -376,7 +377,8 @@ class Handler(BaseHTTPRequestHandler):
                 if DATABASE_URL:
                     all_adm = []
                     for b in _bundles():
-                        for row in registry_db.evidence_records(_db(), b["name"]):
+                        for row in registry_db.evidence_records(
+                                _db(), b["name"], b.get("namespace")):
                             all_adm.append({
                                 "bundle": row["name"], "version": row["version"],
                                 "artifact_id": row["artifact_id"],

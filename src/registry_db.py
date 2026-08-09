@@ -249,13 +249,23 @@ def _validate_evidence(evidence: dict) -> None:
     if evidence["decision"] != "attest-pass":
         raise ValueError("evidence.decision must be 'attest-pass' (the only "
                          "admission decision in this version)")
+    if evidence.get("digest") and not _SHA256_RE.fullmatch(evidence["digest"]):
+        raise ValueError("evidence.digest must be sha256:<64 hex> when present")
 
 
 @_serialized
-def evidence_records(conn, name: str) -> list[dict]:
-    cur = _exec(conn,
-        "SELECT * FROM evidence WHERE name = ? ORDER BY published_at, digest",
-        (name,))
+def evidence_records(conn, name: str, namespace: str | None = None) -> list[dict]:
+    """Evidence records for one bundle. The PK includes namespace (S-004
+    permits the same name in different namespaces) — filter by namespace
+    when the caller has it, or rows from distinct namespaces mix."""
+    if namespace is None:
+        cur = _exec(conn,
+            "SELECT * FROM evidence WHERE name = ? "
+            "ORDER BY published_at, digest", (name,))
+    else:
+        cur = _exec(conn,
+            "SELECT * FROM evidence WHERE name = ? AND namespace = ? "
+            "ORDER BY published_at, digest", (name, namespace))
     return [dict(r) for r in cur.fetchall()]
 
 
@@ -271,9 +281,26 @@ def ledger_blocks(conn, name: str) -> list[dict]:
 
 
 @_serialized
-def get_bundle(conn, name: str) -> Optional[dict]:
-    cur = _exec(conn,
-        "SELECT * FROM bundles WHERE name = ? "
-        "ORDER BY namespace, version DESC LIMIT 1", (name,))
-    row = cur.fetchone()
-    return _entry_from_row(row) if row else None
+def get_bundle(conn, name: str, namespace: str | None = None) -> Optional[dict]:
+    """Newest version record of a bundle. ORDER BY on TEXT sorts lexically
+    ('1.10.0' < '1.9.0'), so the semver max is computed in Python; the
+    namespace filter keeps S-004's same-name-different-namespace rows apart."""
+    if namespace is None:
+        cur = _exec(conn, "SELECT * FROM bundles WHERE name = ?", (name,))
+    else:
+        cur = _exec(conn,
+            "SELECT * FROM bundles WHERE name = ? AND namespace = ?",
+            (name, namespace))
+    rows = cur.fetchall()
+    if not rows:
+        return None
+    best = max(rows, key=lambda r: _semver_key(r["version"]))
+    return _entry_from_row(best)
+
+
+def _semver_key(version: str) -> tuple[int, int, int]:
+    parts = str(version).split(".")
+    try:
+        return (int(parts[0]), int(parts[1]), int(parts[2]))
+    except (ValueError, IndexError):
+        return (0, 0, 0)  # unparseable versions sort last, never crash
