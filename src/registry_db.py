@@ -212,9 +212,10 @@ def _append_ledger_block(conn, namespace: str, name: str, version: str,
     the DB-mode /bundles/{name}/ledger route's producer). Chained by sha256
     (previous block digest + seq); the author-side evidence chain carries
     the HMAC signatures — this is the registry's append-only event log, not
-    a signed chain. Called from publish() on the FIRST publish of a
-    (namespace, name, version, digest) record only (B-006: re-publishes are
-    no-ops and append nothing)."""
+    a signed chain. Called from publish() on ANY write event: the first
+    publish of a (namespace, name, version, digest) record OR an evidence
+    insert for an existing record (B-006: identical re-publishes insert
+    nothing and append nothing)."""
     prev = "sha256:" + "0" * 64
     seq = 1
     cur = _exec(conn, "SELECT block_digest, seq FROM ledger ORDER BY seq DESC LIMIT 1")
