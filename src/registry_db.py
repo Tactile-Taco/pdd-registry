@@ -31,7 +31,7 @@ import threading
 import time
 from typing import Any, Optional
 
-RESOURCE_ID_RE = re.compile(r"^(https?://|urn:)[A-Za-z0-9._~:/?#\[\]@!$&'()*+,;=%-]+$")
+RESOURCE_ID_RE = re.compile(r"^(https?://|urn:)[A-Za-z0-9._~:/?#\[\]@!$&'()*+,;=%-]{1,2048}$")
 _SHA256_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
 
 # The server shares ONE connection across request threads (ThreadingHTTPServer).
@@ -207,7 +207,8 @@ def _block_digest(block: dict) -> str:
 
 @_serialized
 def _append_ledger_block(conn, namespace: str, name: str, version: str,
-                         bundle_digest: str, resource_id: str, now: str) -> None:
+                         bundle_digest: str, artifact_id: str,
+                         resource_id: str, now: str) -> None:
     """Append one hash-chained block to the registry-side ledger (S-006:
     the DB-mode /bundles/{name}/ledger route's producer). Chained by sha256
     (previous block digest + seq); the author-side evidence chain carries
@@ -215,7 +216,9 @@ def _append_ledger_block(conn, namespace: str, name: str, version: str,
     a signed chain. Called from publish() on ANY write event: the first
     publish of a (namespace, name, version, digest) record OR an evidence
     insert for an existing record (B-006: identical re-publishes insert
-    nothing and append nothing)."""
+    nothing and append nothing). artifact_id is part of the block so two
+    evidence writes in the same second cannot collide on the block_digest
+    PK (security review LOW)."""
     prev = "sha256:" + "0" * 64
     seq = 1
     cur = _exec(conn, "SELECT block_digest, seq FROM ledger ORDER BY seq DESC LIMIT 1")
@@ -225,6 +228,7 @@ def _append_ledger_block(conn, namespace: str, name: str, version: str,
         seq = row["seq"] + 1
     block = {"previous": prev, "namespace": namespace, "name": name,
              "version": version, "bundle_digest": bundle_digest,
+             "artifact_id": artifact_id,
              "resource_identifier": resource_id, "published_at": now}
     block["digest"] = _block_digest(block)
     # bundle_ref is namespace-qualified: S-004 permits the same name in
@@ -299,6 +303,7 @@ def _publish_unlocked(conn, bundle: dict, evidence: dict) -> dict:
         # new artifact_id is a change B-006's no-op wording does not
         # cover). Identical re-publishes insert nothing and append nothing.
         _append_ledger_block(conn, ns, name, version, digest,
+                             evidence["artifact_id"],
                              evidence["resource_identifier"], now)
     conn.commit()
     cur = _exec(conn,
