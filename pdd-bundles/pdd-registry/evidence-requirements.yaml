@@ -8,6 +8,9 @@ evidence_requirements:
     - discovery_log
     - resource_identifier   # S-007 (v1.2.0): URL/URN of the author's
                             # validator-loop execution record (honor system)
+    - freshness             # S-008 (v1.3.0): the latest admission must
+                            # attest the current on-disk bundle digest
+                            # (keyless `pdd evidence staleness` gate)
   attestations:
     signed: true
     signer: evidence-keeper (HMAC-SHA256, production PDD_EVIDENCE_KEY from Infisical, nixos-infra project)

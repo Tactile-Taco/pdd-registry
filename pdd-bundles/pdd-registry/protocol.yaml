@@ -1,12 +1,15 @@
 protocol:
   name: pdd-registry
-  version: 1.2.0
+  version: 1.3.0
   status: sealed
 
 # Catalog addressing metadata (v1.1 version event): namespace/name display
 # addressing + controlled tag vocabulary. The on-disk directory stays
 # pdd-bundles/<name> and evidence stays name-keyed — this is a
 # backwards-compatible bridge, not a directory reorganization.
+# v1.3.0 version event: S-008 evidence-freshness gate — the latest admission
+# must attest the on-disk bundle digest; drift without re-attestation is a
+# violation (enforced keylessly in CI + make all).
 namespace: pdd
 tags: [engine, data-catalog, server]
 

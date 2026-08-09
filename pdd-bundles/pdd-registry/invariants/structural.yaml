@@ -73,3 +73,16 @@ structural_invariants:
     severity: must
     validation:
       - contract_tests
+
+  - id: S-008
+    statement: >
+      Evidence freshness: the latest admission evidence for a bundle must
+      attest the bundle's CURRENT on-disk digest. Any change to the bundle
+      directory (protocol.yaml, invariants, schemas, capability/validator
+      manifests) without re-validation and re-attestation is a violation:
+      the migrated registry record would then be paired with evidence that
+      attests a different snapshot.
+    severity: must
+    validation:
+      - staleness_gate   # keyless `pdd evidence staleness`; wired into
+                         # make all + pdd-pr-gates + pdd-validator-loop CI

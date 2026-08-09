@@ -31,8 +31,14 @@ evidence:
 	$(PY) scripts/pdd.py evidence build user-registry --impl implementations/user-registry/python-stdlib
 	$(PY) scripts/pdd.py evidence verify user-registry
 
+## S-008 freshness gate (keyless): the latest admission evidence must attest
+## the CURRENT on-disk bundle digest — a bundle change without re-attestation
+## fails here, so CI blocks it before anything is deployed/migrated
+evidence-staleness:
+	$(PY) scripts/pdd.py evidence staleness
+
 ## Everything a commit must pass
-all: lint test validate evidence
+all: lint test validate evidence-staleness evidence
 
 ## Install CI workflows into .github/workflows (needs a credential with workflow scope)
 ci-install:

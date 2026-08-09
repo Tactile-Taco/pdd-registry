@@ -52,7 +52,14 @@ Language/compiler versions; dependency graph + package hashes; generated files +
 - `append` — append a ledger block (recomputes chain hash).
 - `verify` — re-walk a ledger, recompute every link, report first divergence.
 - `replay` — recompute admission from preserved inputs and compare digests.
+- `staleness` (pdd CLI, S-008 v1.3.0) — keyless freshness gate: the latest
+  admission must attest the CURRENT on-disk bundle digest; any bundle
+  change without re-validate + `evidence build` fails the gate. Wired into
+  `make all` + CI; run it after every bundle edit before committing.
 
 ## Rules
 - No admission without an evidence object; no deployment without a genesis block.
 - `verify` failure = governance incident: quarantine artifact, notify remediation.
+- Freshness (S-008): never let the bundle drift from the latest
+  attestation — re-validate + re-attest on every bundle change, or the
+  migrated registry record silently stops being covered by evidence.

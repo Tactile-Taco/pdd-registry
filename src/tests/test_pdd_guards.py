@@ -80,6 +80,47 @@ def test_behavioral_coverage_splits_covered_and_uncovered():
     assert covered == [] and uncovered == ["B-001"]
 
 
+def test_evidence_staleness_fresh_then_drifted(tmp_path, monkeypatch, capsys):
+    """S-008 gate (keyless): fresh when the latest admission attests the
+    current on-disk digest; fails the moment any bundle file changes
+    without re-attestation (the drift the CI gate must block)."""
+    bdir = tmp_path / "bundles" / "pdd-registry"
+    bdir.mkdir(parents=True)
+    (bdir / "protocol.yaml").write_text("protocol:\n  name: pdd-registry\n")
+    d1 = pdd._bundle_digest(bdir)
+    ev = tmp_path / "evidence" / "pdd-registry"
+    (ev / "admission").mkdir(parents=True)
+    adm = {"protocol": {"name": "pdd-registry", "bundle_digest": d1}}
+    adm_path = ev / "admission" / "a.evidence.json"
+    adm_path.write_text(json.dumps(adm))
+    digest = "sha256:" + hashlib.sha256(adm_path.read_bytes()).hexdigest()
+    (ev / "runtime-ledger.jsonl").write_text(
+        json.dumps({"observations": {"evidence_digest": digest}}) + "\n")
+    monkeypatch.setattr(pdd, "BUNDLES", tmp_path / "bundles")
+    monkeypatch.setattr(pdd, "EVIDENCE", tmp_path / "evidence")
+    assert pdd.cmd_evidence_staleness(["pdd-registry"]) == 0
+    capsys.readouterr()
+    # Drift: any bundle-file change without re-attestation fails the gate.
+    (bdir / "schemas").mkdir()
+    (bdir / "schemas" / "x.json").write_text("{}")
+    assert pdd.cmd_evidence_staleness(["pdd-registry"]) == 1
+    assert "attests" in capsys.readouterr().out
+    # Unknown bundle names are rejected (no path escape).
+    assert pdd.cmd_evidence_staleness(["../evil"]) == 1
+
+
+def test_evidence_staleness_no_chain_skips(tmp_path, monkeypatch, capsys):
+    """A bundle without an evidence chain is skipped, not failed — the gate
+    is about DRIFT of attested bundles."""
+    bdir = tmp_path / "bundles" / "draft"
+    bdir.mkdir(parents=True)
+    (bdir / "protocol.yaml").write_text("protocol:\n  name: draft\n")
+    monkeypatch.setattr(pdd, "BUNDLES", tmp_path / "bundles")
+    monkeypatch.setattr(pdd, "EVIDENCE", tmp_path / "evidence")
+    assert pdd.cmd_evidence_staleness(["draft"]) == 0
+    assert "no evidence chain yet" in capsys.readouterr().out
+
+
 def test_evidence_validation_resource_format():
     """--validation-resource must be an http(s) URL or urn: URN (S-007) —
     the guard regex (shared with the publish schema pattern) must accept

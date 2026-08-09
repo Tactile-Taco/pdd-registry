@@ -58,3 +58,32 @@ No open conflicts; lint passed; versions pinned.
   pdd-registry.publish (new). No dependents; no conflicts.
 - **Enforcement**: storage/publish contract tests (contract-runner),
   publish schema strictness (json-schema), lint unchanged.
+
+## v1.3.0 version event (evidence-freshness gate)
+
+- **Decision (2026-08-09)**: after the DB-backed migration, a real drift
+  surfaced — a publish-schema fix (8be0b55) changed the bundle directory
+  AFTER the last evidence build, so the migrated registry record held the
+  post-fix digest while the admission chain pinned the pre-fix snapshot.
+  The freshness rule is a registry/evidence contract (external agents that
+  interact with the registry must know that a bundle change without
+  re-attestation is a violation), so it belongs IN the protocol, not just
+  in CI.
+- **Version**: 1.3.0 minor (additive invariant only — no handshake/surface
+  change, nothing removed/renamed/made-required; same precedent as v1.1.0
+  adding S-004/S-005).
+- **Invariant**: S-008 (must, structural) — the latest admission evidence
+  must attest the current on-disk bundle digest; any bundle-directory
+  change without re-validation + re-attestation is a violation.
+- **Enforcement (honesty rule — never pass what isn't enforced)**:
+  keyless `pdd evidence staleness` CLI command (no PDD_EVIDENCE_KEY
+  needed), wired into `make all` (between validate and evidence), the
+  pdd-pr-gates workflow (blocks PRs) and the pdd-validator-loop workflow
+  (blocks main); the existing `pdd evidence build` stale-results gate
+  remains the signing-time backstop. The gate is exercised by
+  test_evidence_staleness_fresh_then_drifted.
+- **Compatibility matrix**: pdd-registry 1.3.0 (1.2.0 in git history),
+  sealed, same provides (search, bundle-views, publish); no dependents.
+- **Dogfood**: the version event itself changed the bundle digest — the
+  gate failed on our own change until validate + evidence build re-ran,
+  exactly as designed.

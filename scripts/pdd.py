@@ -462,6 +462,78 @@ def cmd_evidence_latest(argv: list[str]) -> int:
     sys.exit(f"no admission file matches the latest attestation {latest}")
 
 
+def cmd_evidence_staleness(argv: list[str]) -> int:
+    """evidence staleness [bundle...]
+
+    S-008 freshness gate (keyless): every sealed bundle's LATEST admission
+    evidence must attest the CURRENT on-disk bundle digest. A bundle
+    directory change without re-validate + re-attestation fails the gate,
+    so CI can block a PR/deploy that would drift the registry's migrated
+    record away from its signed evidence. Exit 0 = all fresh; exit 1 =
+    drift; exit 2 = usage error."""
+    names = argv or sorted(p.name for p in BUNDLES.glob("*")
+                           if (p / "protocol.yaml").is_file())
+    if not names:
+        print("no bundles to check")
+        return 2
+    rc = 0
+    for name in names:
+        if not _valid_bundle_name(name):
+            print(f"FAIL {name}: invalid bundle name")
+            rc = 1
+            continue
+        ledger = EVIDENCE / name / "runtime-ledger.jsonl"
+        if not ledger.exists():
+            print(f"skip {name}: no evidence chain yet (bundle not attested)")
+            continue
+        try:
+            blocks = [json.loads(ln) for ln in ledger.read_text().splitlines()
+                      if ln.strip()]
+        except (OSError, json.JSONDecodeError) as exc:
+            print(f"FAIL {name}: cannot read ledger: {exc}")
+            rc = 1
+            continue
+        if not blocks:
+            print(f"FAIL {name}: empty ledger")
+            rc = 1
+            continue
+        latest = (blocks[-1].get("observations") or {}).get("evidence_digest")
+        if not latest:
+            print(f"FAIL {name}: latest block has no evidence_digest")
+            rc = 1
+            continue
+        adm = None
+        adm_dir = EVIDENCE / name / "admission"
+        if adm_dir.is_dir():
+            for path in sorted(adm_dir.glob("*.evidence.json")):
+                if "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest() == latest:
+                    try:
+                        adm = json.loads(path.read_text())
+                    except json.JSONDecodeError:
+                        adm = None
+                    break
+        if adm is None:
+            print(f"FAIL {name}: latest attestation {latest[:16]} has no "
+                  "readable admission file")
+            rc = 1
+            continue
+        attested = (adm.get("protocol") or {}).get("bundle_digest")
+        if not _valid_sha256(attested):
+            print(f"FAIL {name}: admission attests invalid bundle_digest "
+                  f"{attested!r}")
+            rc = 1
+            continue
+        disk = _bundle_digest(BUNDLES / name)
+        if attested != disk:
+            print(f"FAIL {name}: evidence attests {attested[:16]} but the "
+                  f"bundle on disk is {disk[:16]} — re-run `pdd validate "
+                  f"{name}` + `pdd evidence build {name}` (S-008)")
+            rc = 1
+        else:
+            print(f"OK {name}: evidence attests current digest {disk[:16]}")
+    return rc
+
+
 def cmd_evidence_verify(argv: list[str]) -> int:
     registry, argv = _remote_registry(argv)
     if registry:
@@ -817,7 +889,8 @@ COMMANDS = {
     "bundle": {"lint": cmd_bundle_lint, "seal": cmd_bundle_seal},
     "validate": cmd_validate,
     "evidence": {"build": cmd_evidence_build, "verify": cmd_evidence_verify,
-                 "latest": cmd_evidence_latest},
+                 "latest": cmd_evidence_latest,
+                 "staleness": cmd_evidence_staleness},
     "run": cmd_run,
     "publish": cmd_publish,
 }

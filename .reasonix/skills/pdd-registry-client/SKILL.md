@@ -18,7 +18,7 @@ HTTP — a documented decision, see docs/service-features-v2.md).
 | `pdd-bundles/<name>/` | the registry: sealed protocol bundles (protocol.yaml, invariants/{S,B,O}.yaml, capability-manifest.yaml, evidence-requirements.yaml, validators/, ambiguity-log.md, negotiation-minutes.md) |
 | `implementations/<name>/<variant>/` | candidate realizations (candidate-manifest.json + tests with invariant lineage) |
 | `evidence/<name>/` | signed admission evidence + discovery logs (stem-keyed `{impl[:16]}-{bundle[:12]}` since v1.1), validation results, `runtime-ledger.jsonl` |
-| `scripts/pdd.py` | the CLI (`bundle lint/seal`, `validate`, `evidence build/verify/latest`, `run`, `index`, `search`, `publish`) |
+| `scripts/pdd.py` | the CLI (`bundle lint/seal`, `validate`, `evidence build/verify/latest/staleness`, `run`, `index`, `search`, `publish`) |
 | `src/server.py` + `src/registry_index.py` + `src/registry_db.py` | the HTTP service; shares the SAME index as the CLI; `registry_db.py` is the v1.2 database adapter (PostgreSQL in prod, sqlite for dev/tests) |
 
 The catalog is built **live** from `pdd-bundles/*` — adding a directory is
@@ -52,6 +52,15 @@ M6 mini-pc, `deploy/postgres.yaml`; pdd-registry protocol 1.2.0, S-006):
   pointing at the author's validator-loop execution record (e.g. a CI/CD
   results page). `pdd evidence build --validation-resource <url>` binds
   it into the signed provenance.
+- **Evidence freshness gate (S-008, v1.3.0)**: the latest admission
+  evidence must attest the CURRENT on-disk bundle digest — any bundle
+  change without re-validation + re-attestation is a violation. Keyless
+  `pdd evidence staleness [bundle...]` (no PDD_EVIDENCE_KEY, no registry
+  needed) exits 0 when fresh, 1 on drift; wired into `make all`, the
+  pdd-pr-gates workflow (blocks PRs) and pdd-validator-loop (blocks
+  main). If you change anything under `pdd-bundles/<name>/`, run
+  `pdd validate <name>` + `pdd evidence build <name>` before committing —
+  the gate will refuse to ship the drift otherwise.
 
 ## DECIDE — the registry decision framework (run this BEFORE writing anything)
 

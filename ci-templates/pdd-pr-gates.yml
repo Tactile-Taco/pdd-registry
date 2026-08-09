@@ -15,3 +15,7 @@ jobs:
         run: python3 .reasonix/skills/pdd-protocol-author/scripts/check_bundle.py --catalog pdd-bundles/
       - name: Cross-bundle compatibility
         run: python3 .reasonix/skills/pdd-contract-negotiator/scripts/check_compatibility.py pdd-bundles/
+      # S-008 freshness gate: a bundle change without re-attestation fails
+      # here, before the PR can be merged.
+      - name: Evidence freshness (S-008)
+        run: python3 scripts/pdd.py evidence staleness

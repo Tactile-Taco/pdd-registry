@@ -54,3 +54,12 @@ Open items and recorded decisions for the pdd-registry protocol bundle.
 - **Tag choice for user-registry.** Tagged `server` only; `auth` is reserved
   for authentication protocols — user-registry's boundary explicitly excludes
   authentication/authorization, so `auth` would overclaim.
+- **S-008 "latest admission" definition.** "Latest" = the admission file
+  whose content digest matches the evidence_digest of the LAST ledger
+  block for the bundle (the same selection rule as `pdd evidence latest`,
+  which drives the deploy-time DB seeding). Multiple implementation
+  artifacts attested for one bundle: the latest block wins; re-attestation
+  of the current digest for the canonical artifact is the requirement.
+- **Staleness vs. un-attested bundles.** A bundle with no evidence chain
+  is SKIPPED, not failed — the gate is about drift of attested bundles;
+  the seal + evidence-build flow covers first-time attestation.

@@ -25,6 +25,10 @@ jobs:
           PDD_EVIDENCE_KEY: ${{ secrets.PDD_EVIDENCE_KEY }}
       - name: Three-layer Validator Loop
         run: make validate
+      # S-008 freshness gate: a bundle change without re-attestation fails
+      # here (keyless — runs before the signing steps).
+      - name: Evidence freshness (S-008)
+        run: python3 scripts/pdd.py evidence staleness
       # The signing key is scoped to the evidence steps only.
       - name: Evidence chain build + verify
         run: make evidence
