@@ -85,9 +85,11 @@ echo "==> Creating pdd-postgres Secret on ${STAGING_TAILSCALE_IP} (idempotent)"
 # only in the cluster Secret (tailnet-only staging); PDD_DATABASE_URL carries
 # the full URL so the registry Deployment needs no password material of its
 # own. Exists -> untouched (a re-roll would need a postgres restart + re-seed).
+# Generation is runner-side with coreutils (the guest's ssh shell has no
+# openssl) and the secret content flows via stdin only.
 ssh_guest 'sudo k3s kubectl get secret pdd-postgres >/dev/null 2>&1' \
   || {
-    PG_PW="$(ssh_guest 'openssl rand -hex 24')"
+    PG_PW="$(od -An -tx1 -N24 /dev/urandom | tr -d ' \n')"
     printf 'POSTGRES_PASSWORD=%s\nPDD_DATABASE_URL=postgresql://pdd:%s@postgres:5432/pdd\n' \
       "${PG_PW}" "${PG_PW}" \
       | ssh_guest 'sudo k3s kubectl create secret generic pdd-postgres \
