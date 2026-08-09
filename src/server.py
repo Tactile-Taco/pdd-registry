@@ -338,7 +338,8 @@ class Handler(BaseHTTPRequestHandler):
                 return
             if path == "/evidence/verify":
                 if DATABASE_URL:
-                    self._json({"results": [r for b in _bundles()
+                    self._json({"ok": True,
+                                "results": [r for b in _bundles()
                                             for r in _db_evidence_verify(b["name"])]})
                 else:
                     self._json({"results": [_verify_bundle(b["name"]) for b in _bundles()]})

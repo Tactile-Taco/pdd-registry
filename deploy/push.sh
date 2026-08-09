@@ -123,21 +123,22 @@ ssh_guest "sudo k3s kubectl rollout restart deployment/${PROJECT} && \
   sudo k3s kubectl rollout status deployment/${PROJECT} --timeout=120s"
 
 echo "==> Seeding the DB-backed registry (git -> DB on deploy, brownfield sync)"
-# v1.2: the registry catalog lives in PostgreSQL. Each sealed bundle in this
-# repo is published with the evidence attested by its LATEST ledger block
-# (the author-side chain stays the source of truth; the DB is the serving
-# layer). publish is idempotent (B-006) so re-deploys are no-ops.
-REGISTRY_URL="pdd+https://${PROJECT}.${STAGING_TAILSCALE_DNS}"
+# v1.2: the registry catalog lives in PostgreSQL. Each sealed bundle is
+# published with the evidence attested by its LATEST ledger block (the
+# author-side chain stays the source of truth; the DB is the serving layer).
+# publish is idempotent (B-006) so re-deploys are no-ops. The seed loop runs
+# INSIDE the registry pod: the image ships the repo + evidence at /opt/pdd,
+# and publish targets pdd+http://localhost:8080 — the runner shell can
+# neither resolve tailnet DNS nor trust the staging cert, so in-cluster
+# publishing avoids both.
 for BUNDLE_DIR in pdd-bundles/*/; do
   BNAME="$(basename "${BUNDLE_DIR}")"
-  EVIDENCE_FILE="$(python3 scripts/pdd.py evidence latest "${BNAME}" 2>/dev/null || true)"
-  if [ -z "${EVIDENCE_FILE}" ] || [ ! -f "${EVIDENCE_FILE}" ]; then
-    echo "==> no latest evidence for ${BNAME}; skipping publish" >&2
-    continue
-  fi
-  python3 scripts/pdd.py publish "${BUNDLE_DIR}" \
-    --evidence "${EVIDENCE_FILE}" --registry "${REGISTRY_URL}" \
-    || { echo "publish failed for ${BNAME}" >&2; exit 1; }
+  echo "==> seeding ${BNAME}"
+  ssh_guest "sudo k3s kubectl exec deploy/${PROJECT} -- sh -c '
+    EV=\$(python3 /opt/pdd/scripts/pdd.py evidence latest ${BNAME}) &&
+    python3 /opt/pdd/scripts/pdd.py publish /opt/pdd/pdd-bundles/${BNAME} \
+      --evidence \"\$EV\" --registry pdd+http://localhost:8080
+  '" || { echo "seed failed for ${BNAME}" >&2; exit 1; }
 done
 
 echo "==> Live at https://${PROJECT}.${STAGING_TAILSCALE_DNS}"
