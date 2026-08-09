@@ -22,7 +22,12 @@ COPY validators/ validators/
 COPY pdd-bundles/ pdd-bundles/
 COPY implementations/ implementations/
 COPY evidence/ evidence/
-COPY .reasonix/ .reasonix/
+# Only the pdd-repository skills ship in the image (the runtime server
+# subprocesses pdd-evidence-keeper/scripts/evidence_chain.py, and the future
+# MCP server serves the pdd-* skills as resources). .reasonix/ also holds
+# agent-harness files (desktop-topic-*.json, tasks/) that are NOT part of
+# this project and must not be baked into the artifact.
+COPY .reasonix/skills/ .reasonix/skills/
 COPY Makefile README.md ./
 
 EXPOSE 8080
