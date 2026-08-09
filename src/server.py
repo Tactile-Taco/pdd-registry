@@ -285,6 +285,13 @@ class Handler(BaseHTTPRequestHandler):
                                       "message": "publish payload too large "
                                                  "(max 8 MiB)"}}, status=400)
                 return
+            payload = json.loads(self.rfile.read(length).decode() or "{}")
+            if not isinstance(payload, dict):
+                self._json({"error": {"kind": "invalid_request",
+                                      "message": "publish body must be a JSON "
+                                                 "object {bundle, evidence}"}},
+                           status=400)
+                return
             # Publish authn (security review HIGH): any client that can reach
             # the Ingress may write catalog rows — require the shared-secret
             # bearer token (PDD_PUBLISH_TOKEN env from the pdd-publish-token
@@ -310,7 +317,6 @@ class Handler(BaseHTTPRequestHandler):
                                                  "Authorization: Bearer token"}},
                            status=401)
                 return
-            payload = json.loads(self.rfile.read(length).decode() or "{}")
             # Belt: adapter shape checks always run; suspenders: strict schema
             # validation when jsonschema is available.
             try:
@@ -490,9 +496,13 @@ class Handler(BaseHTTPRequestHandler):
                     self._json({"error": "limit must be >= 0"}, status=400)
                     return
             if DATABASE_URL:
-                # DB-backed ledger view: the registry's own ledger table
-                # (append-only blocks recorded by publish()). The chain is
-                # per (namespace, name) — S-004 keeps same-name chains apart.
+                # DB-backed ledger view: the registry's own append-only
+                # event log (blocks appended by publish()). bundle_ref is
+                # namespace-qualified so each (namespace, name) sees its own
+                # contiguous seq run; the previous-links form one global
+                # hash chain. Address here is name-keyed (v3 surface) —
+                # same-name bundles in different namespaces resolve via the
+                # semver-max record, matching the FS-mode /bundles/{name}.
                 # limit semantics match the filesystem mode: None = all,
                 # limit>0 = last N, limit=0 = zero blocks (a -0 slice would
                 # return everything — never slice with limit=0).

@@ -199,7 +199,10 @@ def _append_ledger_block(conn, namespace: str, name: str, version: str,
              "resource_identifier": resource_id, "published_at": now}
     block["digest"] = _block_digest(block)
     # bundle_ref is namespace-qualified: S-004 permits the same name in
-    # different namespaces, and each (namespace, name) keeps its own chain.
+    # different namespaces, and each (namespace, name) keeps its own
+    # contiguous block run (seq). The previous-links form ONE global
+    # append-only hash chain across all bundle_refs (the registry's event
+    # log); per-chain contiguity is by seq, not by previous-link.
     _exec(conn,
           "INSERT INTO ledger (bundle_ref, block, block_digest, seq) "
           "VALUES (?, ?, ?, ?)",
@@ -210,9 +213,24 @@ def _append_ledger_block(conn, namespace: str, name: str, version: str,
 def publish(conn, bundle: dict, evidence: dict) -> dict:
     """Idempotent publish (B-006). Validates shape + digests + S-007
     resource_identifier, inserts atomically; re-publishing the same
-    (namespace, name, version, digest) is a no-op returning the record."""
+    (namespace, name, version, digest) is a no-op returning the record.
+
+    Failure-safe: the server shares ONE connection — a mid-transaction
+    failure must roll back, or psycopg fails every later request with
+    InFailedSqlTransaction (sqlite stays in an open transaction)."""
     _validate_bundle(bundle)
     _validate_evidence(evidence)
+    try:
+        return _publish_unlocked(conn, bundle, evidence)
+    except BaseException:
+        try:
+            conn.rollback()
+        except Exception:  # noqa: BLE001 — the original error matters more
+            pass
+        raise
+
+
+def _publish_unlocked(conn, bundle: dict, evidence: dict) -> dict:
     ns, name, version = bundle["namespace"], bundle["name"], bundle["version"]
     digest = bundle["digest"]
     now = bundle.get("published_at") or evidence.get("published_at") or ""

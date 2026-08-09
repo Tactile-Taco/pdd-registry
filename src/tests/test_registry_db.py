@@ -185,6 +185,21 @@ def test_all_public_ops_serialized():
     assert getattr(registry_db._append_ledger_block, "__wrapped__", None) is not None
 
 
+def test_publish_rolls_back_on_failure(conn, monkeypatch):
+    """A mid-transaction publish failure must roll back: the server shares
+    ONE connection — an aborted transaction would fail every later request
+    (psycopg InFailedSqlTransaction / sqlite open transaction)."""
+    def boom(*args, **kwargs):
+        raise RuntimeError("forced ledger failure")
+    monkeypatch.setattr(registry_db, "_append_ledger_block", boom)
+    with pytest.raises(RuntimeError):
+        registry_db.publish(conn, _bundle(), _evidence())
+    # the shared connection is still usable and nothing was persisted
+    assert registry_db.list_catalog(conn) == []
+    assert registry_db.publish(conn, _bundle(), _evidence())["ok"] is True
+    assert len(registry_db.list_catalog(conn)) == 1
+
+
 def test_unsupported_url_scheme_rejected():
     with pytest.raises(ValueError):
         registry_db.connect("mysql://x/y")
