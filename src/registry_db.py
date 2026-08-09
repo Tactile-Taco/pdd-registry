@@ -199,10 +199,9 @@ def _append_ledger_block(conn, namespace: str, name: str, version: str,
              "resource_identifier": resource_id, "published_at": now}
     block["digest"] = _block_digest(block)
     # bundle_ref is namespace-qualified: S-004 permits the same name in
-    # different namespaces, and each (namespace, name) keeps its own
-    # contiguous block run (seq). The previous-links form ONE global
-    # append-only hash chain across all bundle_refs (the registry's event
-    # log); per-chain contiguity is by seq, not by previous-link.
+    # different namespaces, and each (namespace, name) keeps its own block
+    # run. seq is a GLOBAL monotonic counter across all bundle_refs (one
+    # append-only log); previous-links hash-chain every block in order.
     _exec(conn,
           "INSERT INTO ledger (bundle_ref, block, block_digest, seq) "
           "VALUES (?, ?, ?, ?)",
@@ -321,6 +320,8 @@ def _validate_evidence(evidence: dict) -> None:
                          "admission decision in this version)")
     if evidence.get("digest") and not _SHA256_RE.fullmatch(evidence["digest"]):
         raise ValueError("evidence.digest must be sha256:<64 hex> when present")
+    if not isinstance(evidence.get("signed_object"), dict):
+        raise ValueError("evidence.signed_object must be an object")
 
 
 @_serialized

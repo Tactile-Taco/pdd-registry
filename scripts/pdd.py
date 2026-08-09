@@ -375,10 +375,11 @@ def cmd_evidence_build(argv: list[str]) -> int:
     disc.mkdir(parents=True, exist_ok=True)
     disc_content = json.dumps(evidence["discovery_log"], indent=2)
     disc_path = disc / f"{stem}.discovery.json"
-    disc_existed = disc_path.exists()
-    disc_path.write_text(disc_content)
-    # Bind the discovery log into the signed object: digest of the exact bytes on disk.
-    disc_digest = "sha256:" + hashlib.sha256(disc_path.read_bytes()).hexdigest()
+    # The digest is content-based (name-independent): it can be computed in
+    # memory, so the canonical file write is DEFERRED until the final stem is
+    # known — a --force suffix must never touch the canonical discovery file
+    # (the preserved canonical admission binds its existing digest).
+    disc_digest = "sha256:" + hashlib.sha256(disc_content.encode()).hexdigest()
     provenance = {"manifest": manifest["artifact_id"],
                   "discovery_digest": disc_digest}
     if validation_resource is not None:
@@ -406,12 +407,13 @@ def cmd_evidence_build(argv: list[str]) -> int:
             n += 1
         print(f"--force: canonical name occupied; re-attesting as {stem}.evidence.json "
               f"(older objects + ledger blocks stay, append-only)")
+        # Only the SUFFIXED discovery file is written: the preserved
+        # canonical admission binds the canonical discovery's existing
+        # digest, and touching that file would break its attestation.
         (disc / f"{stem}.discovery.json").write_text(disc_content)
-        # The canonical discovery file we just wrote has no matching
-        # admission object when it did not exist before (the force-suffixed
-        # admission binds the suffixed discovery) — remove the orphan.
-        if not disc_existed:
-            disc_path.unlink(missing_ok=True)
+    else:
+        # Final stem is canonical: write the discovery log it binds.
+        disc_path.write_text(disc_content)
 
     adm = EVIDENCE / name / "admission"
     adm.mkdir(parents=True, exist_ok=True)
