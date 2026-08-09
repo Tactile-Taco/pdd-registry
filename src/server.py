@@ -290,7 +290,13 @@ class Handler(BaseHTTPRequestHandler):
                 return
             auth = self.headers.get("Authorization", "")
             supplied = auth[7:] if auth.startswith("Bearer ") else ""
-            if not supplied or not hmac.compare_digest(supplied, expected):
+            # hmac.compare_digest raises TypeError on non-ASCII str (headers
+            # are latin-1-decoded): map that to 401, never a 500.
+            try:
+                token_ok = bool(supplied) and hmac.compare_digest(supplied, expected)
+            except TypeError:
+                token_ok = False
+            if not token_ok:
                 self._json({"error": {"kind": "invalid_request",
                                       "message": "publish requires a valid "
                                                  "Authorization: Bearer token"}},

@@ -242,6 +242,9 @@ def test_publish_requires_bearer_token(db_client):
     assert body["error"]["kind"] == "invalid_request"
     status, body = db_client("/publish", payload, token="wrong-token")
     assert status == 401
+    # non-ASCII token must 401, never 500 (compare_digest TypeError guard)
+    status, body = db_client("/publish", payload, token="tökén")
+    assert status == 401
     # nothing was written
     _, body = db_client("/bundles")
     assert body["bundles"] == []
