@@ -393,7 +393,12 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/evidence/admission":
                 if DATABASE_URL:
                     all_adm = []
+                    seen = set()
                     for b in _bundles():
+                        key = (b["name"], b.get("namespace"))
+                        if key in seen:
+                            continue
+                        seen.add(key)
                         for row in registry_db.evidence_records(
                                 _db(), b["name"], b.get("namespace")):
                             all_adm.append({
