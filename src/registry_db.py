@@ -376,4 +376,5 @@ def _semver_key(version: str) -> tuple[int, int, int]:
     try:
         return (int(parts[0]), int(parts[1]), int(parts[2]))
     except (ValueError, IndexError):
-        return (0, 0, 0)  # unparseable versions sort last, never crash
+        return (0, 0, 0)  # unparseable versions sort first; unreachable in
+                          # practice (_validate_bundle enforces semver)

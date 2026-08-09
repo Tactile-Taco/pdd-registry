@@ -400,6 +400,25 @@ def test_publish_body_must_be_object(db_client):
     assert body["error"]["kind"] == "invalid_request"
 
 
+def test_publish_token_checked_before_body_read(db_client):
+    """Wrong token + oversized Content-Length must 401 WITHOUT reading the
+    body (thread-starve hardening): the header check runs first, so a client
+    that never sends its claimed body cannot pin a handler."""
+    import http.client as _hc
+    from urllib.parse import urlparse
+
+    u = urlparse(db_client.base_url)
+    conn = _hc.HTTPConnection(u.hostname, u.port, timeout=5)
+    conn.putrequest("POST", "/publish")
+    conn.putheader("Authorization", "Bearer wrong-token")
+    conn.putheader("Content-Length", "999999999")  # claim a huge body...
+    conn.endheaders()  # ...but send NO body at all
+    resp = conn.getresponse()
+    resp.read()
+    assert resp.status == 401
+    conn.close()
+
+
 def test_publish_unavailable_in_filesystem_mode():
     """Without PDD_DATABASE_URL the publish endpoint fails closed (S-002
     error envelope, kind=internal) — the filesystem path is author-side and

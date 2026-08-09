@@ -262,6 +262,11 @@ def _db_evidence_verify(name: str, namespace: str | None = None) -> list[dict]:
 
 
 class Handler(BaseHTTPRequestHandler):
+    # Header/body reads time out at 30s (slow-dribble hardening) — applied
+    # by BaseHTTPRequestHandler.setup() BEFORE any header parsing, so idle
+    # connections cannot pin handler threads on any route.
+    timeout = 30
+
     def _json(self, obj, status=200):
         body = json.dumps(obj, indent=2).encode()
         self.send_response(status)
@@ -548,9 +553,10 @@ class Handler(BaseHTTPRequestHandler):
 class _BoundedThreadingHTTPServer(ThreadingHTTPServer):
     """Bounded concurrency (security review MEDIUM): ThreadingHTTPServer
     spawns unbounded threads — an attacker who can reach the Ingress could
-    starve /healthz with many slow connections. The semaphore blocks the
-    accept loop while MAX_HANDLERS are busy (backpressure instead of
-    unbounded threads)."""
+    starve /healthz with many slow connections. The semaphore is acquired on
+    accept and released when the HANDLER THREAD finishes (process_request
+    itself only spawns the thread), so at most MAX_HANDLERS handlers are
+    busy; further connections get backpressure on the accept loop."""
 
     MAX_HANDLERS = 32
 
@@ -563,6 +569,13 @@ class _BoundedThreadingHTTPServer(ThreadingHTTPServer):
         self._slots.acquire()
         try:
             super().process_request(request, client_address)
+        except Exception:  # noqa: BLE001 — thread spawn failed: free the slot
+            self._slots.release()
+            raise
+
+    def process_request_thread(self, request, client_address):
+        try:
+            super().process_request_thread(request, client_address)
         finally:
             self._slots.release()
 
