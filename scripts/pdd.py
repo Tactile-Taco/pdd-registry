@@ -665,7 +665,8 @@ def _registry_get(url: str, path: str) -> dict:
         with _strict_opener().open(http_url, timeout=15) as resp:  # noqa: S310
             return json.loads(resp.read().decode())
     except urllib.error.HTTPError as err:
-        sys.exit(f"registry error {err.code} for {path}: "
+        sys.exit(f"registry error {err.code} for {path} "
+                 f"(redirects are disabled for pdd+ registries): "
                  f"{err.read().decode()[:300]}")
     except urllib.error.URLError as err:
         sys.exit(f"cannot reach registry {http_url!r}: {err.reason}")

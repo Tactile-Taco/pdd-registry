@@ -130,9 +130,11 @@ def layer_structural(bundle: Path, impl: Path) -> list[dict]:
               and len(set(tags)) == len(tags))
     results.append({"invariant_id": "S-005", "layer": "structural",
                     "outcome": "pass" if tag_ok else "fail",
-                    "evidence": f"{len(tags) if isinstance(tags, list) else type(tags).__name__} "
-                                f"tags, kebab-case, unique, <=8" if tag_ok else
-                                f"tags {tags!r} violate the grammar (kebab-case list, <=8, no dupes)"})
+                    "evidence": (f"{len(tags) if isinstance(tags, list) else type(tags).__name__} "
+                                 f"tags, kebab-case, unique, <=8"
+                                 if tag_ok else
+                                 f"tags {tags!r} violate the grammar "
+                                 f"(kebab-case list, <=8, no dupes)")})
     # S-006/S-007 are invariants OF the registry bundle (publish handshake +
     # resource-identified evidence). They apply only to bundles that declare
     # pdd-registry.publish; other bundles get an honest skip, never a false
