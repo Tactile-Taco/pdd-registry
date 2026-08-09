@@ -11,7 +11,8 @@ Translate the Validator Loop into durable, scheduled, enterprise-grade CI. CI is
 ## Registry integration
 - CI gates mirror the dependency DAG (pdd-registry-client DECIDE item 0).
   Today the validator-loop is one sequential job on main and
-  `make validate`/`make evidence` are hardcoded to user-registry — the
+  `make validate`/`make evidence` cover both sealed bundles (user-registry
+  and pdd-registry, each with its own candidate impl) — the
   agent orders work by the DAG (standalone bundles first). Parallel
   per-bundle CI jobs and status-gated PR checks are the roadmap build-out;
   PR gates today run bundle lint + cross-bundle compatibility.
