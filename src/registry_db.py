@@ -134,6 +134,17 @@ def init_schema(conn) -> None:
     for stmt in SCHEMA.split(";"):
         if stmt.strip():
             conn.execute(stmt)
+    # v1.2 migration: the evidence table gained bundle_digest (B-006
+    # never-silent-overwrite). Legacy tables get the column backfilled with
+    # '' — legacy rows keep working (unscoped lookups include them) and new
+    # publishes carry the real digest. The ALTER fails when the column
+    # already exists (both dialects) — that is the fresh-table normal path.
+    try:
+        _exec(conn,
+              "ALTER TABLE evidence ADD COLUMN "
+              "bundle_digest TEXT NOT NULL DEFAULT ''")
+    except Exception:  # noqa: BLE001 — duplicate column: already migrated
+        conn.rollback()
     conn.commit()
 
 

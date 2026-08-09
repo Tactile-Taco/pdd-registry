@@ -248,6 +248,28 @@ def test_publish_server_stamps_published_at(conn):
     assert ev[0]["published_at"].endswith("Z")
 
 
+def test_init_schema_migrates_legacy_evidence_table():
+    """A legacy evidence table (pre-bundle_digest) is migrated in place:
+    the column is backfilled with '' and old rows stay readable."""
+    conn = registry_db.connect("sqlite:///:memory:")
+    conn.execute("CREATE TABLE evidence ("
+                 "namespace TEXT NOT NULL, name TEXT NOT NULL, "
+                 "version TEXT NOT NULL, artifact_id TEXT NOT NULL, "
+                 "resource_identifier TEXT NOT NULL, decision TEXT NOT NULL, "
+                 "signed_object TEXT NOT NULL, digest TEXT NOT NULL, "
+                 "published_at TEXT NOT NULL)")
+    conn.execute("INSERT INTO evidence (namespace, name, version, artifact_id, "
+                 "resource_identifier, decision, signed_object, digest, "
+                 "published_at) VALUES ('pdd', 'pdd-registry', '1.0.0', 'a', "
+                 "'https://ci.example/runs/1', 'attest-pass', '{}', '', '')")
+    conn.commit()
+    registry_db.init_schema(conn)
+    rows = registry_db.evidence_records(conn, "pdd-registry")
+    assert len(rows) == 1  # legacy row migrated and readable
+    assert rows[0]["bundle_digest"] == ""  # backfilled
+    conn.close()
+
+
 def test_unsupported_url_scheme_rejected():
     with pytest.raises(ValueError):
         registry_db.connect("mysql://x/y")
