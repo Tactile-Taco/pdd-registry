@@ -22,7 +22,8 @@
         "depends_on": {"type": "array", "items": {"type": "string"}},
         "provides": {"type": "object"},
         "invariants": {"type": "object"},
-        "capabilities": {"type": "object"}
+        "capabilities": {"type": "object"},
+        "boundary": {"type": "object"}
       }
     },
     "evidence": {
@@ -39,6 +40,11 @@
           "description": "http(s) URL or URN of the author's validator-loop execution record (S-007)."
         },
         "decision": {"type": "string", "enum": ["attest-pass"]},
+        "digest": {
+          "type": "string",
+          "pattern": "^$|^sha256:[0-9a-f]{64}$",
+          "description": "Optional digest of the signed evidence object."
+        },
         "signed_object": {
           "type": "object",
           "description": "The author-signed evidence object (E = H(P, I, V, R, t)); stored and served verbatim."

@@ -20,6 +20,7 @@ import json
 import os
 import subprocess
 import sys
+import threading
 import traceback
 from http.server import BaseHTTPRequestHandler, HTTPServer, ThreadingHTTPServer
 from pathlib import Path
@@ -31,12 +32,35 @@ BUNDLES = ROOT / "pdd-bundles"
 EVIDENCE = ROOT / "evidence"
 SKILLS = ROOT / ".reasonix" / "skills"
 PDD = ROOT / "scripts" / "pdd.py"
+# v1.2: DB-backed serving (S-006). When PDD_DATABASE_URL is set, the catalog,
+# evidence, and ledger views are served from the backing database
+# (PostgreSQL in production, sqlite:// for dev/tests) instead of the
+# filesystem layout. Unset = the legacy filesystem path (backwards compat).
+DATABASE_URL = os.environ.get("PDD_DATABASE_URL")
 
 # registry_index.py lives in this same directory (src/); make it importable no
 # matter how the module is loaded (python3 src/server.py, pytest, kubectl exec).
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import registry_index  # noqa: E402  (shared catalog/search with scripts/pdd.py)
+import registry_db  # noqa: E402  (DB-backed storage adapter, v1.2 S-006)
+
+_db_conn = None
+_db_lock = threading.Lock()
+
+
+def _db():
+    """Lazy shared database connection for the DB-backed path (init guarded
+    by a lock — the server is threaded). The global is set only after the
+    schema is initialized, so a failed init retries on the next request."""
+    global _db_conn
+    if _db_conn is None:
+        with _db_lock:
+            if _db_conn is None:
+                conn = registry_db.connect(DATABASE_URL)
+                registry_db.init_schema(conn)
+                _db_conn = conn
+    return _db_conn
 
 try:
     import yaml
@@ -60,7 +84,11 @@ def _load_protocol(path: Path) -> dict:
 def _catalog() -> list[dict]:
     """Shared registry index catalog; degrades to the v1 naive parse if pyyaml
     is missing (basic /bundles still works), else raises for the v2 views that
-    genuinely need structured YAML (fail-closed: explicit error, no fake data)."""
+    genuinely need structured YAML (fail-closed: explicit error, no fake data).
+    v1.2: with PDD_DATABASE_URL set, the catalog is materialized from the
+    backing database (S-006) in the same entry shape as the filesystem path."""
+    if DATABASE_URL:
+        return registry_db.list_catalog(_db())
     if yaml is not None:
         return registry_index.load_catalog(BUNDLES)
     return [{"name": p.get("name"), "version": p.get("version"), "status": p.get("status"),
@@ -69,7 +97,10 @@ def _catalog() -> list[dict]:
 
 
 def _catalog_strict() -> list[dict]:
-    """v2 views require structured YAML — raise a clear error when absent."""
+    """v2 views require structured YAML — raise a clear error when absent.
+    v1.2: with PDD_DATABASE_URL set, the DB is the structured source."""
+    if DATABASE_URL:
+        return registry_db.list_catalog(_db())
     if yaml is None:
         raise RuntimeError("pyyaml is required for v2 catalog views (pinned in the Dockerfile)")
     return registry_index.load_catalog(BUNDLES)
@@ -173,6 +204,46 @@ def _admission(name: str) -> list[dict]:
     return result
 
 
+def _db_evidence_verify(name: str) -> list[dict]:
+    """DB-backed evidence verification (v1.2, S-007): the registry stores the
+    author's signed evidence records; verification is limited to presence,
+    resource_identifier format, decision, and signature — the honor system.
+    The registry does NOT re-run validation."""
+    rows = registry_db.evidence_records(_db(), name)
+    out = []
+    import tempfile
+    import importlib.util as _iu
+    spec = _iu.spec_from_file_location(
+        "evidence_chain_db",
+        SKILLS / "pdd-evidence-keeper" / "scripts" / "evidence_chain.py")
+    chain = _iu.module_from_spec(spec)
+    spec.loader.exec_module(chain)
+    for row in rows:
+        row_ok, reason = True, None
+        if not registry_db._RESOURCE_ID_RE.fullmatch(row["resource_identifier"]):
+            row_ok, reason = False, "resource_identifier format"
+        if row["decision"] != "attest-pass":
+            row_ok, reason = False, "decision"
+        if row_ok:
+            try:
+                with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as f:
+                    f.write(row["signed_object"])
+                    tmp = f.name
+                try:
+                    ver = chain.verify_evidence_object(tmp)
+                    if not ver.get("ok"):
+                        row_ok, reason = False, ver.get("reason", "signature")
+                finally:
+                    os.unlink(tmp)
+            except Exception:  # noqa: BLE001
+                row_ok, reason = False, "verification unavailable"
+        out.append({"bundle": name, "artifact_id": row["artifact_id"],
+                    "resource_identifier": row["resource_identifier"],
+                    "decision": row["decision"], "signature_valid": row_ok,
+                    "verified": row_ok, "reason": reason})
+    return out
+
+
 class Handler(BaseHTTPRequestHandler):
     def _json(self, obj, status=200):
         body = json.dumps(obj, indent=2).encode()
@@ -181,6 +252,57 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
+
+    def do_POST(self):
+        """v1.2 publish handshake (B-006/S-007): POST /publish with
+        {bundle, evidence} validates against the publish schema and the
+        storage adapter, then persists idempotently. Only available in
+        DB-backed mode (PDD_DATABASE_URL) — the filesystem path is
+        author-side (git + CLI) and never accepts writes over HTTP."""
+        try:
+            parsed = urlparse(self.path)
+            if parsed.path != "/publish":
+                self._json({"error": {"kind": "not_found",
+                                      "message": "unknown route"}}, status=404)
+                return
+            if not DATABASE_URL:
+                self._json({"error": {"kind": "internal",
+                                      "message": "publish requires PDD_DATABASE_URL "
+                                                 "(DB-backed mode)"}}, status=500)
+                return
+            length = int(self.headers.get("Content-Length", "0"))
+            if length > 8 * 1024 * 1024:
+                self._json({"error": {"kind": "invalid_request",
+                                      "message": "publish payload too large "
+                                                 "(max 8 MiB)"}}, status=400)
+                return
+            payload = json.loads(self.rfile.read(length).decode() or "{}")
+            # Belt: adapter shape checks always run; suspenders: strict schema
+            # validation when jsonschema is available.
+            try:
+                import jsonschema  # noqa: PLC0415
+                schema = json.loads(
+                    (Path(__file__).resolve().parent.parent
+                     / "pdd-bundles" / "pdd-registry" / "schemas"
+                     / "publish.schema.json").read_text())
+                jsonschema.validate(payload, schema)
+            except ImportError:
+                pass
+            except Exception as exc:  # noqa: BLE001 — ValidationError -> 400
+                self._json({"error": {"kind": "invalid_request",
+                                      "message": f"publish rejected: {exc}"}},
+                           status=400)
+                return
+            record = registry_db.publish(_db(), payload["bundle"],
+                                         payload["evidence"])
+            self._json({"ok": True, "record": record["bundle"]})
+        except (KeyError, ValueError, json.JSONDecodeError) as exc:
+            self._json({"error": {"kind": "invalid_request",
+                                  "message": f"publish rejected: {exc}"}},
+                       status=400)
+        except Exception as exc:  # noqa: BLE001
+            self._json({"error": {"kind": "internal", "message": str(exc)}},
+                       status=500)
 
     def do_GET(self):
         try:
@@ -215,13 +337,29 @@ class Handler(BaseHTTPRequestHandler):
                 self._json({"bundles": bundles})
                 return
             if path == "/evidence/verify":
-                self._json({"results": [_verify_bundle(b["name"]) for b in _bundles()]})
+                if DATABASE_URL:
+                    self._json({"results": [r for b in _bundles()
+                                            for r in _db_evidence_verify(b["name"])]})
+                else:
+                    self._json({"results": [_verify_bundle(b["name"]) for b in _bundles()]})
                 return
             if path == "/evidence/admission":
-                all_adm = []
-                for b in _bundles():
-                    all_adm.extend(_admission(b["name"]))
-                self._json({"admissions": all_adm})
+                if DATABASE_URL:
+                    all_adm = []
+                    for b in _bundles():
+                        for row in registry_db.evidence_records(_db(), b["name"]):
+                            all_adm.append({
+                                "bundle": row["name"], "version": row["version"],
+                                "artifact_id": row["artifact_id"],
+                                "resource_identifier": row["resource_identifier"],
+                                "decision": row["decision"],
+                                "digest": row["digest"]})
+                    self._json({"admissions": all_adm})
+                else:
+                    all_adm = []
+                    for b in _bundles():
+                        all_adm.extend(_admission(b["name"]))
+                    self._json({"admissions": all_adm})
                 return
             if path == "/search":
                 q = (query.get("q") or [""])[0].strip()
@@ -293,6 +431,21 @@ class Handler(BaseHTTPRequestHandler):
                 if limit < 0:
                     self._json({"error": "limit must be >= 0"}, status=400)
                     return
+            if DATABASE_URL:
+                # DB-backed ledger view: the registry's own ledger table
+                # (append-only blocks recorded by the registry deployment).
+                # limit semantics match the filesystem mode: None = all,
+                # limit>0 = last N, limit=0 = zero blocks (a -0 slice would
+                # return everything — never slice with limit=0).
+                blocks = registry_db.ledger_blocks(_db(), name)
+                if limit is None:
+                    shown = blocks
+                elif limit > 0:
+                    shown = blocks[-limit:]
+                else:
+                    shown = []
+                self._json({"ok": True, "blocks": shown, "count": len(blocks)})
+                return
             view = registry_index.ledger_view(EVIDENCE, name, limit)
             view["verified"] = _ledger_valid(name)
             self._json(view)

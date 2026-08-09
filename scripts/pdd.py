@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -210,6 +211,14 @@ def cmd_evidence_build(argv: list[str]) -> int:
     if "--impl" not in argv:
         sys.exit("evidence build requires --impl DIR")
     impl = Path(_flag_value(argv, "--impl")).resolve()
+    # v1.2 S-007: the author's validator-loop execution record (http(s) URL
+    # or urn: URN, e.g. a CI/CD results page) is bound into the signed
+    # provenance as validation_resource.
+    validation_resource = _flag_value(argv, "--validation-resource")
+    if validation_resource is not None and not re.fullmatch(
+            r"(https?://|urn:)[A-Za-z0-9._~:/?#\[\]@!$&'()*+,;=%-]+",
+            validation_resource):
+        sys.exit("--validation-resource must be an http(s) URL or urn: URN (S-007)")
     proto = bundle_dir(name)
     manifest = json.loads((impl / "candidate-manifest.json").read_text())
     entry_module = manifest.get("entry_module")
@@ -341,11 +350,15 @@ def cmd_evidence_build(argv: list[str]) -> int:
     disc_path.write_text(json.dumps(evidence["discovery_log"], indent=2))
     # Bind the discovery log into the signed object: digest of the exact bytes on disk.
     disc_digest = "sha256:" + hashlib.sha256(disc_path.read_bytes()).hexdigest()
+    provenance = {"manifest": manifest["artifact_id"],
+                  "discovery_digest": disc_digest}
+    if validation_resource is not None:
+        provenance["validation_resource"] = validation_resource
     chain = subprocess.run(
         [sys.executable, str(EVIDENCE_CHAIN), "build",
          json.dumps(evidence["protocol"]), impl_digest,
          json.dumps(results["validators"]), json.dumps(results["results"]),
-         json.dumps({"manifest": manifest["artifact_id"], "discovery_digest": disc_digest})],
+         json.dumps(provenance)],
         capture_output=True, text=True)
     if chain.returncode != 0:
         sys.exit(f"evidence build failed: {chain.stderr}")
@@ -499,7 +512,73 @@ def cmd_run(argv: list[str]) -> int:
     return 1
 
 
+def _remote_registry(argv: list[str]) -> tuple[str | None, list[str]]:
+    """Extract --registry <pdd+http://host/> (or $PDD_REGISTRY) from argv.
+
+    Returns (registry_url, remaining_argv). The resource identifier scheme
+    is pdd+http:// (v1.2): the CLI talks to a registry server whose catalog
+    is served from the backing database on the mini-pc."""
+    rest: list[str] = []
+    url = os.environ.get("PDD_REGISTRY")
+    i = 0
+    while i < len(argv):
+        if argv[i] == "--registry" and i + 1 < len(argv):
+            url = argv[i + 1]
+            i += 2
+        else:
+            rest.append(argv[i])
+            i += 1
+    if url is not None and not url.startswith("pdd+http://"):
+        sys.exit(f"invalid registry resource identifier {url!r} "
+                 f"(expected pdd+http://<host>/... )")
+    return url, rest
+
+
+def _registry_get(url: str, path: str) -> dict:
+    """GET a read endpoint on a remote registry (stdlib urllib only)."""
+    import urllib.error
+    import urllib.parse
+    import urllib.request
+    http_url = url[len("pdd+"):].rstrip("/") + path
+    try:
+        with urllib.request.urlopen(http_url, timeout=15) as resp:  # noqa: S310
+            return json.loads(resp.read().decode())
+    except urllib.error.HTTPError as err:
+        sys.exit(f"registry error {err.code} for {path}: "
+                 f"{err.read().decode()[:300]}")
+    except urllib.error.URLError as err:
+        sys.exit(f"cannot reach registry {http_url!r}: {err.reason}")
+    except (json.JSONDecodeError, UnicodeDecodeError) as err:
+        sys.exit(f"registry returned non-JSON for {path}: {err}")
+
+
+def _registry_post(url: str, path: str, payload: dict) -> dict:
+    """POST a write endpoint on a remote registry (publish handshake)."""
+    import urllib.error
+    import urllib.request
+    http_url = url[len("pdd+"):].rstrip("/") + path
+    req = urllib.request.Request(  # noqa: S310
+        http_url, data=json.dumps(payload).encode(),
+        headers={"Content-Type": "application/json"}, method="POST")
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:  # noqa: S310
+            return json.loads(resp.read().decode())
+    except urllib.error.HTTPError as err:
+        sys.exit(f"publish rejected ({err.code}): {err.read().decode()[:300]}")
+    except urllib.error.URLError as err:
+        sys.exit(f"cannot reach registry {http_url!r}: {err.reason}")
+    except (json.JSONDecodeError, UnicodeDecodeError) as err:
+        sys.exit(f"registry returned non-JSON for {path}: {err}")
+
+
 def cmd_index(argv: list[str]) -> int:
+    registry, argv = _remote_registry(argv)
+    if registry:
+        # Same command, new resource: the remote registry serves the catalog
+        # from its backing database (S-006) with the same JSON shape.
+        body = _registry_get(registry, "/bundles")
+        print(json.dumps({"bundles": body.get("bundles", [])}, indent=2))
+        return 0
     from registry_index import catalog_json, load_catalog  # lazy: keeps other cmds stdlib-only
     catalog = load_catalog(BUNDLES)
     errors = [b for b in catalog if "error" in b]
@@ -512,12 +591,19 @@ def cmd_index(argv: list[str]) -> int:
 
 
 def cmd_search(argv: list[str]) -> int:
+    registry, argv = _remote_registry(argv)
     if not argv:
         print("search requires a query, e.g. `pdd search idempotent`")
         print(__doc__)
         return 2
-    from registry_index import load_catalog, search  # lazy: keeps other cmds stdlib-only
     query = argv[0]
+    if registry:
+        import urllib.parse
+        body = _registry_get(registry, f"/search?q={urllib.parse.quote(query)}")
+        print(json.dumps({"query": query, "count": body.get("count", 0),
+                          "results": body.get("results", [])}, indent=2))
+        return 0 if body.get("results") else 1
+    from registry_index import load_catalog, search  # lazy: keeps other cmds stdlib-only
     catalog = load_catalog(BUNDLES)
     errors = [b for b in catalog if "error" in b]
     if errors:
@@ -529,11 +615,73 @@ def cmd_search(argv: list[str]) -> int:
     return 0 if results else 1
 
 
+def cmd_publish(argv: list[str]) -> int:
+    """publish <bundle-dir> --evidence <file> --registry pdd+http://<host>/
+
+    Publishes a bundle + its signed evidence to a DB-backed registry (v1.2
+    publish handshake, B-006 idempotent / S-007 resource_identifier)."""
+    registry, argv = _remote_registry(argv)
+    if not argv or registry is None:
+        print("publish requires a bundle dir and --registry, e.g.")
+        print("  pdd publish pdd-bundles/pdd-registry \\")
+        print("    --evidence evidence.json --registry pdd+http://m6/registry")
+        return 2
+    evidence_file = None
+    rest = []
+    i = 0
+    while i < len(argv):
+        if argv[i] == "--evidence" and i + 1 < len(argv):
+            evidence_file = argv[i + 1]
+            i += 2
+        else:
+            rest.append(argv[i])
+            i += 1
+    if evidence_file is None:
+        print("publish requires --evidence <file>")
+        return 2
+    if not rest:
+        print("publish requires a bundle dir, e.g. pdd-bundles/pdd-registry")
+        return 2
+    from registry_index import load_bundle  # lazy: pyyaml
+    bundle_dir = Path(rest[0])
+    if not bundle_dir.is_dir() or not (bundle_dir / "protocol.yaml").exists():
+        print(f"not a bundle directory: {bundle_dir}")
+        return 2
+    b = load_bundle(bundle_dir)
+    if "error" in b:
+        sys.exit(f"cannot read bundle: {b['error']}")
+    ev = json.loads(Path(evidence_file).read_text())
+    payload = {"bundle": {
+        "namespace": b.get("namespace"), "name": b["name"],
+        "version": b.get("version"), "status": b.get("status"),
+        "digest": _bundle_digest(bundle_dir),
+        "purpose": b.get("purpose"), "tags": b.get("tags") or [],
+        "depends_on": b.get("depends_on") or [],
+        "provides": b.get("provides") or {},
+        "invariants": b.get("invariants") or {},
+        "capabilities": b.get("capabilities") or {},
+        "boundary": b.get("boundary") or {},
+    }, "evidence": {
+        "artifact_id": ev.get("artifact_id") or b.get("name"),
+        "resource_identifier": ev.get("resource_identifier")
+            or sys.exit("evidence file must contain resource_identifier "
+                        "(S-007: http(s) URL or urn: URN of the validator "
+                        "loop record)"),
+        "decision": ev.get("decision", "attest-pass"),
+        "signed_object": ev.get("signed_object", ev),
+        "digest": ev.get("digest", ""),
+    }}
+    body = _registry_post(registry, "/publish", payload)
+    print(json.dumps(body, indent=2))
+    return 0 if body.get("ok") else 1
+
+
 COMMANDS = {
     "bundle": {"lint": cmd_bundle_lint, "seal": cmd_bundle_seal},
     "validate": cmd_validate,
     "evidence": {"build": cmd_evidence_build, "verify": cmd_evidence_verify},
     "run": cmd_run,
+    "publish": cmd_publish,
 }
 
 
@@ -556,6 +704,13 @@ def main(argv: list[str]) -> int:
         if not rest:
             print(f"{head} requires a bundle name")
             print(__doc__)
+            return 2
+        return COMMANDS[head](rest)
+    if head == "publish":
+        if not rest:
+            print("publish requires a bundle dir and --registry, e.g.")
+            print("  pdd publish pdd-bundles/pdd-registry \\")
+            print("    --evidence evidence.json --registry pdd+http://m6/registry")
             return 2
         return COMMANDS[head](rest)
     if head == "index":

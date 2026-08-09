@@ -18,6 +18,7 @@ Run: python3 -m pytest src/tests/test_pdd_guards.py -q
 import hashlib
 import importlib.util
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -77,6 +78,18 @@ def test_behavioral_coverage_splits_covered_and_uncovered():
     # empty lineage -> everything uncovered; B-* label path
     covered, uncovered = vc._behavioral_coverage(["B-001"], {})
     assert covered == [] and uncovered == ["B-001"]
+
+
+def test_evidence_validation_resource_format():
+    """--validation-resource must be an http(s) URL or urn: URN (S-007) —
+    the guard regex (shared with the publish schema pattern) must accept
+    real record URLs and reject anything else."""
+    ok = ("https://github.com/Tactile-Taco/pdd-repository/actions/runs/1",
+          "https://ci.example/x?y=1#frag", "urn:pdd:run:42")
+    for url in ok:
+        assert re.fullmatch(r"(https?://|urn:)[A-Za-z0-9._~:/?#\[\]@!$&'()*+,;=%-]+", url), url
+    for bad in ("", "nope", "ftp://x", "file:///etc/passwd", "javascript:alert(1)"):
+        assert not re.fullmatch(r"(https?://|urn:)[A-Za-z0-9._~:/?#\[\]@!$&'()*+,;=%-]+", bad), bad
 
 
 # --- _load_validation_results: fail-closed shape checks --------------------
