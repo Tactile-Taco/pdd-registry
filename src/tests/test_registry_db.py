@@ -379,6 +379,18 @@ def test_evidence_only_republish_appends_ledger_block(conn):
     assert len(registry_db.ledger_blocks(conn, "pdd/pdd-registry")) == 2  # no-op
 
 
+def test_resource_identifier_length_cap(conn):
+    """The belt mirrors the schema's 2048-char maxLength on the FULL string
+    (lookahead-anchored — a 2056-char http id must be rejected too)."""
+    with pytest.raises(ValueError):
+        registry_db.publish(conn, _bundle(), _evidence(
+            resource_identifier="https://x/" + "a" * 2048))  # 2056 total
+    # exactly 2048 total is accepted
+    registry_db.publish(conn, _bundle(), _evidence(
+        resource_identifier="https://x/" + "a" * 2038))  # 2048 total
+    assert len(registry_db.list_catalog(conn)) == 1
+
+
 def test_unsupported_url_scheme_rejected():
     with pytest.raises(ValueError):
         registry_db.connect("mysql://x/y")

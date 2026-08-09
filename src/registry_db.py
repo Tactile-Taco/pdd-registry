@@ -31,7 +31,10 @@ import threading
 import time
 from typing import Any, Optional
 
-RESOURCE_ID_RE = re.compile(r"^(https?://|urn:)[A-Za-z0-9._~:/?#\[\]@!$&'()*+,;=%-]{1,2048}$")
+# Total length capped at 2048 via the lookahead anchor — the {1,2048} on the
+# post-prefix portion alone would accept up to 2056 chars (schema maxLength
+# caps the FULL string; belt/schema parity).
+RESOURCE_ID_RE = re.compile(r"^(?=.{1,2048}$)(https?://|urn:)[A-Za-z0-9._~:/?#\[\]@!$&'()*+,;=%-]+$")
 _SHA256_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
 
 # The server shares ONE connection across request threads (ThreadingHTTPServer).
@@ -208,7 +211,8 @@ def _block_digest(block: dict) -> str:
 @_serialized
 def _append_ledger_block(conn, namespace: str, name: str, version: str,
                          bundle_digest: str, artifact_id: str,
-                         resource_id: str, now: str) -> None:
+                         resource_id: str, evidence_digest: str,
+                         now: str) -> None:
     """Append one hash-chained block to the registry-side ledger (S-006:
     the DB-mode /bundles/{name}/ledger route's producer). Chained by sha256
     (previous block digest + seq); the author-side evidence chain carries
@@ -216,9 +220,9 @@ def _append_ledger_block(conn, namespace: str, name: str, version: str,
     a signed chain. Called from publish() on ANY write event: the first
     publish of a (namespace, name, version, digest) record OR an evidence
     insert for an existing record (B-006: identical re-publishes insert
-    nothing and append nothing). artifact_id is part of the block so two
-    evidence writes in the same second cannot collide on the block_digest
-    PK (security review LOW)."""
+    nothing and append nothing). artifact_id + evidence_digest are part of
+    the block so same-second writes cannot collide on the block_digest PK
+    (security review LOW)."""
     prev = "sha256:" + "0" * 64
     seq = 1
     cur = _exec(conn, "SELECT block_digest, seq FROM ledger ORDER BY seq DESC LIMIT 1")
@@ -229,7 +233,8 @@ def _append_ledger_block(conn, namespace: str, name: str, version: str,
     block = {"previous": prev, "namespace": namespace, "name": name,
              "version": version, "bundle_digest": bundle_digest,
              "artifact_id": artifact_id,
-             "resource_identifier": resource_id, "published_at": now}
+             "resource_identifier": resource_id,
+             "evidence_digest": evidence_digest, "published_at": now}
     block["digest"] = _block_digest(block)
     # bundle_ref is namespace-qualified: S-004 permits the same name in
     # different namespaces, and each (namespace, name) keeps its own block
@@ -304,7 +309,8 @@ def _publish_unlocked(conn, bundle: dict, evidence: dict) -> dict:
         # cover). Identical re-publishes insert nothing and append nothing.
         _append_ledger_block(conn, ns, name, version, digest,
                              evidence["artifact_id"],
-                             evidence["resource_identifier"], now)
+                             evidence["resource_identifier"],
+                             evidence.get("digest", ""), now)
     conn.commit()
     cur = _exec(conn,
         "SELECT * FROM bundles WHERE namespace = ? AND name = ? "
