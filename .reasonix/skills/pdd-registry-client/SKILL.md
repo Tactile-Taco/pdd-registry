@@ -178,8 +178,9 @@ python3 scripts/pdd.py evidence build my-protocol --impl implementations/my-prot
 python3 scripts/pdd.py evidence verify my-protocol
 ```
 
-- The Makefile targets `validate`/`evidence` are hardcoded to `user-registry`;
-  for other bundles use `scripts/pdd.py` directly (above).
+- The Makefile targets `validate`/`evidence` cover both sealed bundles
+  (user-registry + pdd-registry); for other bundles use `scripts/pdd.py`
+  directly (above).
 - `make all` = lint+test+validate+evidence (the commit gate; needs the key).
 - After commit+push to `dev`, CI runs `pdd-staging-deploy` (self-hosted
   runner `m6-pdd`, label `staging-deploy`) automatically — dev is the

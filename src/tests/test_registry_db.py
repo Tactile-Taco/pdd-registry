@@ -248,6 +248,13 @@ def test_publish_server_stamps_published_at(conn):
     assert ev[0]["published_at"].endswith("Z")
 
 
+def test_evidence_digest_scope_requires_namespace(conn):
+    """Digests are only unique within a namespace: a bundle_digest scope
+    without a namespace is a ValueError, not a silent empty result."""
+    with pytest.raises(ValueError):
+        registry_db.evidence_records(conn, "pdd-registry", bundle_digest="sha256:x")
+
+
 def test_init_schema_migrates_legacy_evidence_table():
     """A legacy evidence table (pre-bundle_digest) is migrated in place:
     the column is backfilled with '' and old rows stay readable."""
@@ -268,6 +275,20 @@ def test_init_schema_migrates_legacy_evidence_table():
     assert len(rows) == 1  # legacy row migrated and readable
     assert rows[0]["bundle_digest"] == ""  # backfilled
     conn.close()
+
+
+def test_init_schema_re_raises_genuine_alter_failures(conn, monkeypatch):
+    """Only duplicate-column errors are swallowed by the migration; a
+    genuine ALTER failure (lock, disk) must re-raise, not rollback-silently."""
+    real_exec = registry_db._exec
+
+    def fake_exec(c, sql, params=()):
+        if sql.startswith("ALTER TABLE"):
+            raise RuntimeError("simulated disk failure")
+        return real_exec(c, sql, params)
+    monkeypatch.setattr(registry_db, "_exec", fake_exec)
+    with pytest.raises(RuntimeError):
+        registry_db.init_schema(conn)
 
 
 def test_unsupported_url_scheme_rejected():
