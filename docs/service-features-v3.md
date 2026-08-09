@@ -102,3 +102,77 @@ the linter enforces shape, not membership.
    validate pdd-registry`), evidence is rebuilt under the real
    `PDD_EVIDENCE_KEY`, `git diff --check` is clean, and a post-mutation
    review runs before the final answer.
+
+---
+
+# v1.2: DB-backed registry (PostgreSQL on the mini-pc)
+
+Purpose: host the protocol registry on a **database** instead of the git
+repo. The pdd-registry protocol moved to **1.2.0** (minor, S-003:
+additive-only surface). The client surface (endpoints, filters, schemas for
+search/views) is unchanged; the serving layer changed and the registry
+gained a publish handshake. This section documents the v1.2 contract.
+
+## Architecture decisions (user-confirmed, 2026-08-09)
+
+- **DB engine**: PostgreSQL in the staging k3s cluster on the M6 mini-pc
+  (persistent volume; manifests in `deploy/postgres.yaml`; the
+  `pdd-postgres` Secret with `PDD_DATABASE_URL` is created idempotently by
+  `deploy/push.sh`).
+- **Resource identifier**: the CLI talks to the registry server with
+  `--registry pdd+http(s)://<host>/` (or `$PDD_REGISTRY`) — the SAME
+  commands (`pdd index`, `pdd search`, `pdd evidence verify`) against the
+  DB-backed registry; the server reads the database
+  (`PDD_DATABASE_URL` env, `src/registry_db.py`, sqlite for dev/tests,
+  PostgreSQL in production — one portable SQL dialect).
+- **Write path**: authoring/lint/seal/validate/evidence stay in git (the
+  author-side chain is the source of truth); the DB is the serving layer.
+  The registry does **not** own a git repo of protocols.
+- **Validation is author-owned** (honor system in this version): the
+  registry does not run the validator loop and does not prove validation.
+  Every admission evidence record carries a `resource_identifier` (S-007)
+  — an http(s) URL or `urn:` pointing at the author's validator-loop
+  execution record (e.g. a CI/CD results page); the registry's
+  `/evidence/verify` checks presence, format, decision, and signature only.
+- **Deploy target**: the staging k3s guest on the M6 (existing ingress,
+  tailnet-only).
+
+## New surface (v1.2)
+
+| Surface | Shape |
+|---|---|
+| `POST /publish` | `{bundle, evidence}` validated against `schemas/publish.schema.json`; idempotent by `(namespace, name, version, digest)` (B-006); evidence requires `resource_identifier` (S-007); only available in DB mode — the filesystem path never accepts writes over HTTP |
+| `GET /bundles` (DB mode) | same v3 shape, materialized from the database (S-006) |
+| `GET /search?q=` (DB mode) | same ranking, over the DB catalog |
+| `GET /evidence/verify` (DB mode) | per stored record: presence + resource_identifier format + decision + signature (honor system) |
+| `GET /bundles/{name}/ledger` (DB mode) | the registry's own append-only ledger table |
+| CLI `pdd publish <dir> --evidence <file> --registry pdd+http(s)://…` | builds the publish payload (resource_identifier from the evidence file or its `provenance.validation_resource`) and POSTs it |
+| CLI `--registry` / `$PDD_REGISTRY` | `pdd index` / `pdd search` / `pdd evidence verify` against a remote DB-backed registry |
+| CLI `pdd evidence latest <name>` | prints the admission attested by the LATEST ledger block (used by `deploy/push.sh` to seed the DB) |
+| CLI `pdd evidence build --validation-resource <url>` | binds the author's validator-loop record into the signed provenance (S-007 dogfood) |
+
+## Seeding (git -> DB on deploy)
+
+`deploy/push.sh` publishes each sealed bundle with the evidence attested by
+its latest ledger block after each deploy (idempotent, B-006), so the
+registry database mirrors the repo's catalog without the registry owning a
+git repo.
+
+## Acceptance checks (v1.2)
+
+1. `pdd validate pdd-registry` admits with S-006/S-007 passing and B-006
+   honestly skipped until its service contract tests land (they now exist
+   in `src/tests/test_registry_db.py`).
+2. `python3 -m pytest src/tests/test_registry_db.py` passes: publish
+   idempotency (B-006), resource_identifier enforcement (S-007), dialect
+   portability (`_adapt_sql`), invariant-layer filling, HTTP publish
+   (schema rejection, filesystem-mode fail-closed), DB-mode
+   evidence/ledger routes, CLI remote surface.
+3. `deploy/postgres.yaml` + `deploy/k8s.yaml` parse with the documented
+   invariants (traefik, `pdd-repository` identity, `PDD_DATABASE_URL` ->
+   `pdd-postgres` secret, postgres Deployment/Service/PVC) — enforced by
+   `test_deploy_manifests_parse`.
+4. The evidence chain verifies: pdd-registry admission
+   `ba2e5aa69ef93b42-fdd2918f267e` binds
+   `provenance.validation_resource` (the pdd-validator-loop workflow) and
+   all blocks verify under the real `PDD_EVIDENCE_KEY`.

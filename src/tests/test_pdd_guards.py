@@ -92,6 +92,31 @@ def test_evidence_validation_resource_format():
         assert not re.fullmatch(r"(https?://|urn:)[A-Za-z0-9._~:/?#\[\]@!$&'()*+,;=%-]+", bad), bad
 
 
+def test_deploy_manifests_parse():
+    """The k8s manifests must stay valid YAML with the documented invariants:
+    traefik ingress, pdd-repository identity, PDD_DATABASE_URL wiring to the
+    pdd-postgres secret, postgres Deployment + Service + PVC."""
+    import yaml
+    base = ROOT / "deploy"
+    k8s = list(yaml.safe_load_all((base / "k8s.yaml").read_text()))
+    docs = [d for d in k8s if isinstance(d, dict)]
+    ingress = next(d for d in docs if d["kind"] == "Ingress")
+    assert ingress["spec"]["ingressClassName"] == "traefik"
+    deployment = next(d for d in docs if d["kind"] == "Deployment")
+    assert deployment["metadata"]["name"] == "pdd-repository"
+    env = {e["name"]: e for e in deployment["spec"]["template"]["spec"]
+           ["containers"][0]["env"]}
+    assert env["PDD_DATABASE_URL"]["valueFrom"]["secretKeyRef"]["name"] == "pdd-postgres"
+    assert env["PDD_DATABASE_URL"]["valueFrom"]["secretKeyRef"]["optional"] is False
+    pg = list(yaml.safe_load_all((base / "postgres.yaml").read_text()))
+    pdocs = [d for d in pg if isinstance(d, dict)]
+    kinds = {d["kind"] for d in pdocs}
+    assert kinds == {"PersistentVolumeClaim", "Deployment", "Service"}
+    pgdep = next(d for d in pdocs if d["kind"] == "Deployment")
+    assert pgdep["metadata"]["name"] == "pdd-postgres"
+    assert "pdd-postgres-pvc" in str(pgdep)
+
+
 # --- _load_validation_results: fail-closed shape checks --------------------
 
 

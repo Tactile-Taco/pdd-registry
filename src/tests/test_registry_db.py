@@ -291,6 +291,37 @@ def test_cli_remote_commands_same_surface(db_client, capsys, monkeypatch):
         pdd.cmd_search(["--registry", "ftp://x", "engine"])
 
 
+def test_cli_publish_uses_validation_resource_fallback(db_client, capsys, monkeypatch, tmp_path):
+    """`pdd publish` accepts an admission evidence object whose
+    resource_identifier comes from provenance.validation_resource (S-007)
+    — the shape push.sh seeds the DB with."""
+    import importlib.util as _u
+
+    spec = _u.spec_from_file_location("pdd_cli", ROOT / "scripts" / "pdd.py")
+    pdd = _u.module_from_spec(spec)
+    spec.loader.exec_module(pdd)
+    monkeypatch.setattr(pdd, "REPO_ROOT", ROOT)
+    monkeypatch.setattr(pdd, "EVIDENCE", ROOT / "evidence")
+    monkeypatch.setattr(pdd, "BUNDLES", ROOT / "pdd-bundles")
+    # an admission-shaped evidence file: no top-level resource_identifier,
+    # only provenance.validation_resource (as the signed admission objects)
+    ev_file = tmp_path / "evidence.json"
+    ev_file.write_text(json.dumps({
+        "artifact_id": "user-registry-python-stdlib",
+        "decision": "attest-pass",
+        "provenance": {"validation_resource": "https://ci.example/runs/7"},
+        "digest": "sha256:" + "c" * 64,
+    }))
+    rc = pdd.cmd_publish([str(ROOT / "pdd-bundles" / "user-registry"),
+                          "--evidence", str(ev_file),
+                          "--registry", "pdd+" + db_client.base_url])
+    out = capsys.readouterr().out
+    assert rc == 0 and '"ok": true' in out
+    status, body = db_client("/bundles?namespace=user")
+    assert status == 200
+    assert [b["name"] for b in body["bundles"]] == ["user-registry"]
+
+
 def test_db_mode_evidence_and_ledger_routes(db_client):
     """DB-backed /evidence/verify, /evidence/admission and
     /bundles/{name}/ledger must serve from the database (would have caught

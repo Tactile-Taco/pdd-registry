@@ -26,6 +26,7 @@
         ps.hypothesis
         ps.jsonschema
         ps.pyyaml
+        ps.psycopg
       ]);
 
       # Assemble the repo content (tracked files) into /opt/pdd inside the image.

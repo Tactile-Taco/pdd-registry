@@ -13,7 +13,8 @@ RUN pip install --no-cache-dir \
     pytest==9.0.3 \
     hypothesis==6.165.0 \
     jsonschema==4.26.0 \
-    pyyaml==6.0.3
+    pyyaml==6.0.3 \
+    psycopg[binary]==3.2.9
 
 COPY src/ src/
 COPY scripts/ scripts/

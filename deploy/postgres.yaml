@@ -1,0 +1,77 @@
+# PostgreSQL for the DB-backed protocol registry (pdd-registry v1.2, S-006).
+# Applied on the staging cluster (k3s) via deploy/push.sh (or the
+# staging-deploy CI) — the guest's default storage class provides the PVC.
+# Credentials come from the pdd-postgres Secret created idempotently by
+# push.sh (generated once, stored only in the cluster; tailnet-only).
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pdd-postgres-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pdd-postgres
+  labels:
+    app: pdd-postgres
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: pdd-postgres
+  template:
+    metadata:
+      labels:
+        app: pdd-postgres
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 5432
+          env:
+            - name: POSTGRES_USER
+              value: pdd
+            - name: POSTGRES_DB
+              value: pdd
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: pdd-postgres
+                  key: POSTGRES_PASSWORD
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+              subPath: pgdata
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", "pdd", "-d", "pdd"]
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          livenessProbe:
+            exec:
+              command: ["pg_isready", "-U", "pdd", "-d", "pdd"]
+            initialDelaySeconds: 15
+            periodSeconds: 15
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: pdd-postgres-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: pdd-postgres
+spec:
+  selector:
+    app: pdd-postgres
+  ports:
+    - port: 5432
+      targetPort: 5432

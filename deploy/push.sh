@@ -80,6 +80,26 @@ printf 'PDD_EVIDENCE_KEY=%s\n' "${PDD_EVIDENCE_KEY}" \
   | ssh_guest 'sudo k3s kubectl create secret generic pdd-evidence-key \
       --from-env-file=/dev/stdin --dry-run=client -o yaml | sudo k3s kubectl apply -f -'
 
+echo "==> Creating pdd-postgres Secret on ${STAGING_TAILSCALE_IP} (idempotent)"
+# v1.2: the registry runs DB-backed. The password is generated ONCE and lives
+# only in the cluster Secret (tailnet-only staging); PDD_DATABASE_URL carries
+# the full URL so the registry Deployment needs no password material of its
+# own. Exists -> untouched (a re-roll would need a postgres restart + re-seed).
+ssh_guest 'sudo k3s kubectl get secret pdd-postgres >/dev/null 2>&1' \
+  || {
+    PG_PW="$(ssh_guest 'openssl rand -hex 24')"
+    printf 'POSTGRES_PASSWORD=%s\nPDD_DATABASE_URL=postgresql://pdd:%s@postgres:5432/pdd\n' \
+      "${PG_PW}" "${PG_PW}" \
+      | ssh_guest 'sudo k3s kubectl create secret generic pdd-postgres \
+          --from-env-file=/dev/stdin --dry-run=client -o yaml | sudo k3s kubectl apply -f -'
+  }
+
+echo "==> Applying postgres manifest (v1.2 DB-backed registry, S-006)"
+ssh_guest 'sudo k3s kubectl apply -f -' < deploy/postgres.yaml
+
+echo "==> Waiting for postgres to be ready"
+ssh_guest 'sudo k3s kubectl rollout status deployment/pdd-postgres --timeout=180s'
+
 echo "==> Applying manifest (host + image digest substituted) to ${STAGING_TAILSCALE_IP}"
 MANIFEST="deploy/k8s.yaml"
 # Escape & for sed (the values are operator-controlled, but never trust them).
@@ -99,5 +119,23 @@ printf '%s' "${SUBSTITUTED}" \
 echo "==> Bouncing the deployment to pull the new image"
 ssh_guest "sudo k3s kubectl rollout restart deployment/${PROJECT} && \
   sudo k3s kubectl rollout status deployment/${PROJECT} --timeout=120s"
+
+echo "==> Seeding the DB-backed registry (git -> DB on deploy, brownfield sync)"
+# v1.2: the registry catalog lives in PostgreSQL. Each sealed bundle in this
+# repo is published with the evidence attested by its LATEST ledger block
+# (the author-side chain stays the source of truth; the DB is the serving
+# layer). publish is idempotent (B-006) so re-deploys are no-ops.
+REGISTRY_URL="pdd+https://${PROJECT}.${STAGING_TAILSCALE_DNS}"
+for BUNDLE_DIR in pdd-bundles/*/; do
+  BNAME="$(basename "${BUNDLE_DIR}")"
+  EVIDENCE_FILE="$(python3 scripts/pdd.py evidence latest "${BNAME}" 2>/dev/null || true)"
+  if [ -z "${EVIDENCE_FILE}" ] || [ ! -f "${EVIDENCE_FILE}" ]; then
+    echo "==> no latest evidence for ${BNAME}; skipping publish" >&2
+    continue
+  fi
+  python3 scripts/pdd.py publish "${BUNDLE_DIR}" \
+    --evidence "${EVIDENCE_FILE}" --registry "${REGISTRY_URL}" \
+    || { echo "publish failed for ${BNAME}" >&2; exit 1; }
+done
 
 echo "==> Live at https://${PROJECT}.${STAGING_TAILSCALE_DNS}"

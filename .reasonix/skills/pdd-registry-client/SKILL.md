@@ -18,14 +18,34 @@ HTTP — a documented decision, see docs/service-features-v2.md).
 | `pdd-bundles/<name>/` | the registry: sealed protocol bundles (protocol.yaml, invariants/{S,B,O}.yaml, capability-manifest.yaml, evidence-requirements.yaml, validators/, ambiguity-log.md, negotiation-minutes.md) |
 | `implementations/<name>/<variant>/` | candidate realizations (candidate-manifest.json + tests with invariant lineage) |
 | `evidence/<name>/` | signed admission evidence + discovery logs (stem-keyed `{impl[:16]}-{bundle[:12]}` since v1.1), validation results, `runtime-ledger.jsonl` |
-| `scripts/pdd.py` | the CLI (`bundle lint/seal`, `validate`, `evidence build/verify`, `run`, `index`, `search`) |
-| `src/server.py` + `src/registry_index.py` | the HTTP service; shares the SAME index as the CLI |
+| `scripts/pdd.py` | the CLI (`bundle lint/seal`, `validate`, `evidence build/verify/latest`, `run`, `index`, `search`, `publish`) |
+| `src/server.py` + `src/registry_index.py` + `src/registry_db.py` | the HTTP service; shares the SAME index as the CLI; `registry_db.py` is the v1.2 database adapter (PostgreSQL in prod, sqlite for dev/tests) |
 
 The catalog is built **live** from `pdd-bundles/*` — adding a directory is
 the whole "registration". Since the v1.1 version event every bundle declares
 `namespace` + `tags`; the display address is `namespace/name` (directories
 and evidence stay name-keyed). No auth anywhere (tailnet-only); everything
 is read-only except git+deploy.
+
+Since **v1.2 the registry is DB-backed** (PostgreSQL in staging k3s on the
+M6 mini-pc, `deploy/postgres.yaml`; pdd-registry protocol 1.2.0, S-006):
+
+- **Same commands, new resource identifier**: `pdd index`, `pdd search`,
+  `pdd evidence verify` accept `--registry pdd+http(s)://<host>/` (or
+  `$PDD_REGISTRY`) and talk to the DB-backed registry server — the
+  resource is the registry URL, not the filesystem.
+- **Publishing**: `pdd publish <bundle-dir> --evidence <file>
+  --registry pdd+http(s)://…` submits a bundle + its signed evidence
+  (idempotent by (namespace, name, version, digest), B-006). The registry
+  does NOT own a git repo of protocols; the author-side git chain stays
+  the source of truth and `deploy/push.sh` seeds the DB on deploy
+  (via `pdd evidence latest <name>`).
+- **Author-owned validation (honor system)**: the registry does not run
+  the validator loop and does not prove validation. Every evidence record
+  must carry a `resource_identifier` (S-007) — an http(s) URL or `urn:`
+  pointing at the author's validator-loop execution record (e.g. a CI/CD
+  results page). `pdd evidence build --validation-resource <url>` binds
+  it into the signed provenance.
 
 ## DECIDE — the registry decision framework (run this BEFORE writing anything)
 

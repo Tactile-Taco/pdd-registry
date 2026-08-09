@@ -32,6 +32,18 @@ spec:
                   name: pdd-evidence-key
                   key: PDD_EVIDENCE_KEY
                   optional: true
+            # v1.2 DB-backed registry: the catalog + evidence records are
+            # served from PostgreSQL (S-006). The full URL (with password)
+            # lives in the pdd-postgres Secret, created idempotently by
+            # push.sh. Required: DB mode is the v1.2 deployment posture; a
+            # missing Secret fails the deploy loudly instead of silently
+            # serving the legacy filesystem catalog.
+            - name: PDD_DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: pdd-postgres
+                  key: PDD_DATABASE_URL
+                  optional: false
 ---
 apiVersion: v1
 kind: Service

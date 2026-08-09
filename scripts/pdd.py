@@ -384,6 +384,29 @@ def cmd_evidence_build(argv: list[str]) -> int:
     return 0
 
 
+def cmd_evidence_latest(argv: list[str]) -> int:
+    """Print the admission evidence file attested by the LATEST ledger block
+    (used by deploy/push.sh to seed the DB-backed registry: the newest
+    signed evidence is the one to publish, and it is version-event-safe)."""
+    name = argv[0]
+    if not _valid_bundle_name(name):
+        sys.exit(f"invalid bundle name {name!r}")
+    ledger = EVIDENCE / name / "runtime-ledger.jsonl"
+    if not ledger.exists():
+        sys.exit(f"no ledger at {ledger}")
+    blocks = [json.loads(ln) for ln in ledger.read_text().splitlines() if ln.strip()]
+    if not blocks:
+        sys.exit(f"ledger {ledger} is empty")
+    latest = (blocks[-1].get("observations") or {}).get("evidence_digest")
+    if not latest:
+        sys.exit(f"latest block of {ledger} has no evidence_digest")
+    for path in sorted((EVIDENCE / name / "admission").glob("*.evidence.json")):
+        if "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest() == latest:
+            print(path)
+            return 0
+    sys.exit(f"no admission file matches the latest attestation {latest}")
+
+
 def cmd_evidence_verify(argv: list[str]) -> int:
     name = argv[0]
     if not _valid_bundle_name(name):
@@ -663,10 +686,13 @@ def cmd_publish(argv: list[str]) -> int:
         "boundary": b.get("boundary") or {},
     }, "evidence": {
         "artifact_id": ev.get("artifact_id") or b.get("name"),
-        "resource_identifier": ev.get("resource_identifier")
+        "resource_identifier": (
+            ev.get("resource_identifier")
+            or (ev.get("provenance") or {}).get("validation_resource")
             or sys.exit("evidence file must contain resource_identifier "
                         "(S-007: http(s) URL or urn: URN of the validator "
-                        "loop record)"),
+                        "loop record; admission evidence objects carry it "
+                        "under provenance.validation_resource)")),
         "decision": ev.get("decision", "attest-pass"),
         "signed_object": ev.get("signed_object", ev),
         "digest": ev.get("digest", ""),
@@ -679,7 +705,8 @@ def cmd_publish(argv: list[str]) -> int:
 COMMANDS = {
     "bundle": {"lint": cmd_bundle_lint, "seal": cmd_bundle_seal},
     "validate": cmd_validate,
-    "evidence": {"build": cmd_evidence_build, "verify": cmd_evidence_verify},
+    "evidence": {"build": cmd_evidence_build, "verify": cmd_evidence_verify,
+                 "latest": cmd_evidence_latest},
     "run": cmd_run,
     "publish": cmd_publish,
 }
