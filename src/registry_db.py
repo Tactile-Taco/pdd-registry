@@ -22,13 +22,29 @@ imported lazily for the PostgreSQL path so dev/test needs no extra deps.
 
 from __future__ import annotations
 
+import functools
 import json
 import re
 import sqlite3
+import threading
 from typing import Any, Optional
 
 _RESOURCE_ID_RE = re.compile(r"^(https?://|urn:)[A-Za-z0-9._~:/?#\[\]@!$&'()*+,;=%-]+$")
 _SHA256_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
+
+# The server shares ONE connection across request threads (ThreadingHTTPServer).
+# psycopg3 raises "connection already in use" on concurrent ops and a shared
+# sqlite3 connection interleaves transactions — serialize every public
+# operation per process (the registry is low-QPS; one pod, one process).
+_OP_LOCK = threading.RLock()
+
+
+def _serialized(fn):
+    @functools.wraps(fn)
+    def wrapper(*args, **kwargs):
+        with _OP_LOCK:
+            return fn(*args, **kwargs)
+    return wrapper
 
 
 def _adapt_sql(sql: str, postgres: bool) -> str:
@@ -105,6 +121,7 @@ def connect(url: str):
     raise ValueError(f"unsupported database URL scheme: {url.split(':')[0]!r}")
 
 
+@_serialized
 def init_schema(conn) -> None:
     # execute one statement at a time (portable across sqlite3/psycopg)
     for stmt in SCHEMA.split(";"):
@@ -144,6 +161,7 @@ def _entry_from_row(row) -> dict:
     }
 
 
+@_serialized
 def list_catalog(conn) -> list[dict]:
     """All bundle records as catalog entries (registry_index shape), ordered
     by (namespace, name, version) — deterministic (S-006 consistent read)."""
@@ -152,6 +170,7 @@ def list_catalog(conn) -> list[dict]:
     return [_entry_from_row(r) for r in cur.fetchall()]
 
 
+@_serialized
 def publish(conn, bundle: dict, evidence: dict) -> dict:
     """Idempotent publish (B-006). Validates shape + digests + S-007
     resource_identifier, inserts atomically; re-publishing the same
@@ -227,8 +246,12 @@ def _validate_evidence(evidence: dict) -> None:
     if not _RESOURCE_ID_RE.fullmatch(evidence["resource_identifier"]):
         raise ValueError("evidence.resource_identifier must be an http(s) "
                          "URL or urn: URN (S-007)")
+    if evidence["decision"] != "attest-pass":
+        raise ValueError("evidence.decision must be 'attest-pass' (the only "
+                         "admission decision in this version)")
 
 
+@_serialized
 def evidence_records(conn, name: str) -> list[dict]:
     cur = _exec(conn,
         "SELECT * FROM evidence WHERE name = ? ORDER BY published_at, digest",
@@ -236,6 +259,7 @@ def evidence_records(conn, name: str) -> list[dict]:
     return [dict(r) for r in cur.fetchall()]
 
 
+@_serialized
 def ledger_blocks(conn, name: str) -> list[dict]:
     cur = _exec(conn,
         "SELECT block FROM ledger WHERE bundle_ref = ? "
@@ -246,6 +270,7 @@ def ledger_blocks(conn, name: str) -> list[dict]:
     return [json.loads(r["block"]) for r in cur.fetchall()]
 
 
+@_serialized
 def get_bundle(conn, name: str) -> Optional[dict]:
     cur = _exec(conn,
         "SELECT * FROM bundles WHERE name = ? "

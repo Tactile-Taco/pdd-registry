@@ -106,6 +106,8 @@ def test_S007_evidence_requires_resource_identifier(conn):
         registry_db.publish(conn, _bundle(), _evidence(resource_identifier="not-a-url"))
     with pytest.raises(ValueError):
         registry_db.publish(conn, _bundle(), _evidence(resource_identifier="ftp://x"))
+    with pytest.raises(ValueError):
+        registry_db.publish(conn, _bundle(), _evidence(decision="attest-fail"))
     # valid http(s) and urn: forms are accepted
     registry_db.publish(conn, _bundle(), _evidence(resource_identifier="https://ci.example/runs/1"))
     registry_db.publish(conn, _bundle(digest="sha256:" + "b" * 64),
@@ -327,6 +329,11 @@ def test_cli_remote_commands_same_surface(db_client, capsys, monkeypatch):
     rc = pdd.cmd_index(["--registry", registry])
     out = capsys.readouterr().out
     assert rc == 0 and '"namespace": "pdd"' in out and '"address"' in out
+    # evidence verify against the registry (S-007 honor-system surface)
+    rc = pdd.cmd_evidence_verify(["--registry", registry])
+    out = capsys.readouterr().out
+    assert rc == 1  # the seeded stub object is not signed -> not verified
+    assert '"results"' in out and '"verified": false' in out
     # invalid resource identifier fails closed
     with pytest.raises(SystemExit):
         pdd.cmd_search(["--registry", "ftp://x", "engine"])

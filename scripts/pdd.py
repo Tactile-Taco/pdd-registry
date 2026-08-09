@@ -431,6 +431,9 @@ def cmd_evidence_latest(argv: list[str]) -> int:
     """Print the admission evidence file attested by the LATEST ledger block
     (used by deploy/push.sh to seed the DB-backed registry: the newest
     signed evidence is the one to publish, and it is version-event-safe)."""
+    if not argv:
+        print("evidence latest requires a bundle name, e.g. `pdd evidence latest pdd-registry`")
+        return 2
     name = argv[0]
     if not _valid_bundle_name(name):
         sys.exit(f"invalid bundle name {name!r}")
@@ -451,6 +454,21 @@ def cmd_evidence_latest(argv: list[str]) -> int:
 
 
 def cmd_evidence_verify(argv: list[str]) -> int:
+    registry, argv = _remote_registry(argv)
+    if registry:
+        # Same command, new resource: verify the DB-backed registry's stored
+        # evidence records (presence + resource_identifier + decision +
+        # signature, S-007 honor system) over the registry's own endpoint.
+        body = _registry_get(registry, "/evidence/verify")
+        if argv:
+            rows = [r for r in body.get("results", []) if r.get("bundle") == argv[0]]
+            body["results"] = rows
+        print(json.dumps(body, indent=2))
+        # rc reflects VERIFICATION, not the endpoint's own ok flag: any
+        # unverified record (honor-system signature check) fails the run.
+        results = body.get("results") or []
+        return 0 if body.get("ok") and results and all(
+            r.get("verified") for r in results) else 1
     name = argv[0]
     if not _valid_bundle_name(name):
         sys.exit(f"invalid bundle name {name!r}")
