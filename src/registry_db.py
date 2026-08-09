@@ -134,6 +134,13 @@ def init_schema(conn) -> None:
     for stmt in SCHEMA.split(";"):
         if stmt.strip():
             conn.execute(stmt)
+    # COMMIT BEFORE the migration ALTER: psycopg runs every statement in ONE
+    # transaction — on a fresh PostgreSQL database the duplicate-column
+    # rollback below would otherwise discard the CREATE TABLEs just issued
+    # (sqlite autocommits DDL, which is why tests need a txn-emulating conn
+    # to catch this). The tables must persist before the ALTER's rollback
+    # path can run.
+    conn.commit()
     # v1.2 migration: the evidence table gained bundle_digest (B-006
     # never-silent-overwrite). Legacy tables get the column backfilled with
     # '' — legacy rows keep working (unscoped lookups include them) and new
@@ -316,6 +323,8 @@ def _validate_bundle(bundle: dict) -> None:
     for key in ("provides", "invariants", "capabilities", "boundary"):
         if not isinstance(bundle.get(key), dict):
             raise ValueError(f"bundle.{key} must be an object")
+    if not isinstance(bundle.get("depends_on"), list):
+        raise ValueError("bundle.depends_on must be an array")
     if not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", bundle["namespace"]):
         raise ValueError("bundle.namespace must be kebab-case")
     if not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", bundle["version"]):

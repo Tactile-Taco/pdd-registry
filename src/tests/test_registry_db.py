@@ -291,6 +291,22 @@ def test_init_schema_re_raises_genuine_alter_failures(conn, monkeypatch):
         registry_db.init_schema(conn)
 
 
+def test_init_schema_commits_before_alter():
+    """Fresh-DB emulation of psycopg transaction semantics (one transaction
+    per connection: DDL is NOT autocommitted after an explicit BEGIN): the
+    SCHEMA CREATEs must persist before the duplicate-column ALTER rollback —
+    otherwise a fresh PostgreSQL database ends with zero tables and every
+    route 500s. With sqlite's DDL autocommit this bug is invisible, which is
+    why the txn is held open here."""
+    real = registry_db.connect("sqlite:///:memory:")
+    real.execute("BEGIN")  # hold one transaction: DDL participates in it
+    registry_db.init_schema(real)
+    # the tables survived the ALTER's rollback path and are usable
+    registry_db.publish(real, _bundle(), _evidence())
+    assert len(registry_db.list_catalog(real)) == 1
+    real.close()
+
+
 def test_unsupported_url_scheme_rejected():
     with pytest.raises(ValueError):
         registry_db.connect("mysql://x/y")
