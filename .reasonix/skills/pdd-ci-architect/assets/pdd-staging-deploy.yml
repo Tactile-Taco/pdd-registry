@@ -1,0 +1,45 @@
+name: pdd-staging-deploy
+on:
+  push:
+    branches: [dev]
+  workflow_dispatch:
+permissions:
+  contents: read
+  packages: write
+concurrency:
+  group: pdd-staging-deploy
+  cancel-in-progress: true
+jobs:
+  deploy:
+    # Self-hosted runner on the M6 (nixos-infra: services.github-runners,
+    # repo-scoped, label staging-deploy) that can reach the tailnet staging
+    # guest. Requires docker on the runner (push.sh builds + pushes via docker).
+    # See docs/runner-proposal.md.
+    runs-on: [self-hosted, staging-deploy]
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+      - name: Build, push, deploy to staging k3s
+        env:
+          GITHUB_TOKEN: ${{ secrets.GHCR_PAT }}
+          STAGING_TAILSCALE_IP: ${{ secrets.STAGING_TAILSCALE_IP }}
+          STAGING_TAILSCALE_DNS: ${{ secrets.STAGING_TAILSCALE_DNS }}
+          STAGING_SSH_KEY_MATERIAL: ${{ secrets.STAGING_SSH_KEY }}
+          STAGING_KNOWN_HOSTS: deploy/staging-known_hosts
+          PDD_EVIDENCE_KEY: ${{ secrets.PDD_EVIDENCE_KEY }}
+        run: |
+          # The secret holds key material; ssh -i needs a file. Materialize
+          # under $RUNNER_TEMP with 0600 perms (the value is masked in logs).
+          umask 077
+          printf '%s\n' "$STAGING_SSH_KEY_MATERIAL" > "$RUNNER_TEMP/ci-staging-key"
+          export STAGING_SSH_KEY="$RUNNER_TEMP/ci-staging-key"
+          ./deploy/push.sh
+      - name: Verify service
+        env:
+          STAGING_TAILSCALE_IP: ${{ secrets.STAGING_TAILSCALE_IP }}
+          STAGING_TAILSCALE_DNS: ${{ secrets.STAGING_TAILSCALE_DNS }}
+        run: |
+          # Tailnet DNS does not resolve on the runner shell: pin the address.
+          curl -sfk --resolve "pdd-repository.$STAGING_TAILSCALE_DNS:443:$STAGING_TAILSCALE_IP" \
+            "https://pdd-repository.$STAGING_TAILSCALE_DNS/healthz"
+          curl -sfk --resolve "pdd-repository.$STAGING_TAILSCALE_DNS:443:$STAGING_TAILSCALE_IP" \
+            "https://pdd-repository.$STAGING_TAILSCALE_DNS/evidence/verify" | grep -q '"ok": true'
