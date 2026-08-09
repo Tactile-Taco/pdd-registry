@@ -28,6 +28,7 @@ import json
 import re
 import sqlite3
 import threading
+import time
 from typing import Any, Optional
 
 RESOURCE_ID_RE = re.compile(r"^(https?://|urn:)[A-Za-z0-9._~:/?#\[\]@!$&'()*+,;=%-]+$")
@@ -75,13 +76,18 @@ CREATE TABLE IF NOT EXISTS evidence (
   namespace           TEXT NOT NULL,
   name                TEXT NOT NULL,
   version             TEXT NOT NULL,
+  bundle_digest       TEXT NOT NULL,
   artifact_id         TEXT NOT NULL,
   resource_identifier TEXT NOT NULL,
   decision            TEXT NOT NULL,
   signed_object       TEXT NOT NULL,
   digest              TEXT NOT NULL,
   published_at        TEXT NOT NULL,
-  PRIMARY KEY (namespace, name, version, artifact_id, digest)
+  -- bundle_digest in the PK: B-006 'never a silent overwrite' — a
+  -- same-(namespace, name, version) re-publish with a DIFFERENT bundle
+  -- digest must get its OWN evidence row (and never serve the old
+  -- evidence that attests the old digest)
+  PRIMARY KEY (namespace, name, version, bundle_digest, artifact_id, digest)
 );
 CREATE TABLE IF NOT EXISTS ledger (
   bundle_ref   TEXT NOT NULL,
@@ -159,6 +165,7 @@ def _entry_from_row(row) -> dict:
         # views iterate every layer; published bundles may omit empty layers
         "invariants": {layer: invariants.get(layer, []) for layer in LAYERS},
         "capabilities": json.loads(row["capabilities"]),
+        "digest": row["digest"],
     }
 
 
@@ -232,7 +239,10 @@ def publish(conn, bundle: dict, evidence: dict) -> dict:
 def _publish_unlocked(conn, bundle: dict, evidence: dict) -> dict:
     ns, name, version = bundle["namespace"], bundle["name"], bundle["version"]
     digest = bundle["digest"]
-    now = bundle.get("published_at") or evidence.get("published_at") or ""
+    # published_at: server-stamped when neither side carries one — an empty
+    # timestamp would make ordering/auditing meaningless (review finding).
+    now = (bundle.get("published_at") or evidence.get("published_at")
+           or time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()))
     # ON CONFLICT DO NOTHING: portable to sqlite3 (>=3.24) AND postgres
     # (INSERT OR IGNORE is sqlite-only). The PK IS the idempotency key
     # (namespace, name, version, digest) — B-006.
@@ -257,11 +267,11 @@ def _publish_unlocked(conn, bundle: dict, evidence: dict) -> dict:
                              evidence["resource_identifier"], now)
     _exec(conn,
         "INSERT INTO evidence "
-        "(namespace, name, version, artifact_id, resource_identifier, "
-        " decision, signed_object, digest, published_at) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) "
+        "(namespace, name, version, bundle_digest, artifact_id, "
+        " resource_identifier, decision, signed_object, digest, published_at) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
         "ON CONFLICT DO NOTHING",
-        (ns, name, version, evidence["artifact_id"],
+        (ns, name, version, digest, evidence["artifact_id"],
          evidence["resource_identifier"], evidence["decision"],
          json.dumps(evidence.get("signed_object", {})),
          evidence.get("digest", ""), now))
@@ -329,18 +339,25 @@ def _validate_evidence(evidence: dict) -> None:
 
 
 @_serialized
-def evidence_records(conn, name: str, namespace: str | None = None) -> list[dict]:
-    """Evidence records for one bundle. The PK includes namespace (S-004
-    permits the same name in different namespaces) — filter by namespace
-    when the caller has it, or rows from distinct namespaces mix."""
-    if namespace is None:
+def evidence_records(conn, name: str, namespace: str | None = None,
+                     bundle_digest: str | None = None) -> list[dict]:
+    """Evidence records for one bundle. The PK includes namespace + bundle
+    digest (S-004 same-name namespaces; B-006 never-silent-overwrite) —
+    filter by both when the caller has them, or rows from distinct
+    namespaces/versions mix."""
+    if namespace is None and bundle_digest is None:
         cur = _exec(conn,
             "SELECT * FROM evidence WHERE name = ? "
             "ORDER BY published_at, digest", (name,))
-    else:
+    elif bundle_digest is None:
         cur = _exec(conn,
             "SELECT * FROM evidence WHERE name = ? AND namespace = ? "
             "ORDER BY published_at, digest", (name, namespace))
+    else:
+        cur = _exec(conn,
+            "SELECT * FROM evidence WHERE name = ? AND namespace = ? "
+            "AND bundle_digest = ? ORDER BY published_at, digest",
+            (name, namespace, bundle_digest))
     return [dict(r) for r in cur.fetchall()]
 
 
@@ -360,14 +377,19 @@ def ledger_blocks(conn, bundle_ref: str) -> list[dict]:
 @_serialized
 def get_bundle(conn, name: str, namespace: str | None = None) -> Optional[dict]:
     """Newest version record of a bundle. ORDER BY on TEXT sorts lexically
-    ('1.10.0' < '1.9.0'), so the semver max is computed in Python; the
-    namespace filter keeps S-004's same-name-different-namespace rows apart."""
+    ('1.10.0' < '1.9.0'), so the semver max is computed in Python; the SQL
+    ORDER BY version, digest only breaks TIES deterministically (two records
+    with the same semver version and different digests — the max() picks
+    the first, which the deterministic order fixes). The namespace filter
+    keeps S-004's same-name-different-namespace rows apart."""
     if namespace is None:
-        cur = _exec(conn, "SELECT * FROM bundles WHERE name = ?", (name,))
+        cur = _exec(conn,
+            "SELECT * FROM bundles WHERE name = ? "
+            "ORDER BY version, digest", (name,))
     else:
         cur = _exec(conn,
-            "SELECT * FROM bundles WHERE name = ? AND namespace = ?",
-            (name, namespace))
+            "SELECT * FROM bundles WHERE name = ? AND namespace = ? "
+            "ORDER BY version, digest", (name, namespace))
     rows = cur.fetchall()
     if not rows:
         return None

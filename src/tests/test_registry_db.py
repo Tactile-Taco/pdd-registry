@@ -206,6 +206,48 @@ def test_publish_rolls_back_on_failure(conn, monkeypatch):
     assert len(registry_db.list_catalog(conn)) == 1
 
 
+def test_evidence_attributed_per_bundle_digest(conn):
+    """B-006 never-silent-overwrite: a same-(namespace, name, version)
+    re-publish with a DIFFERENT bundle digest must get its OWN evidence row
+    — the new record must never serve the old evidence (which attests the
+    old digest)."""
+    registry_db.publish(conn, _bundle(digest="sha256:" + "a" * 64),
+                        _evidence(artifact_id="e1"))
+    registry_db.publish(conn, _bundle(digest="sha256:" + "b" * 64),
+                        _evidence(artifact_id="e2"))
+    rows = registry_db.evidence_records(conn, "pdd-registry", "pdd")
+    assert len(rows) == 2  # both evidence rows present, none dropped
+    by_digest = {r["bundle_digest"]: r["artifact_id"] for r in rows}
+    assert by_digest == {"sha256:" + "a" * 64: "e1",
+                         "sha256:" + "b" * 64: "e2"}
+    # scope by bundle digest returns only that record's evidence
+    scoped = registry_db.evidence_records(
+        conn, "pdd-registry", "pdd", "sha256:" + "a" * 64)
+    assert [r["artifact_id"] for r in scoped] == ["e1"]
+
+
+def test_get_bundle_tie_breaks_deterministically(conn):
+    """Two records with the same semver version (different digests) must
+    resolve deterministically — the SQL ORDER BY version, digest fixes the
+    cursor order the Python max() depends on."""
+    registry_db.publish(conn, _bundle(version="1.2.0",
+                                      digest="sha256:" + "a" * 64), _evidence())
+    registry_db.publish(conn, _bundle(version="1.2.0",
+                                      digest="sha256:" + "b" * 64), _evidence())
+    first = registry_db.get_bundle(conn, "pdd-registry")["digest"]
+    for _ in range(5):
+        assert registry_db.get_bundle(conn, "pdd-registry")["digest"] == first
+
+
+def test_publish_server_stamps_published_at(conn):
+    """published_at is server-stamped when neither side carries one (an
+    empty timestamp would make ordering/auditing meaningless)."""
+    registry_db.publish(conn, _bundle(), _evidence())
+    ev = registry_db.evidence_records(conn, "pdd-registry", "pdd")
+    assert ev[0]["published_at"] != ""
+    assert ev[0]["published_at"].endswith("Z")
+
+
 def test_unsupported_url_scheme_rejected():
     with pytest.raises(ValueError):
         registry_db.connect("mysql://x/y")

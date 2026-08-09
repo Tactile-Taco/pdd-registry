@@ -179,6 +179,13 @@ for BUNDLE_DIR in pdd-bundles/*/; do
     *[!A-Za-z0-9_-]*|"") echo "invalid bundle dir name: ${BNAME}" >&2; exit 1 ;;
   esac
   echo "==> seeding ${BNAME}"
+  # Only sealed bundles are seeded (review finding: a future draft/review
+  # bundle must not silently land in the registry DB).
+  STATUS="$(sed -n 's/^  status: *//p' "pdd-bundles/${BNAME}/protocol.yaml" | head -1)"
+  if [ "${STATUS}" != "sealed" ]; then
+    echo "==> ${BNAME} status=${STATUS}; skipping seed (sealed only)" >&2
+    continue
+  fi
   ssh_guest "sudo k3s kubectl exec deploy/${PROJECT} -- sh -c '
     EV=\$(python3 /opt/pdd/scripts/pdd.py evidence latest ${BNAME}) &&
     python3 /opt/pdd/scripts/pdd.py publish /opt/pdd/pdd-bundles/${BNAME} \

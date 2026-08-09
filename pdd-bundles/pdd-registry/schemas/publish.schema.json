@@ -10,7 +10,7 @@
       "additionalProperties": false,
       "required": ["namespace", "name", "version", "status", "digest",
                    "purpose", "tags", "depends_on", "provides",
-                   "invariants", "capabilities"],
+                   "invariants", "capabilities", "boundary"],
       "properties": {
         "namespace": {"type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"},
         "name": {"type": "string", "pattern": "^[A-Za-z0-9_-]+$"},

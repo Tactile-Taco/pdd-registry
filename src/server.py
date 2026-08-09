@@ -115,13 +115,13 @@ def _find_bundle(catalog: list[dict], name: str) -> dict | None:
 
 
 def _bundles() -> list[dict]:
-    """The bundle name/version list for the evidence routes. In DB mode the
-    catalog is the database (S-006: serving must not require the on-disk
-    layout — a bundle published from outside the pod's image must be
-    visible); otherwise the filesystem bundle layout."""
+    """The bundle list for the evidence routes. In DB mode the catalog is
+    the database (S-006: serving must not require the on-disk layout — a
+    bundle published from outside the pod's image must be visible);
+    otherwise the filesystem bundle layout."""
     if DATABASE_URL:
         return [{"name": b["name"], "version": b.get("version"),
-                 "namespace": b.get("namespace")}
+                 "namespace": b.get("namespace"), "digest": b.get("digest")}
                 for b in registry_db.list_catalog(_db())]
     result = []
     for proto in sorted(BUNDLES.glob("*/protocol.yaml")):
@@ -213,12 +213,15 @@ def _admission(name: str) -> list[dict]:
     return result
 
 
-def _db_evidence_verify(name: str, namespace: str | None = None) -> list[dict]:
+def _db_evidence_verify(name: str, namespace: str | None = None,
+                        bundle_digest: str | None = None) -> list[dict]:
     """DB-backed evidence verification (v1.2, S-007): the registry stores the
     author's signed evidence records; verification is limited to presence,
     resource_identifier format, decision, and signature — the honor system.
-    The registry does NOT re-run validation."""
-    rows = registry_db.evidence_records(_db(), name, namespace)
+    The registry does NOT re-run validation. Scoped by namespace + bundle
+    digest: B-006 never-silent-overwrite — each bundle record's evidence is
+    attributed to the digest it attests."""
+    rows = registry_db.evidence_records(_db(), name, namespace, bundle_digest)
     out = []
     import tempfile
     import importlib.util as _iu
@@ -398,19 +401,21 @@ class Handler(BaseHTTPRequestHandler):
                 return
             if path == "/evidence/verify":
                 if DATABASE_URL:
-                    # One row per (name, namespace), not per version record
-                    # (_bundles() lists every published version).
+                    # One row per bundle RECORD (name, namespace, version):
+                    # _bundles() lists every published version, and each
+                    # record's evidence is scoped to its own bundle digest.
                     seen = set()
                     targets = []
                     for b in _bundles():
-                        key = (b["name"], b.get("namespace"))
+                        key = (b["name"], b.get("namespace"), b.get("version"))
                         if key not in seen:
                             seen.add(key)
                             targets.append(b)
                     self._json({"ok": True,
                                 "results": [r for b in targets
                                             for r in _db_evidence_verify(
-                                                b["name"], b.get("namespace"))]})
+                                                b["name"], b.get("namespace"),
+                                                b.get("digest"))]})
                 else:
                     self._json({"results": [_verify_bundle(b["name"]) for b in _bundles()]})
                 return
@@ -419,12 +424,13 @@ class Handler(BaseHTTPRequestHandler):
                     all_adm = []
                     seen = set()
                     for b in _bundles():
-                        key = (b["name"], b.get("namespace"))
+                        key = (b["name"], b.get("namespace"), b.get("version"))
                         if key in seen:
                             continue
                         seen.add(key)
                         for row in registry_db.evidence_records(
-                                _db(), b["name"], b.get("namespace")):
+                                _db(), b["name"], b.get("namespace"),
+                                b.get("digest")):
                             all_adm.append({
                                 "bundle": row["name"], "version": row["version"],
                                 "artifact_id": row["artifact_id"],
