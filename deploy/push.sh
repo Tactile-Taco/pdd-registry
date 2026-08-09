@@ -85,9 +85,22 @@ echo "==> Creating pdd-postgres Secret on ${STAGING_TAILSCALE_IP} (idempotent, s
 # only in the cluster Secret (tailnet-only staging); the secret is re-applied
 # on every deploy with the CURRENT password so the URL (host pdd-postgres =
 # the Service name) self-heals without rotating the password (a rotation
-# would need a postgres restart + re-seed). Generation is runner-side with
-# coreutils (the guest's ssh shell has no openssl); content flows via stdin.
-PG_PW="$(ssh_guest 'sudo k3s kubectl get secret pdd-postgres -o jsonpath={.data.POSTGRES_PASSWORD}' 2>/dev/null | base64 -d || true)"
+# would break postgres auth: POSTGRES_PASSWORD is ignored once the volume is
+# initialized). Generation is runner-side with coreutils; content flows via
+# stdin. A transient read failure must NOT look like absence: generate only
+# on a confirmed NotFound, fail loudly on anything else.
+GET_OUT="$(ssh_guest 'sudo k3s kubectl get secret pdd-postgres 2>&1' || true)"
+case "${GET_OUT}" in
+  *NotFound*) PG_PW="" ;;
+  *pdd-postgres*)
+    PG_PW="$(ssh_guest 'sudo k3s kubectl get secret pdd-postgres -o jsonpath={.data.POSTGRES_PASSWORD}' 2>/dev/null | base64 -d || true)"
+    if [ -z "${PG_PW}" ]; then
+      echo "ERROR: pdd-postgres secret exists but its password could not be read" >&2
+      exit 1
+    fi
+    ;;
+  *) echo "ERROR: cannot determine pdd-postgres secret state: ${GET_OUT}" >&2; exit 1 ;;
+esac
 if [ -z "${PG_PW}" ]; then
   PG_PW="$(od -An -tx1 -N24 /dev/urandom | tr -d ' \n')"
 fi
@@ -100,8 +113,21 @@ echo "==> Creating pdd-publish-token Secret on ${STAGING_TAILSCALE_IP} (idempote
 # Publish authn (security review HIGH): POST /publish requires the bearer
 # token; the registry pod reads it from this Secret, the in-cluster seed
 # sends it via the env the pod inherits. Re-applied every deploy with the
-# current token (generated once, like the postgres password).
-PUB_TOK="$(ssh_guest 'sudo k3s kubectl get secret pdd-publish-token -o jsonpath={.data.PDD_PUBLISH_TOKEN}' 2>/dev/null | base64 -d || true)"
+# current token (generated once, like the postgres password). Same
+# confirmed-absence rule as the postgres secret: never regenerate on a
+# transient read failure.
+GET_OUT="$(ssh_guest 'sudo k3s kubectl get secret pdd-publish-token 2>&1' || true)"
+case "${GET_OUT}" in
+  *NotFound*) PUB_TOK="" ;;
+  *pdd-publish-token*)
+    PUB_TOK="$(ssh_guest 'sudo k3s kubectl get secret pdd-publish-token -o jsonpath={.data.PDD_PUBLISH_TOKEN}' 2>/dev/null | base64 -d || true)"
+    if [ -z "${PUB_TOK}" ]; then
+      echo "ERROR: pdd-publish-token secret exists but its value could not be read" >&2
+      exit 1
+    fi
+    ;;
+  *) echo "ERROR: cannot determine pdd-publish-token secret state: ${GET_OUT}" >&2; exit 1 ;;
+esac
 if [ -z "${PUB_TOK}" ]; then
   PUB_TOK="$(od -An -tx1 -N24 /dev/urandom | tr -d ' \n')"
 fi

@@ -281,6 +281,10 @@ def _validate_bundle(bundle: dict) -> None:
     for key in ("namespace", "name", "version", "status", "digest"):
         if not isinstance(bundle.get(key), str) or not bundle[key]:
             raise ValueError(f"bundle.{key} must be a non-empty string")
+    if not isinstance(bundle.get("purpose"), str) or not bundle["purpose"]:
+        raise ValueError("bundle.purpose must be a non-empty string "
+                         "(publish.schema.json requires it; the adapter belt "
+                         "enforces it without jsonschema)")
     if not re.fullmatch(r"[A-Za-z0-9_-]+", bundle["name"]):
         raise ValueError("bundle.name must match ^[A-Za-z0-9_-]+$")
     # JSON-object fields: the adapter belt must type-check independently of
