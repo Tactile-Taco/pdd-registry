@@ -143,8 +143,11 @@ def init_schema(conn) -> None:
         _exec(conn,
               "ALTER TABLE evidence ADD COLUMN "
               "bundle_digest TEXT NOT NULL DEFAULT ''")
-    except Exception:  # noqa: BLE001 — duplicate column: already migrated
-        conn.rollback()
+    except Exception as exc:  # noqa: BLE001
+        msg = str(exc).lower()
+        if "duplicate column" not in msg and "already exists" not in msg:
+            raise  # a genuine ALTER failure must not be swallowed
+        conn.rollback()  # duplicate column: already migrated (fresh-table path)
     conn.commit()
 
 
@@ -356,6 +359,9 @@ def evidence_records(conn, name: str, namespace: str | None = None,
     digest (S-004 same-name namespaces; B-006 never-silent-overwrite) —
     filter by both when the caller has them, or rows from distinct
     namespaces/versions mix."""
+    if bundle_digest is not None and namespace is None:
+        raise ValueError("bundle_digest scope requires a namespace "
+                         "(digests are only unique within a namespace)")
     if namespace is None and bundle_digest is None:
         cur = _exec(conn,
             "SELECT * FROM evidence WHERE name = ? "
