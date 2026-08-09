@@ -189,8 +189,12 @@ def test_publish_rolls_back_on_failure(conn, monkeypatch):
     """A mid-transaction publish failure must roll back: the server shares
     ONE connection — an aborted transaction would fail every later request
     (psycopg InFailedSqlTransaction / sqlite open transaction)."""
+    calls = {"n": 0}
+
     def boom(*args, **kwargs):
-        raise RuntimeError("forced ledger failure")
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise RuntimeError("forced ledger failure")
     monkeypatch.setattr(registry_db, "_append_ledger_block", boom)
     with pytest.raises(RuntimeError):
         registry_db.publish(conn, _bundle(), _evidence())
