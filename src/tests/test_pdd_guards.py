@@ -117,6 +117,31 @@ def test_deploy_manifests_parse():
     assert "pdd-postgres-pvc" in str(pgdep)
 
 
+def test_evidence_latest_prints_latest_attested(monkeypatch, capsys):
+    """`pdd evidence latest <name>` returns the admission attested by the
+    LATEST ledger block — the file the deploy seeding publishes."""
+    import importlib.util as _u
+    import hashlib as _h
+    import json as _j
+
+    spec = _u.spec_from_file_location("pdd_cli", ROOT / "scripts" / "pdd.py")
+    pdd = _u.module_from_spec(spec)
+    spec.loader.exec_module(pdd)
+    monkeypatch.setattr(pdd, "EVIDENCE", ROOT / "evidence")
+    rc = pdd.cmd_evidence_latest(["user-registry"])
+    assert rc == 0
+    printed = capsys.readouterr().out.strip()
+    # the printed path must be the object attested by the FINAL ledger block
+    ledger = ROOT / "evidence" / "user-registry" / "runtime-ledger.jsonl"
+    blocks = [_j.loads(ln) for ln in ledger.read_text().splitlines() if ln.strip()]
+    last = (blocks[-1].get("observations") or {}).get("evidence_digest")
+    for p in (ROOT / "evidence" / "user-registry" / "admission").glob("*.evidence.json"):
+        if "sha256:" + _h.sha256(p.read_bytes()).hexdigest() == last:
+            assert Path(printed) == p
+            return
+    raise AssertionError("no on-disk admission matches the latest ledger attestation")
+
+
 # --- _load_validation_results: fail-closed shape checks --------------------
 
 

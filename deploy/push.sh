@@ -87,7 +87,7 @@ echo "==> Creating pdd-postgres Secret on ${STAGING_TAILSCALE_IP} (idempotent, s
 # the Service name) self-heals without rotating the password (a rotation
 # would need a postgres restart + re-seed). Generation is runner-side with
 # coreutils (the guest's ssh shell has no openssl); content flows via stdin.
-PG_PW="$(ssh_guest 'sudo k3s kubectl get secret pdd-postgres -o jsonpath={.data.POSTGRES_PASSWORD}' 2>/dev/null | base64 -d)"
+PG_PW="$(ssh_guest 'sudo k3s kubectl get secret pdd-postgres -o jsonpath={.data.POSTGRES_PASSWORD}' 2>/dev/null | base64 -d || true)"
 if [ -z "${PG_PW}" ]; then
   PG_PW="$(od -An -tx1 -N24 /dev/urandom | tr -d ' \n')"
 fi

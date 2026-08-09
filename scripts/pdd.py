@@ -337,7 +337,10 @@ def cmd_evidence_build(argv: list[str]) -> int:
                     attested_digest = attested[-1]["observations"]["evidence_digest"]
                     if on_disk != attested_digest:
                         print(f"FAIL: attested evidence file differs from the ledger "
-                              f"(on disk {on_disk} != attested {attested_digest}) — re-run validate, then rebuild")
+                              f"(on disk {on_disk} != attested {attested_digest}); "
+                              f"after a --force re-attestation the canonical file "
+                              f"legitimately differs — use --force to re-attest, "
+                              f"or re-run validate then rebuild")
                         return 1
                     print(f"admission {stem} already attested and consistent; "
                           f"evidence snapshot preserved (re-verify with `pdd evidence verify`)")
