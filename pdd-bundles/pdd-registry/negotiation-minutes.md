@@ -37,3 +37,24 @@ No open conflicts; lint passed; versions pinned.
   match the ledger and the signed discovery binding) and restored, so the
   full chain now verifies with no dangling attestations. The stem-keyed
   naming makes recurrence impossible.
+
+## v1.2.0 version event (DB-backed registry, author-owned validation)
+
+- **Decisions (2026-08-09, user-confirmed forks)**: PostgreSQL in the staging
+  k3s cluster on the M6 mini-pc hosts the registry database; the CLI
+  resource identifier is a `pdd+http://` registry URL (same commands, new
+  resource); the registry does NOT own a git repo of protocols — authors
+  publish bundles + signed evidence; validation is author-owned (honor
+  system), evidenced by `resource_identifier` records pointing at the
+  author's validator-loop execution (e.g. CI/CD results page).
+- **Version**: 1.2.0 minor (S-003: additive optional surface only —
+  publish handshake, DB store, resource identifiers; v3 client surface
+  unchanged; nothing removed/renamed/made-required).
+- **Invariants**: S-006 (DB-backed storage, transactional consistent reads),
+  S-007 (evidence resource_identifier provenance), B-006 (idempotent
+  publish by (namespace, name, version, bundle_digest)).
+- **Compatibility matrix**: pdd-registry 1.2.0 (1.1.0 in git history),
+  sealed, provides pdd-registry.search + bundle-views (unchanged) +
+  pdd-registry.publish (new). No dependents; no conflicts.
+- **Enforcement**: storage/publish contract tests (contract-runner),
+  publish schema strictness (json-schema), lint unchanged.

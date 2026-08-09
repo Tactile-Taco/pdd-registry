@@ -20,11 +20,19 @@ validation_plan:
       validates: [S-004, S-005]
       method: contract_tests
       validator: contract-runner@1.0.0
+    - id: storage-contract-tests
+      validates: [S-006, S-007]
+      method: contract_tests
+      validator: contract-runner@1.0.0
   behavioral:
     - id: property-tests
       validates: [B-001, B-002, B-003, B-005]
       method: property_based_test
       validator: property-runner@1.0.0
+    - id: publish-contract-tests
+      validates: [B-006]
+      method: contract_tests
+      validator: contract-runner@1.0.0
     - id: mutation-sanity
       validates: [B-001, B-002]
       method: mutation_sanity_check

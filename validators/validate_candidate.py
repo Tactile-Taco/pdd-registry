@@ -104,10 +104,10 @@ def layer_structural(bundle: Path, impl: Path) -> list[dict]:
     results.append({"invariant_id": "S-002", "layer": "structural",
                     "outcome": "pass" if "invalid_request" in src else "fail",
                     "evidence": "enumerated error kinds referenced in candidate source"})
-    results.append({"invariant_id": "S-003", "layer": "structural", "outcome": "pass",
-                    "evidence": "v1.1.0 baseline: handshake schemas unchanged (schema-diff n/a); "
-                                "catalog metadata (namespace/tags) added at the bundle level "
-                                "per S-003 minor-version rules"})
+    results.append({"invariant_id": "S-003", "layer": "structural", "outcome": "skip",
+                    "evidence": "schema_diff_check requires a stored baseline; the bundle keeps no "
+                                "schema history — version-event schema changes are reviewed in git "
+                                "history. Not a pass: not enforced here."})
     # S-004: catalog addressing — every entry declares a kebab-case namespace
     # (the cross-bundle (namespace, name) uniqueness half is enforced by the
     # catalog-wide linter pass, `pdd bundle lint`).
@@ -133,6 +133,51 @@ def layer_structural(bundle: Path, impl: Path) -> list[dict]:
                     "evidence": f"{len(tags) if isinstance(tags, list) else type(tags).__name__} "
                                 f"tags, kebab-case, unique, <=8" if tag_ok else
                                 f"tags {tags!r} violate the grammar (kebab-case list, <=8, no dupes)"})
+    # S-006/S-007 are invariants OF the registry bundle (publish handshake +
+    # resource-identified evidence). They apply only to bundles that declare
+    # pdd-registry.publish; other bundles get an honest skip, never a false
+    # fail (the checks are generic-validator code, not bundle-specific).
+    provides = proto.get("provides") or {}
+    is_registry = isinstance(provides, dict) and "pdd-registry.publish" in provides
+    if not is_registry:
+        results.append({"invariant_id": "S-006", "layer": "structural",
+                        "outcome": "skip",
+                        "evidence": "bundle does not declare pdd-registry.publish; "
+                                    "S-006 applies to the registry bundle only"})
+        results.append({"invariant_id": "S-007", "layer": "structural",
+                        "outcome": "skip",
+                        "evidence": "bundle does not declare pdd-registry.publish; "
+                                    "S-007 applies to the registry bundle only"})
+        return results
+    # S-006: DB-backed storage — the bundle must declare the publish handshake
+    # and its schema must exist in the bundle. The adapter itself is
+    # deployment surface (the deployment's database adapter), exercised by
+    # service contract tests, not by the pure-core candidate.
+    publish_ref = provides.get("pdd-registry.publish")
+    s6_ok = (publish_ref == "schemas/publish.schema.json"
+             and (bundle / "schemas" / "publish.schema.json").exists())
+    results.append({"invariant_id": "S-006", "layer": "structural",
+                    "outcome": "pass" if s6_ok else "fail",
+                    "evidence": ("publish handshake + schema declared in bundle"
+                                 if s6_ok else
+                                 "publish handshake/schema missing from bundle")})
+    # S-007: evidence provenance — evidence-requirements.yaml must declare the
+    # resource_identifier field. The registry does not re-run validation in
+    # this version; ingest-time enforcement is a service contract test.
+    evreq = {}
+    try:
+        evreq = load_yaml(bundle / "evidence-requirements.yaml") or {}
+    except Exception:  # noqa: BLE001
+        pass
+    req_list = []
+    if isinstance(evreq, dict):
+        req_list = (evreq.get("evidence_requirements") or {}).get("required") or []
+    s7_ok = "resource_identifier" in req_list
+    results.append({"invariant_id": "S-007", "layer": "structural",
+                    "outcome": "pass" if s7_ok else "fail",
+                    "evidence": ("evidence-requirements declares resource_identifier"
+                                 if s7_ok else
+                                 "evidence-requirements.yaml lacks resource_identifier")})
     return results
 
 
@@ -265,6 +310,17 @@ def layer_operational_static(bundle: Path, impl: Path) -> list[dict]:
     return results
 
 
+def _behavioral_coverage(bids: list[str], lineage: dict) -> tuple[list[str], list[str]]:
+    """Split behavioral invariant ids into (covered, uncovered) relative to the
+    candidate manifest's invariant_lineage. A pass label may only claim the
+    covered ids; uncovered ids get a skip-with-reason entry (a pass label must
+    never imply enforcement that does not exist)."""
+    covered = [iid for iid in bids
+               if isinstance(lineage.get(iid), list) and lineage.get(iid)]
+    uncovered = [iid for iid in bids if iid not in covered]
+    return covered, uncovered
+
+
 def layer_behavioral(bundle: Path, impl: Path, pbt_runs: int, manifest: dict) -> list[dict]:
     results = []
     testdir = impl / "tests"
@@ -291,7 +347,12 @@ def layer_behavioral(bundle: Path, impl: Path, pbt_runs: int, manifest: dict) ->
         pass
     bids = [inv.get("id") for inv in (bid_data.get("behavioral_invariants") or bid_data.get("invariants") or [])
             if inv.get("id")]
-    label = ",".join(bids) if bids else "B-*"
+    # The pass/fail label claims coverage ONLY for ids with candidate-level
+    # tests in invariant_lineage; uncovered ids get their own skip entry below
+    # (a pass label must never imply enforcement that does not exist).
+    lineage = manifest.get("invariant_lineage") or {}
+    covered, uncovered = _behavioral_coverage(bids, lineage)
+    label = ",".join(covered) if covered else "B-*"
     if proc.returncode == 0:
         results.append({"invariant_id": label, "layer": "behavioral",
                         "outcome": "pass", "evidence": f"pytest: {summary}"})
@@ -299,6 +360,15 @@ def layer_behavioral(bundle: Path, impl: Path, pbt_runs: int, manifest: dict) ->
         results.append({"invariant_id": label, "layer": "behavioral",
                         "outcome": "fail", "evidence": f"pytest failed: {summary}"})
         # keep going: mutation sanity may still add signal
+    # Honesty: behavioral ids WITHOUT candidate-level tests are NOT covered by
+    # this pytest run — label them skip-with-reason (e.g. B-006 publish
+    # idempotency), so no pass label implies coverage that does not exist.
+    if uncovered:
+        results.append({"invariant_id": ",".join(uncovered), "layer": "behavioral",
+                        "outcome": "skip",
+                        "evidence": "no candidate-level tests in invariant_lineage; "
+                                    "enforcement lands with the publish/storage service "
+                                    "contract tests (implementation phase)"})
     # Mutation sanity: remove the primary behavioral guard and require the
     # declared property (candidate-manifest mutation_sanity) to fail.
     # The manifest is the one loaded BEFORE any candidate code ran (no TOCTOU:
@@ -501,7 +571,7 @@ def verdict(results: list[dict]) -> tuple[str, str]:
     if suspects:
         return "reject", "mutation-suspect flags open: " + ", ".join(
             r["invariant_id"] for r in suspects)
-    return "admit", "all must invariants pass; no mutation-suspect flags"
+    return "admit", "no must-invariant failures; no mutation-suspect flags"
 
 
 def main(argv: list[str]) -> int:

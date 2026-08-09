@@ -1,6 +1,6 @@
 protocol:
   name: pdd-registry
-  version: 1.1.0
+  version: 1.2.0
   status: sealed
 
 # Catalog addressing metadata (v1.1 version event): namespace/name display
@@ -11,11 +11,14 @@ namespace: pdd
 tags: [engine, data-catalog, server]
 
 purpose: >
-  Protocol catalog search and read views. Given an in-memory catalog of sealed
-  protocol bundles (the shape pdd-bundles/* produces), the registry answers
-  ranked keyword search, filtered bundle listing, and per-bundle views
-  (summary, invariants, capabilities) — deterministically and without
-  mutating the catalog.
+  Protocol catalog search and read views. Given a catalog of sealed protocol
+  bundles (v1.2: served from a durable database backing store; previously the
+  shape pdd-bundles/* produces), the registry answers ranked keyword search,
+  filtered bundle listing, and per-bundle views (summary, invariants,
+  capabilities) — deterministically and without mutating the catalog.
+  Validation is author-owned: the registry stores signed evidence whose
+  resource_identifier points at the protocol author's validator-loop
+  execution record (honor system in this version).
 
 boundary:
   in_scope:
@@ -23,23 +26,29 @@ boundary:
     - Filtered bundle listing (exact status, depends_on membership, namespace, tag)
     - "Namespace/tag metadata: every catalog entry carries a kebab-case namespace and a controlled tag vocabulary; addressing is namespace/name (display) while directories and evidence stay name-keyed"
     - Per-bundle views: summary, invariants (severity-filtered), capabilities
+    - DB-backed catalog storage: durable, transactionally consistent reads from the backing database (PostgreSQL deployment surface); the filesystem bundle layout is not required for serving
+    - Publish of protocol bundles + signed evidence via the publish handshake (idempotent by (namespace, name, version, digest))
     - Deterministic ordering and strictly non-mutating reads
   out_of_scope:
-    - HTTP transport and deployment wiring (src/server.py + src/registry_index.py
-      are the production surface; the attested candidate is the pure in-memory core)
+    - "HTTP transport and deployment wiring (src/server.py + src/registry_index.py + the deployment's database adapter are the production surface; the attested candidate is the pure in-memory core)"
+    - "Running the validator loop: validation is author-owned; the registry does not re-run validation and does not prove it (honor system, evidenced by resource_identifier records in this version)"
+    - "Owning a git repository of protocols: the registry stores bundles in the database; the repo layout (pdd-bundles/) is one authoring format among many and is not the serving layer"
     - Authentication, authorization
-    - Write paths (sealing, evidence signing) — git + CLI, never via the registry core
+    - Write paths (sealing, evidence signing) — author-side (git + CLI), never
+      via the registry core; only the publish handshake writes catalog records
     - Filesystem access and persistence — the candidate operates on an
       in-memory catalog supplied by the caller
 
 handshakes:
   request_schema: schemas/request.schema.json
   response_schema: schemas/response.schema.json
+  publish_schema: schemas/publish.schema.json
 
 depends_on: []
 provides:
   pdd-registry.search: schemas/request.schema.json
   pdd-registry.bundle-views: schemas/response.schema.json
+  pdd-registry.publish: schemas/publish.schema.json
 
 invariants:
   structural: invariants/structural.yaml

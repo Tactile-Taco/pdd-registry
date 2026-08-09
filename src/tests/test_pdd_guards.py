@@ -30,6 +30,7 @@ pdd = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(pdd)
 
 sys.path.insert(0, str(ROOT / "validators"))  # validate_candidate import
+import validate_candidate as vc  # noqa: E402
 
 
 def test_valid_sha256_accepts_only_exact_digests():
@@ -62,6 +63,20 @@ def test_bundle_digest_is_sensitive_to_bundle_changes(tmp_path):
     d2 = pdd._bundle_digest(bdir)
     assert d1.startswith("sha256:") and d1 != d2
     assert hashlib.sha256(proto.read_bytes()).hexdigest() != d1.split(":")[1]
+
+
+def test_behavioral_coverage_splits_covered_and_uncovered():
+    """The behavioral pass label may only claim invariant_lineage-covered ids;
+    uncovered ids (e.g. B-006 publish idempotency) must land in the skip set —
+    a pass label must never imply enforcement that does not exist."""
+    lineage = {"B-001": ["test_b001"], "B-002": ["test_b002"], "B-006": None}
+    covered, uncovered = vc._behavioral_coverage(
+        ["B-001", "B-002", "B-003", "B-004", "B-005", "B-006"], lineage)
+    assert covered == ["B-001", "B-002"]
+    assert uncovered == ["B-003", "B-004", "B-005", "B-006"]
+    # empty lineage -> everything uncovered; B-* label path
+    covered, uncovered = vc._behavioral_coverage(["B-001"], {})
+    assert covered == [] and uncovered == ["B-001"]
 
 
 # --- _load_validation_results: fail-closed shape checks --------------------

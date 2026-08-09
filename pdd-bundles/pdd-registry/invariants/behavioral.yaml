@@ -45,3 +45,15 @@ behavioral_invariants:
     severity: must
     validation:
       - contract_tests
+
+  - id: B-006
+    statement: >
+      Publish is idempotent: publishing the same (namespace, name, version,
+      bundle_digest) twice yields one catalog record (unique constraint), and
+      re-publishing with the same evidence digest is a no-op that returns the
+      existing record. Publishing a different bundle_digest for the same
+      (namespace, name, version) creates a distinct version record — never a
+      silent overwrite.
+    severity: must
+    validation:
+      - contract_tests

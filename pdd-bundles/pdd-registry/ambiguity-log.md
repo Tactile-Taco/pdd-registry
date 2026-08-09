@@ -24,6 +24,26 @@ Open items and recorded decisions for the pdd-registry protocol bundle.
   constrains the pure read core only.
 - **Single variant.** One python-stdlib candidate for v1.0.0; a second
   variant may be added later without a protocol version bump.
+- **DB-backed registry (v1.2.0).** The registry catalog + evidence records
+  are served from a PostgreSQL database deployed in the staging k3s cluster
+  on the M6 mini-pc; the CLI reaches it via a `pdd+http://` registry URL
+  (resource identifier). The filesystem bundle layout remains one authoring
+  format; the registry does NOT own a git repository of protocols.
+- **Author-owned validation (v1.2.0).** The registry does not run the
+  validator loop and does not prove validation (honor system in this
+  version). Every admission evidence record carries a `resource_identifier`
+  (http(s) URL/URN) pointing at the author's validator-loop execution
+  record (e.g. a CI/CD results page); verification is limited to presence,
+  format, and signature. Rationale: the protocol author owns the validation
+  resource; the registry is the catalog + evidence store, not the harness.
+- **Publish handshake.** New `pdd-registry.publish` handshake
+  (schemas/publish.schema.json); idempotent by
+  (namespace, name, version, bundle_digest) — B-006.
+- **Minor (1.2.0) not major.** Client surface (v3 endpoints, schemas for
+  search/views) is unchanged; additions are optional/additive
+  (publish handshake, DB store, resource identifiers); nothing removed,
+  renamed, or made required — S-003 minor-version rules hold. Recorded in
+  negotiation minutes 2026-08-09.
 - **Namespace/tags (v1.1.0).** Namespace is a kebab-case owner/scope slug
   (Docker-Hub-owner / npm-scope analogy); uniqueness is scoped to the
   (namespace, name) pair, NOT global — a hypothetical second typing project

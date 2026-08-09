@@ -1,8 +1,8 @@
 {
   "protocol": {
     "name": "pdd-registry",
-    "version": "1.1.0",
-    "bundle_digest": "sha256:29d33509af0b5475b0b7b4b30f8ef50b144af0294a0bdc84ecbf43583db30610"
+    "version": "1.2.0",
+    "bundle_digest": "sha256:53df85d9d2c773f60785f97fe2254112cbde767b486a6ba9a09550cf748a5a0f"
   },
   "candidate_digest": "sha256:ba2e5aa69ef93b427af5be98ea75e781aba338ed49aaf3c14514acd1b99cea39",
   "validators": [
@@ -58,8 +58,8 @@
     {
       "invariant_id": "S-003",
       "layer": "structural",
-      "outcome": "pass",
-      "evidence": "v1.1.0 baseline: additive optional metadata fields (namespace/tags) only, no field removed/renamed; schema-diff n/a (no stored history)"
+      "outcome": "skip",
+      "evidence": "schema_diff_check requires a stored baseline; the bundle keeps no schema history \u2014 version-event schema changes are reviewed in git history. Not a pass: not enforced here."
     },
     {
       "invariant_id": "S-004",
@@ -72,6 +72,18 @@
       "layer": "structural",
       "outcome": "pass",
       "evidence": "3 tags, kebab-case, unique, <=8"
+    },
+    {
+      "invariant_id": "S-006",
+      "layer": "structural",
+      "outcome": "pass",
+      "evidence": "publish handshake + schema declared in bundle"
+    },
+    {
+      "invariant_id": "S-007",
+      "layer": "structural",
+      "outcome": "pass",
+      "evidence": "evidence-requirements declares resource_identifier"
     },
     {
       "invariant_id": "O-003",
@@ -89,7 +101,13 @@
       "invariant_id": "B-001,B-002,B-003,B-004,B-005",
       "layer": "behavioral",
       "outcome": "pass",
-      "evidence": "pytest: 22 passed in 1.26s"
+      "evidence": "pytest: 22 passed in 1.23s"
+    },
+    {
+      "invariant_id": "B-006",
+      "layer": "behavioral",
+      "outcome": "skip",
+      "evidence": "no candidate-level tests in invariant_lineage; enforcement lands with the publish/storage service contract tests (implementation phase)"
     },
     {
       "invariant_id": "B-001",
@@ -111,7 +129,7 @@
     }
   ],
   "verdict": "admit",
-  "verdict_reason": "all must invariants pass; no mutation-suspect flags",
+  "verdict_reason": "no must-invariant failures; no mutation-suspect flags",
   "environment": {
     "runtime": "3.14.6",
     "os": "linux"

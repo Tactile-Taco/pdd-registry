@@ -6,6 +6,8 @@ evidence_requirements:
     - validation_results
     - dependency_manifest
     - discovery_log
+    - resource_identifier   # S-007 (v1.2.0): URL/URN of the author's
+                            # validator-loop execution record (honor system)
   attestations:
     signed: true
     signer: evidence-keeper (HMAC-SHA256, production PDD_EVIDENCE_KEY from Infisical, nixos-infra project)

@@ -63,9 +63,10 @@ def _evidence_key():
 
 def test_admission_verified_true_on_committed_evidence():
     res = server._admission("user-registry")
-    # Two committed admissions: the v1.0.0 object (restored from git history)
-    # and the v1.1.0 stem-keyed object; both must verify under the real key.
-    assert len(res) == 2
+    # Every committed admission must verify under the real key: v1.0.0 object
+    # (restored from git history) + v1.1.0 objects (stem-keyed). The count
+    # grows with version events (append-only) — never hardcode it.
+    assert len(res) >= 2
     for row in res:
         assert row["signature_valid"] is True
         assert row["ledger_valid"] is True
@@ -95,7 +96,7 @@ def test_admission_tampered_evidence_fails_closed(tmp_path):
         res = server._admission("user-registry")
     finally:
         server.EVIDENCE = ROOT / "evidence"
-    assert len(res) == 2  # tampered v1.1 object + untouched v1.0 object
+    assert len(res) >= 2  # tampered latest object + untampered earlier ones
     tampered_row = next(r for r in res if r["file"] == tampered.name)
     assert tampered_row["signature_valid"] is False
     assert tampered_row["verified"] is False
@@ -103,9 +104,9 @@ def test_admission_tampered_evidence_fails_closed(tmp_path):
     # digest — what broke is the forged file's signature, so verified is False.
     assert tampered_row["ledger_valid"] is True
     assert tampered_row["ledger_attested"] is True
-    # the restored v1.0 object is untouched and still verifies
-    intact = next(r for r in res if r["file"] != tampered.name)
-    assert intact["verified"] is True
+    # the untampered objects still verify
+    intact = [r for r in res if r["file"] != tampered.name]
+    assert intact and all(r["verified"] is True for r in intact)
 
 
 def test_admission_unattested_file_reports_false(tmp_path):

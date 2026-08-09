@@ -1,0 +1,49 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "pdd-registry publish request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["bundle", "evidence"],
+  "properties": {
+    "bundle": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["namespace", "name", "version", "status", "digest",
+                   "purpose", "tags", "depends_on", "provides",
+                   "invariants", "capabilities"],
+      "properties": {
+        "namespace": {"type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"},
+        "name": {"type": "string", "pattern": "^[A-Za-z0-9_-]+$"},
+        "version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"},
+        "status": {"type": "string", "enum": ["sealed", "review", "draft", "deprecated"]},
+        "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+        "purpose": {"type": "string"},
+        "tags": {"type": "array", "items": {"type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"}, "maxItems": 8, "uniqueItems": true},
+        "depends_on": {"type": "array", "items": {"type": "string"}},
+        "provides": {"type": "object"},
+        "invariants": {"type": "object"},
+        "capabilities": {"type": "object"}
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["artifact_id", "resource_identifier", "decision", "signed_object"],
+      "properties": {
+        "artifact_id": {"type": "string"},
+        "resource_identifier": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2048,
+          "pattern": "^(https?://|urn:)[A-Za-z0-9._~:/?#\\[\\]@!$&'()*+,;=%-]+$",
+          "description": "http(s) URL or URN of the author's validator-loop execution record (S-007)."
+        },
+        "decision": {"type": "string", "enum": ["attest-pass"]},
+        "signed_object": {
+          "type": "object",
+          "description": "The author-signed evidence object (E = H(P, I, V, R, t)); stored and served verbatim."
+        }
+      }
+    }
+  }
+}

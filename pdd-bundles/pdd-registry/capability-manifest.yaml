@@ -8,9 +8,14 @@ capabilities:
     allowed_paths: []
   database:
     allowed: true
-    engine: in-memory catalog (supplied by the caller; the candidate never persists)
+    engine: "in-memory catalog for the attested candidate (caller-supplied);
+      PostgreSQL-backed store for the deployment surface (v1.2: catalog +
+      evidence records persisted via the publish handshake; the candidate
+      itself never persists)"
     max_reads_per_request: null
-    max_writes_per_request: 0
+    max_writes_per_request: 0    # the candidate writes nothing; publishes are
+                                 # handled by the deployment surface, not the
+                                 # attested core
   secrets:
     allowed_environment_variables: []
   resources:

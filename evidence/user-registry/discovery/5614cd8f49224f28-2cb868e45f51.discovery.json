@@ -1,0 +1,46 @@
+{
+  "files": [
+    "user_registry.py",
+    "tests/test_user_registry.py"
+  ],
+  "dependencies": {
+    "runtime": [
+      "stdlib only"
+    ],
+    "dev": [
+      "pytest",
+      "hypothesis"
+    ]
+  },
+  "invariant_lineage": {
+    "S-001": [
+      "test_S001_created_user_matches_response_schema_shape"
+    ],
+    "S-002": [
+      "test_S002_error_envelope_uses_enumerated_kinds"
+    ],
+    "B-001": [
+      "test_B001_repeat_request_id_returns_original_without_second_write",
+      "test_B001_many_repeats_never_grow_state"
+    ],
+    "B-002": [
+      "test_B002_different_ids_same_email_second_conflicts"
+    ],
+    "B-003": [
+      "test_B003_invalid_input_fails_closed_no_state_change",
+      "test_B003_invalid_after_valid_keeps_prior_state"
+    ],
+    "B-004": [
+      "test_B004_get_is_deterministic_and_non_mutating",
+      "test_B004_get_unknown_id_returns_not_found"
+    ],
+    "B-005": [
+      "test_B005_case_and_whitespace_variants_conflict"
+    ]
+  },
+  "known_limitations": [
+    "In-memory store: state is lost on process restart (persistence explicitly out of protocol scope)",
+    "No concurrency control (max_concurrency: 1 per capability manifest)",
+    "Performance budgets (O-005) are advisory should-tier; measured by benchmark, not admission-gating"
+  ]
+}

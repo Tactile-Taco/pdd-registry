@@ -16,14 +16,18 @@ test:
 	env -i PATH="$$PATH" HOME="$$(mktemp -d)" LANG="C.UTF-8" PBT_RUNS=200 $(PY) -m pytest implementations/ -q
 	env -i PATH="$$PATH" HOME="$$HOME" LANG="C.UTF-8" PDD_EVIDENCE_KEY="$${PDD_EVIDENCE_KEY:?export PDD_EVIDENCE_KEY (the key the committed evidence is signed with; see README)}" $(PY) -m pytest src/tests -q
 
-## Run the full three-layer Validator Loop on the sealed bundle's candidate
+## Run the full three-layer Validator Loop on both sealed bundles' candidates
 ## (candidate execution is env-scrubbed inside validate_candidate.py)
 validate:
 	$(PY) scripts/pdd.py validate user-registry --pbt-runs 200
+	$(PY) scripts/pdd.py validate pdd-registry --impl implementations/pdd-registry/python-stdlib --pbt-runs 200
 
-## Build the signed Evidence Chain + genesis ledger block, then verify the
-## ledger and every admission evidence object (needs PDD_EVIDENCE_KEY exported)
+## Build the signed Evidence Chain + genesis ledger blocks, then verify the
+## ledgers and every admission evidence object for BOTH registries
+## (needs PDD_EVIDENCE_KEY exported)
 evidence: 
+	$(PY) scripts/pdd.py evidence build pdd-registry --impl implementations/pdd-registry/python-stdlib
+	$(PY) scripts/pdd.py evidence verify pdd-registry
 	$(PY) scripts/pdd.py evidence build user-registry --impl implementations/user-registry/python-stdlib
 	$(PY) scripts/pdd.py evidence verify user-registry
 

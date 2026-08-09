@@ -135,7 +135,12 @@ def test_search_ranks_purpose_over_invariant():
     assert ("behavioral", "B-001") in ids
     # field weight: purpose (5) outranks invariant text (3)
     assert res[0]["layer"] == "bundle" and res[0]["id"] == "purpose"
-    assert all(r["bundle"] == "user-registry" for r in res)
+    # Since the v1.2.0 version event, pdd-registry's B-006 ("Publish is
+    # idempotent") also matches — but only at the invariant layer.
+    pr = [r for r in res if r["bundle"] == "pdd-registry"]
+    assert pr and all(r["layer"] == "behavioral" and r["id"] == "B-006" for r in pr)
+    ur = [r for r in res if r["bundle"] == "user-registry"]
+    assert ur
 
 
 def test_search_requires_all_tokens():

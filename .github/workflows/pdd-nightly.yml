@@ -16,12 +16,18 @@ jobs:
       - run: pip install pyyaml==6.0.3 pytest==9.0.3 hypothesis==6.165.0 jsonschema==4.26.0
       - name: Extended property runs (>=5000 cases)
         run: PBT_RUNS=5000 python3 validators/validate_candidate.py pdd-bundles/user-registry implementations/user-registry/python-stdlib --pbt-runs 5000
+      - name: pdd-registry extended property runs (>=5000 cases)
+        run: PBT_RUNS=5000 python3 validators/validate_candidate.py pdd-bundles/pdd-registry implementations/pdd-registry/python-stdlib --pbt-runs 5000
       - name: Candidate suite (scrubbed) + service verification (key)
         run: make test
         env:
           PDD_EVIDENCE_KEY: ${{ secrets.PDD_EVIDENCE_KEY }}
       - name: Evidence chain verify
         run: python3 .reasonix/skills/pdd-evidence-keeper/scripts/evidence_chain.py verify evidence/user-registry/runtime-ledger.jsonl
+        env:
+          PDD_EVIDENCE_KEY: ${{ secrets.PDD_EVIDENCE_KEY }}
+      - name: pdd-registry evidence chain verify
+        run: python3 .reasonix/skills/pdd-evidence-keeper/scripts/evidence_chain.py verify evidence/pdd-registry/runtime-ledger.jsonl
         env:
           PDD_EVIDENCE_KEY: ${{ secrets.PDD_EVIDENCE_KEY }}
       - name: Open issue on failure

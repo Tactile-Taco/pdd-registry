@@ -49,3 +49,27 @@ structural_invariants:
     validation:
       - linter
       - contract_tests
+
+  - id: S-006
+    statement: >
+      DB-backed storage: the registry catalog and evidence records are
+      persisted in the backing database (PostgreSQL deployment surface); reads
+      are transactionally consistent — a query observes a committed snapshot
+      and never partial state. Serving does not require the on-disk bundle
+      layout. The attested candidate remains the pure in-memory core; the
+      database adapter is deployment surface.
+    severity: must
+    validation:
+      - contract_tests
+
+  - id: S-007
+    statement: >
+      Evidence provenance: every admission evidence record stored by the
+      registry carries a resource_identifier (an http(s) URL or URN) pointing
+      at the protocol author's validator-loop execution record (e.g. a CI/CD
+      results page). The registry does not re-run validation; verification of
+      the record is limited to presence, format, and signature — the honor
+      system for this version.
+    severity: must
+    validation:
+      - contract_tests
