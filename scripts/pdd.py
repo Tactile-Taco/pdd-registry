@@ -566,11 +566,14 @@ def cmd_evidence_verify(argv: list[str]) -> int:
             rows = [r for r in body.get("results", []) if r.get("bundle") == argv[0]]
             body["results"] = rows
         print(json.dumps(body, indent=2))
-        # rc reflects VERIFICATION, not the endpoint's own ok flag: any
-        # unverified record (honor-system signature check) fails the run.
+        # rc reflects VERIFICATION of the SCOPE THE USER ASKED FOR: the
+        # filtered rows must all be verified (registry-owned crypto) or
+        # attested (author-owned honor system) — never a fake
+        # verified:true. The endpoint's own ok aggregates over ALL bundles,
+        # so it is not used for a per-bundle verdict.
         results = body.get("results") or []
-        return 0 if body.get("ok") and results and all(
-            r.get("verified") for r in results) else 1
+        return 0 if results and all(
+            r.get("status") in ("verified", "attested") for r in results) else 1
     name = argv[0]
     if not _valid_bundle_name(name):
         sys.exit(f"invalid bundle name {name!r}")

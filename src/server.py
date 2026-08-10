@@ -31,6 +31,13 @@ PORT = int(os.environ.get("PORT", "8080"))
 ROOT = Path(os.environ.get("PDD_ROOT", "/opt/pdd"))
 BUNDLES = ROOT / "pdd-bundles"
 EVIDENCE = ROOT / "evidence"
+
+# Three-state evidence classification (S-007 evolution): namespaces the
+# registry itself attests (it holds the signing key) get full crypto
+# verification -> status verified/unverified. Every other namespace is
+# author-owned (honor system): the registry checks structure only and
+# reports status "attested" — never a fake "verified": true.
+OWNED_NAMESPACES = frozenset({"pdd", "user", "taxonomy"})
 SKILLS = ROOT / ".reasonix" / "skills"
 PDD = ROOT / "scripts" / "pdd.py"
 # v1.2: DB-backed serving (S-006). When PDD_DATABASE_URL is set, the catalog,
@@ -243,30 +250,58 @@ def _db_evidence_verify(name: str, namespace: str | None = None,
     except Exception:  # noqa: BLE001 — per-record 'unavailable' below
         chain = None
     for row in rows:
-        row_ok, reason = True, None
+        owned = (row.get("namespace") or "") in OWNED_NAMESPACES
+        reason = None
         if not registry_db.RESOURCE_ID_RE.fullmatch(row["resource_identifier"]):
-            row_ok, reason = False, "resource_identifier format"
-        if row["decision"] != "attest-pass":
-            row_ok, reason = False, "decision"
-        if row_ok and chain is not None:
-            try:
-                with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as f:
-                    f.write(row["signed_object"])
-                    tmp = f.name
+            reason = "resource_identifier format"
+        elif row["decision"] != "attest-pass":
+            reason = "decision"
+        structural_failure = reason is not None
+        if reason is None and owned:
+            # Registry-owned namespace: full crypto verification (digest +
+            # signature) against the registry's key — verified or unverified.
+            if chain is not None:
                 try:
-                    ver = chain.verify_evidence_object(tmp)
-                    if not ver.get("ok"):
-                        row_ok, reason = False, ver.get("reason", "signature")
-                finally:
-                    os.unlink(tmp)
-            except Exception:  # noqa: BLE001
-                row_ok, reason = False, "verification unavailable"
-        elif row_ok:
-            row_ok, reason = False, "verification unavailable"
-        record = {"bundle": name, "artifact_id": row["artifact_id"],
-                  "resource_identifier": row["resource_identifier"],
-                  "decision": row["decision"], "signature_valid": row_ok,
-                  "verified": row_ok, "reason": reason}
+                    with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as f:
+                        f.write(row["signed_object"])
+                        tmp = f.name
+                    try:
+                        ver = chain.verify_evidence_object(tmp)
+                        if not ver.get("ok"):
+                            reason = ver.get("reason", "signature")
+                    finally:
+                        os.unlink(tmp)
+                except Exception:  # noqa: BLE001
+                    reason = "verification unavailable"
+            else:
+                reason = "verification unavailable"
+        if reason is None and not owned:
+            # Author-owned namespace (honor system, S-007): structural checks
+            # only. Status "attested", NEVER verified:true — the registry
+            # holds no key for the author.
+            record = {"bundle": name, "namespace": row.get("namespace"),
+                      "artifact_id": row["artifact_id"],
+                      "resource_identifier": row["resource_identifier"],
+                      "decision": row["decision"], "signature_valid": False,
+                      "verified": False, "status": "attested",
+                      "reason": "attested (S-007 honor system): author-owned "
+                                "namespace; the registry holds no key for it"}
+        elif reason is None:
+            record = {"bundle": name, "namespace": row.get("namespace"),
+                      "artifact_id": row["artifact_id"],
+                      "resource_identifier": row["resource_identifier"],
+                      "decision": row["decision"], "signature_valid": True,
+                      "verified": True, "status": "verified", "reason": None}
+        else:
+            # Structural failures are "invalid" in EVERY namespace; only
+            # crypto-path failures on owned records are "unverified".
+            record = {"bundle": name, "namespace": row.get("namespace"),
+                      "artifact_id": row["artifact_id"],
+                      "resource_identifier": row["resource_identifier"],
+                      "decision": row["decision"], "signature_valid": False,
+                      "verified": False,
+                      "status": "invalid" if structural_failure else "unverified",
+                      "reason": reason}
         # Validator-attestation observation (taxonomy/validator-receipt,
         # additive S-007 evolution): when the author carried a receipt
         # inside the signed object, parse it per the receipt taxonomy and
@@ -501,11 +536,14 @@ class Handler(BaseHTTPRequestHandler):
                         if key not in seen:
                             seen.add(key)
                             targets.append(b)
-                    self._json({"ok": True,
-                                "results": [r for b in targets
-                                            for r in _db_evidence_verify(
-                                                b["name"], b.get("namespace"),
-                                                b.get("digest"))]})
+                    _results = [r for b in targets
+                                for r in _db_evidence_verify(
+                                    b["name"], b.get("namespace"),
+                                    b.get("digest"))]
+                    self._json({"ok": bool(_results) and all(
+                                    r.get("status") in ("verified", "attested")
+                                    for r in _results),
+                                "results": _results})
                 else:
                     self._json({"results": [_verify_bundle(b["name"]) for b in _bundles()]})
                 return
@@ -578,6 +616,13 @@ class Handler(BaseHTTPRequestHandler):
             self._json({"error": f"bundle {name} is broken (see server log)"}, status=500)
             return
         if len(parts) == 2:
+            # Three-state evidence summary in the catalog view: verified
+            # (registry-owned crypto), attested (author-owned honor system),
+            # unverified/invalid (failures). None in file mode (no DB).
+            ev_statuses = None
+            if DATABASE_URL:
+                ev_statuses = sorted({r.get("status") for r in _db_evidence_verify(
+                    b["name"], b.get("namespace"), b.get("digest"))})
             self._json({
                 "name": b["name"], "version": b.get("version"), "status": b.get("status"),
                 "namespace": b.get("namespace"), "tags": b.get("tags") or [],
@@ -586,6 +631,7 @@ class Handler(BaseHTTPRequestHandler):
                 "depends_on": b.get("depends_on", []), "provides": b.get("provides", {}),
                 "invariant_ids": {layer: [it["id"] for it in b["invariants"][layer]]
                                   for layer in registry_index.LAYERS},
+                "evidence_status": ev_statuses,
             })
             return
         sub = parts[2]

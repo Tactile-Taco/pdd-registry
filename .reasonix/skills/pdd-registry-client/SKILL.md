@@ -93,6 +93,17 @@ M6 mini-pc, `deploy/postgres.yaml`; pdd-registry protocol 1.2.0, S-006):
   main). If you change anything under `pdd-bundles/<name>/`, run
   `pdd validate <name>` + `pdd evidence build <name>` before committing —
   the gate will refuse to ship the drift otherwise.
+- **Three-state evidence verify (2026-08-10)**: `/evidence/verify`
+  classifies each record by namespace ownership — registry-owned
+  namespaces (`pdd`, `user`, `taxonomy`) get full crypto verification
+  (`status: verified|unverified`); any other namespace is author-owned
+  and gets structural checks only (`status: attested` — resource
+  identifier format + decision, S-007 honor system; `verified` stays
+  `false`, the registry holds no key for the author). Structurally
+  invalid records (e.g. a tampered stored resource_identifier) are
+  `status: invalid` and fail the endpoint. `/bundles/{name}` exposes the
+  record states as `evidence_status`; `pdd evidence verify --registry`
+  exits 0 when every record is `verified` or `attested`.
 
 ## DECIDE — the registry decision framework (run this BEFORE writing anything)
 
@@ -265,11 +276,11 @@ HTTP views (all read-only, 404 for unknown bundles):
 | Endpoint | Returns |
 |---|---|
 | `/bundles?status=sealed&depends_on=X&namespace=pdd&tag=engine` | filtered index `{name, namespace, tags, address, version, status, depends_on, provides}` — namespace exact, tag exact membership (v1.1) |
-| `/bundles/{name}` | summary + `invariant_ids` per layer |
+| `/bundles/{name}` | summary + `invariant_ids` per layer + `evidence_status` (verified/attested/unverified/invalid) in DB mode |
 | `/bundles/{name}/invariants?severity=must` | full S/B/O invariant items (severity filter: must/should) |
 | `/bundles/{name}/capabilities` | capability manifest (network, filesystem, secrets, …) |
 | `/bundles/{name}/ledger?limit=N` | last N ledger blocks + `verified` (real HMAC-chain check; no key → `verified:false`) |
-| `/evidence/verify`, `/evidence/admission` | per-bundle ledger verification; admitted digests |
+| `/evidence/verify`, `/evidence/admission` | per-bundle verification: `ok` true iff every record is `verified` (registry-owned crypto) or `attested` (author-owned honor system); `status` per record |
 
 Same `curl --resolve` pattern as SEARCH; `?limit=0` → zero blocks, negative/
 non-integer limit → 400.

@@ -941,3 +941,62 @@ def test_receipt_observation_valid_and_malformed(db_client):
     assert by_artifact["receipt-bad"]["receipt"]["valid"] is False
     assert by_artifact["receipt-bad"]["receipt"]["errors"]
     assert by_artifact["receipt-none"]["receipt"] is None
+
+
+def test_three_state_evidence_foreign_namespace_attested(db_client):
+    """Three-state evidence verify: an author-owned namespace (honor
+    system, S-007) is classified 'attested' via structural checks only —
+    verified stays False (never a fake pass), but /evidence/verify ok:true
+    and the bundle view reports attested."""
+    registry_db.publish(server._db(), _bundle(
+        namespace="monkeytype", name="challenges",
+        digest="sha256:" + "b" * 64),
+        _evidence(artifact_id="challenges-core", digest=""))
+    status, body = db_client("/evidence/verify?bundle=challenges")
+    assert status == 200
+    row = body["results"][0]
+    assert row["namespace"] == "monkeytype"
+    assert row["status"] == "attested"
+    assert row["verified"] is False          # never a fake verified:true
+    assert row["signature_valid"] is False   # no key held for the author
+    assert "honor system" in row["reason"]
+    # bundle-scoped ok: attested counts as green
+    status, body = db_client("/evidence/verify?bundle=challenges&namespace=monkeytype")
+    assert body["ok"] is True
+    # /bundles/{name} propagates the evidence state
+    status, body = db_client("/bundles/challenges")
+    assert status == 200
+    assert body["evidence_status"] == ["attested"]
+
+
+def test_three_state_evidence_foreign_structural_failure_invalid(db_client):
+    """A foreign record whose stored resource_identifier became invalid
+    (raw-SQL tamper — the S-009 scenario publish-time validation cannot
+    see) is 'invalid' and fails the verify: attested is not a rubber
+    stamp, and the structural gate applies to every namespace."""
+    registry_db.publish(server._db(), _bundle(
+        namespace="monkeytype", name="challenges",
+        digest="sha256:" + "c" * 64),
+        _evidence(artifact_id="bad-rid", digest=""))
+    conn = server._db()
+    conn.execute("UPDATE evidence SET resource_identifier = ? "
+                 "WHERE artifact_id = ?",
+                 ("not-a-resource-id", "bad-rid"))
+    conn.commit()
+    status, body = db_client("/evidence/verify?bundle=challenges")
+    assert body["results"][0]["status"] == "invalid"
+    assert body["results"][0]["reason"] == "resource_identifier format"
+    assert body["ok"] is False
+
+
+def test_three_state_evidence_owned_stub_unverified(db_client):
+    """Registry-owned namespace with a stub (unsigned) object: crypto path
+    fails closed -> status 'unverified', never attested."""
+    status, _ = db_client("/publish", {"bundle": _bundle(),
+                                       "evidence": _evidence()})
+    assert status == 200
+    status, body = db_client("/evidence/verify?bundle=pdd-registry")
+    assert status == 200
+    assert body["results"][0]["status"] == "unverified"
+    assert body["results"][0]["verified"] is False
+    assert body["ok"] is False
