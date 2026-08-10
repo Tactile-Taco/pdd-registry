@@ -1,0 +1,143 @@
+{
+  "protocol": {
+    "name": "pdd-registry-mcp",
+    "version": "1.0.0",
+    "bundle_digest": "sha256:f886f4e872e99b94896e7b29e5a6345d2613b3484934ad73b76b3435ff3f4c53"
+  },
+  "candidate_digest": "sha256:a2b1770ab875c9238d71fecb5aa596a5e7c721c09cf7ed5fd454d8850553c775",
+  "validators": [
+    {
+      "id": "schema-validator",
+      "version": "1.0.0",
+      "layer": "structural"
+    },
+    {
+      "id": "contract-runner",
+      "version": "1.0.0",
+      "layer": "structural"
+    },
+    {
+      "id": "property-runner",
+      "version": "1.0.0",
+      "layer": "behavioral"
+    },
+    {
+      "id": "mutation-sanity",
+      "version": "1.0.0",
+      "layer": "behavioral"
+    },
+    {
+      "id": "import-scanner",
+      "version": "1.0.0",
+      "layer": "operational"
+    },
+    {
+      "id": "capability-monitor",
+      "version": "1.0.0",
+      "layer": "operational"
+    },
+    {
+      "id": "benchmark-runner",
+      "version": "1.0.0",
+      "layer": "operational"
+    }
+  ],
+  "results": [
+    {
+      "invariant_id": "S-001",
+      "layer": "structural",
+      "outcome": "pass",
+      "evidence": "compile ok for 1 module(s)"
+    },
+    {
+      "invariant_id": "S-002",
+      "layer": "structural",
+      "outcome": "pass",
+      "evidence": "enumerated error kinds referenced in candidate source"
+    },
+    {
+      "invariant_id": "S-003",
+      "layer": "structural",
+      "outcome": "skip",
+      "evidence": "schema_diff_check requires a stored baseline; the bundle keeps no schema history \u2014 version-event schema changes are reviewed in git history. Not a pass: not enforced here."
+    },
+    {
+      "invariant_id": "S-004",
+      "layer": "structural",
+      "outcome": "pass",
+      "evidence": "namespace 'pdd' is kebab-case (1..63 chars)"
+    },
+    {
+      "invariant_id": "S-005",
+      "layer": "structural",
+      "outcome": "pass",
+      "evidence": "2 tags, kebab-case, unique, <=8"
+    },
+    {
+      "invariant_id": "S-006",
+      "layer": "structural",
+      "outcome": "skip",
+      "evidence": "bundle does not declare pdd-registry.publish; S-006 applies to the registry bundle only"
+    },
+    {
+      "invariant_id": "S-007",
+      "layer": "structural",
+      "outcome": "skip",
+      "evidence": "bundle does not declare pdd-registry.publish; S-007 applies to the registry bundle only"
+    },
+    {
+      "invariant_id": "S-009",
+      "layer": "structural",
+      "outcome": "skip",
+      "evidence": "bundle does not declare pdd-registry.publish; S-009 applies to the registry bundle only"
+    },
+    {
+      "invariant_id": "S-010",
+      "layer": "structural",
+      "outcome": "skip",
+      "evidence": "bundle does not declare pdd-registry.publish; S-010 applies to the registry bundle only"
+    },
+    {
+      "invariant_id": "O-003",
+      "layer": "operational",
+      "outcome": "pass",
+      "evidence": "imports=['json', 're']; unapproved=[]"
+    },
+    {
+      "invariant_id": "O-001,O-002,O-004",
+      "layer": "operational",
+      "outcome": "pass",
+      "evidence": "forbidden signals=[]"
+    },
+    {
+      "invariant_id": "B-001,B-002,B-003,B-004,B-005",
+      "layer": "behavioral",
+      "outcome": "pass",
+      "evidence": "pytest: 19 passed in 0.01s"
+    },
+    {
+      "invariant_id": "B-001",
+      "layer": "behavioral",
+      "outcome": "pass",
+      "evidence": "mutant rejected by B001_unknown_tool (exit 1, assertion failure) \u2014 property is not vacuous"
+    },
+    {
+      "invariant_id": "O-001,O-002",
+      "layer": "operational",
+      "outcome": "skip",
+      "evidence": "sandbox not requested or docker not found; static scan only"
+    },
+    {
+      "invariant_id": "O-005",
+      "layer": "operational",
+      "outcome": "observe",
+      "evidence": "benchmark failed: Traceback (most recent call last):\n  File \"<string>\", line 10, in <module>\n    reg.handle(**args)\n    ~~~~~~~~~~^^^^^^^^"
+    }
+  ],
+  "verdict": "admit",
+  "verdict_reason": "no must-invariant failures; no mutation-suspect flags",
+  "environment": {
+    "runtime": "3.14.6",
+    "os": "linux"
+  }
+}

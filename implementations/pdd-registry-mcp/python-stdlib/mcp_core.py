@@ -60,6 +60,16 @@ DEFAULT_TOOL_DEFS = [
                       "required": ["bundle", "evidence"],
                       "properties": {"bundle": {"type": "object"},
                                      "evidence": {"type": "object"}}}},
+    {"name": "registry.admin.token.mint",
+     "description": "Mint a per-agent publish token (B-004). Admin-gated at the deployment surface (PDD_ADMIN_TOKEN bearer); the plaintext is returned exactly once, only its hash is stored, and the mint is audited.",
+     "inputSchema": {"type": "object", "additionalProperties": False,
+                      "required": ["label"],
+                      "properties": {"label": {"type": "string", "maxLength": 64}}}},
+    {"name": "registry.admin.token.revoke",
+     "description": "Revoke a minted publish token so subsequent publishes with it are rejected (B-005). Admin-gated at the deployment surface (PDD_ADMIN_TOKEN bearer); the revocation is audited.",
+     "inputSchema": {"type": "object", "additionalProperties": False,
+                      "required": ["token_id"],
+                      "properties": {"token_id": {"type": "integer"}}}},
 ]
 
 DEFAULT_TOOL_NAMES = {t["name"] for t in DEFAULT_TOOL_DEFS}
@@ -71,12 +81,15 @@ class McpCore:
     """Stateless JSON-RPC dispatcher. Thread-safe: no mutable state."""
 
     def __init__(self, tools=None, search_fn=None, index_fn=None,
-                 evidence_fn=None, resources=None, protocol_version=None):
+                 evidence_fn=None, resources=None, protocol_version=None,
+                 mint_fn=None, revoke_fn=None):
         self._tools = list(tools) if tools is not None else list(DEFAULT_TOOL_DEFS)
         self._tool_names = {t["name"] for t in self._tools}
         self._search_fn = search_fn
         self._index_fn = index_fn
         self._evidence_fn = evidence_fn
+        self._mint_fn = mint_fn
+        self._revoke_fn = revoke_fn
         self._resources = list(resources or [])
         self._protocol_version = protocol_version or PROTOCOL_VERSION
 
@@ -167,7 +180,28 @@ class McpCore:
                                        required=(), passthrough=True)
         if name == "registry.submission.check":
             return self._ok(rid, {"checks": self._submission_checks(args)})
+        if name == "registry.admin.token.mint":
+            return self._admin_tool(rid, args, self._mint_fn, required=("label",))
+        if name == "registry.admin.token.revoke":
+            return self._admin_tool(rid, args, self._revoke_fn, required=("token_id",))
         return self._error(rid, -32602, f"unhandled tool {name!r}", "internal")
+
+    def _admin_tool(self, rid, args, fn, required):
+        """B-004/B-005 admin tools: dispatched to the injected handler
+        (the deployment surface enforces the admin bearer + DB audit)."""
+        if fn is None:
+            return self._error(rid, -32000, "admin store not configured",
+                               "internal")
+        for key in required:
+            if args.get(key) in (None, ""):
+                return self._error(rid, -32602,
+                                   f"missing required argument: {key}",
+                                   "invalid_request")
+        try:
+            return self._ok(rid, fn(dict(args)))
+        except Exception as exc:  # noqa: BLE001 — S-002 envelope
+            return self._error(rid, -32000, "admin tool failed", "internal",
+                               detail=str(exc)[:200])
 
     def _registry_tool(self, rid, args, fn, required, passthrough):
         if fn is None:

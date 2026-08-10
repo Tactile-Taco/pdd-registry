@@ -48,6 +48,14 @@ spec:
             # registry-facing tools to this same pod's REST API.
             - name: PDD_REGISTRY_URL
               value: "pdd+http://localhost:8080"
+            # MCP Phase B: admin bearer for registry.admin.* tools
+            # (token.mint/revoke). Created idempotently by push.sh.
+            - name: PDD_ADMIN_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: pdd-admin-token
+                  key: PDD_ADMIN_TOKEN
+                  optional: false
             # Publish authn (POST /publish bearer token; the in-cluster seed
             # sends it via this env). Created idempotently by push.sh.
             - name: PDD_PUBLISH_TOKEN

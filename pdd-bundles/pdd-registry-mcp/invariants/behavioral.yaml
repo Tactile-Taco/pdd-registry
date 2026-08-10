@@ -28,3 +28,25 @@ behavioral_invariants:
     severity: must
     validation:
       - contract_tests
+
+  - id: B-004
+    statement: >
+      Admin token minting (v1.1.0): registry.admin.token.mint issues a
+      per-agent publish token whose plaintext is returned exactly once;
+      the registry stores only a hash of it and appends a mint record to
+      the audit trail. The tool requires an admin bearer (enforced at the
+      deployment surface; the attested core dispatches to the injected
+      admin handler).
+    severity: must
+    validation:
+      - contract_tests
+
+  - id: B-005
+    statement: >
+      Admin token revocation (v1.1.0): registry.admin.token.revoke
+      deactivates a minted token so subsequent publishes with it are
+      rejected; the revocation is appended to the audit trail. Revoked
+      tokens never re-activate.
+    severity: must
+    validation:
+      - contract_tests

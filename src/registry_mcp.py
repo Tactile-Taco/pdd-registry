@@ -13,6 +13,7 @@ against the bundle's tool-registry schema when jsonschema is available.
 
 import importlib.util
 import json
+import os
 import sys
 import urllib.error
 import urllib.request
@@ -137,8 +138,67 @@ def build_core(registry_url: str):
     return mcp_core.McpCore(
         tools=mcp_core.DEFAULT_TOOL_DEFS,
         resources=_skill_resources(),
+        mint_fn=_mint_fn, revoke_fn=_revoke_fn,
         **_make_handlers(registry_url),
     )
+
+
+# --- admin token store (MCP Phase B): the DB provider is set by the
+# --- server (server.py owns the shared connection; no duplicate pool).
+_db_provider = None
+
+
+def set_db_provider(fn):
+    global _db_provider
+    _db_provider = fn
+
+
+def _db():
+    return _db_provider() if _db_provider is not None else None
+
+
+ADMIN_TOKEN = os.environ.get("PDD_ADMIN_TOKEN", "")
+ADMIN_TOOL_PREFIX = "registry.admin."
+
+
+def _admin_ok(auth_bearer: str) -> bool:
+    """Admin tools require Bearer PDD_ADMIN_TOKEN (constant-time; a
+    TypeError on non-ASCII input is a rejection, never a 500)."""
+    if not ADMIN_TOKEN or not auth_bearer:
+        return False
+    try:
+        import hmac  # noqa: PLC0415
+        return hmac.compare_digest(auth_bearer, ADMIN_TOKEN)
+    except TypeError:
+        return False
+
+
+def _mint_fn(args: dict) -> dict:
+    conn = _db()
+    if conn is None:
+        raise RuntimeError("admin tools require DB-backed mode "
+                           "(PDD_DATABASE_URL)")
+    import registry_db  # noqa: PLC0415
+    out = registry_db.mint_publish_token(conn, args["label"],
+                                         actor="mcp-admin")
+    # The plaintext is returned exactly once; never log/audit it.
+    return {"token_id": out["token_id"], "token": out["token"],
+            "label": out["label"], "active": out["active"],
+            "created_at": out["created_at"]}
+
+
+def _revoke_fn(args: dict) -> dict:
+    conn = _db()
+    if conn is None:
+        raise RuntimeError("admin tools require DB-backed mode "
+                           "(PDD_DATABASE_URL)")
+    import registry_db  # noqa: PLC0415
+    ok = registry_db.revoke_publish_token(conn, args["token_id"],
+                                          actor="mcp-admin")
+    if not ok:
+        raise ValueError(f"token_id {args['token_id']} not found or "
+                         "already revoked")
+    return {"revoked": True, "token_id": args["token_id"]}
 
 
 # Module-level shared instance (the container sets PDD_REGISTRY_URL; the
@@ -154,11 +214,13 @@ if REGISTRY_URL:
     except SystemExit:
         CORE = None  # S-004 failure: the /mcp route reports it; do not die
 else:
-    CORE = mcp_core.McpCore(resources=_skill_resources())
+    CORE = mcp_core.McpCore(resources=_skill_resources(),
+                            mint_fn=_mint_fn, revoke_fn=_revoke_fn)
 
 
-def handle_request(body: bytes) -> tuple[dict, int]:
-    """Serve one HTTP JSON-RPC request (read-only Phase A surface)."""
+def handle_request(body: bytes, auth_bearer: str = "") -> tuple[dict, int]:
+    """Serve one HTTP JSON-RPC request (Phase A read-only surface; Phase B
+    adds the admin-gated token tools)."""
     if CORE is None:
         return ({"jsonrpc": "2.0", "id": None,
                  "error": {"code": -32000, "message": "S-004 surface stale",
@@ -169,4 +231,18 @@ def handle_request(body: bytes) -> tuple[dict, int]:
         return ({"jsonrpc": "2.0", "id": None,
                  "error": {"code": -32602, "message": "invalid JSON body",
                            "data": {"kind": "invalid_request"}}}), 400
+    # B-004/B-005 admin gating (deployment surface): tools under
+    # registry.admin.* require a valid PDD_ADMIN_TOKEN bearer.
+    params = {}
+    if isinstance(request, dict):
+        params = request.get("params") or {}
+    if (isinstance(request, dict) and request.get("method") == "tools/call"
+            and isinstance(params, dict)
+            and str(params.get("name", "")).startswith(ADMIN_TOOL_PREFIX)
+            and not _admin_ok(auth_bearer)):
+        return ({"jsonrpc": "2.0", "id": request.get("id"),
+                 "error": {"code": -32000,
+                           "message": "admin tools require a valid "
+                                       "PDD_ADMIN_TOKEN bearer",
+                           "data": {"kind": "invalid_request"}}}), 401
     return CORE.handle(request), 200

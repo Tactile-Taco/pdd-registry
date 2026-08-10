@@ -26,6 +26,7 @@ import functools
 import hashlib
 import json
 import re
+import secrets
 import sqlite3
 import threading
 import time
@@ -75,8 +76,7 @@ CREATE TABLE IF NOT EXISTS bundles (
   published_at   TEXT NOT NULL,
   PRIMARY KEY (namespace, name, version, digest)
 );
-CREATE TABLE IF NOT EXISTS evidence (
-  namespace           TEXT NOT NULL,
+CREATE TABLE IF NOT EXISTS evidence (  namespace           TEXT NOT NULL,
   name                TEXT NOT NULL,
   version             TEXT NOT NULL,
   bundle_digest       TEXT NOT NULL,
@@ -99,6 +99,27 @@ CREATE TABLE IF NOT EXISTS ledger (
   -- monotonic append sequence, writer-set, no default: a forgotten seq
   -- fails loudly instead of silently losing insertion order
   seq          INTEGER NOT NULL
+);
+-- MCP Phase B (pdd-registry-mcp 1.1.0): per-agent publish tokens. Only the
+-- sha256 of the token is stored (the plaintext is returned once at mint);
+-- active=0 revokes. Revocation is a deliberate state change to a token row
+-- (NOT ledger/evidence data — those stay append-only, S-009).
+CREATE TABLE IF NOT EXISTS publish_tokens (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  label      TEXT NOT NULL,
+  token_hash TEXT NOT NULL UNIQUE,
+  active     INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL,
+  created_by TEXT NOT NULL
+);
+-- Append-only audit trail for mint/revoke actions (no update/delete path).
+CREATE TABLE IF NOT EXISTS token_audit (
+  id        INTEGER PRIMARY KEY AUTOINCREMENT,
+  action    TEXT NOT NULL,
+  token_id  INTEGER,
+  actor     TEXT NOT NULL,
+  detail    TEXT NOT NULL,
+  at        TEXT NOT NULL
 );
 """
 
@@ -452,12 +473,83 @@ def verify_ledger_chain(conn) -> dict:
     return {"ok": True, "blocks": len(blocks), "seq": None, "reason": None}
 
 
+def _token_hash(token: str) -> str:
+    """sha256 hex of a token — the ONLY form stored at rest (minted
+    plaintext is returned once, then never persisted)."""
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+@_serialized
+def mint_publish_token(conn, label: str, actor: str) -> dict:
+    """Mint a per-agent publish token (MCP Phase B, admin-gated at the
+    route). The plaintext is returned exactly once; the DB stores only its
+    hash. Every mint is appended to the token_audit trail."""
+    if not isinstance(label, str) or not label.strip() or len(label) > 64:
+        raise ValueError("label must be a non-empty string of <= 64 chars")
+    token = secrets.token_hex(24)  # 48 hex chars, 192 bits
+    now = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    cur = _exec(conn,
+        "INSERT INTO publish_tokens (label, token_hash, active, created_at, "
+        "created_by) VALUES (?, ?, 1, ?, ?)",
+        (label.strip(), _token_hash(token), now, actor))
+    tid = cur.lastrowid
+    _exec(conn,
+        "INSERT INTO token_audit (action, token_id, actor, detail, at) "
+        "VALUES ('mint', ?, ?, ?, ?)",
+        (tid, actor, label.strip(), now))
+    return {"token_id": tid, "token": token, "label": label.strip(),
+            "active": True, "created_at": now, "created_by": actor}
+
+
+@_serialized
+def revoke_publish_token(conn, token_id: int, actor: str) -> bool:
+    """Deactivate a minted token; rejected by verify_publish_token after
+    this. Revocation is a deliberate state change to a TOKEN row (the
+    ledger/evidence stay append-only, S-009). Audited."""
+    now = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    cur = _exec(conn, "UPDATE publish_tokens SET active = 0 WHERE id = ? "
+                      "AND active = 1", (int(token_id),))
+    if cur.rowcount == 0:
+        return False
+    _exec(conn,
+        "INSERT INTO token_audit (action, token_id, actor, detail, at) "
+        "VALUES ('revoke', ?, ?, 'active=0', ?)",
+        (int(token_id), actor, now))
+    return True
+
+
+def verify_publish_token(conn, supplied) -> bool:
+    """True iff `supplied` matches an ACTIVE minted token (hash lookup).
+    Called by the publish route after the env-token compare fails."""
+    if not isinstance(supplied, str) or not supplied:
+        return False
+    cur = _exec(conn, "SELECT active FROM publish_tokens WHERE token_hash = ?",
+                (_token_hash(supplied),))
+    row = cur.fetchone()
+    return bool(row and row["active"] == 1)
+
+
+def list_publish_tokens(conn) -> list[dict]:
+    """Minted tokens WITHOUT hashes: id, label, active, created_at,
+    created_by (hash values never leave the DB)."""
+    cur = _exec(conn, "SELECT id, label, active, created_at, created_by "
+                      "FROM publish_tokens ORDER BY id")
+    return [dict(r) for r in cur.fetchall()]
+
+
+def token_audit_rows(conn, limit: int = 100) -> list[dict]:
+    """Append-only audit trail (mint/revoke events, newest last)."""
+    cur = _exec(conn, "SELECT id, action, token_id, actor, detail, at "
+                      "FROM token_audit ORDER BY id DESC LIMIT ?",
+                (int(limit),))
+    return [dict(r) for r in cur.fetchall()]
+
+
 @_serialized
 def get_bundle(conn, name: str, namespace: str | None = None) -> Optional[dict]:
     """Newest version record of a bundle. ORDER BY on TEXT sorts lexically
     ('1.10.0' < '1.9.0'), so the semver max is computed in Python; the SQL
-    ORDER BY version, digest only breaks TIES deterministically (two records
-    with the same semver version and different digests — the max() picks
+    ORDER BY version, digest only breaks TIES deterministically (two records    with the same semver version and different digests — the max() picks
     the first, which the deterministic order fixes). The namespace filter
     keeps S-004's same-name-different-namespace rows apart."""
     if namespace is None:

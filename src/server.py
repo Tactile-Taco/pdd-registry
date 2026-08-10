@@ -64,6 +64,11 @@ def _db():
                 _db_conn = conn
     return _db_conn
 
+
+# MCP Phase B: the admin token tools (mint/revoke) reuse the server's shared
+# connection via this provider (no duplicate connection pool).
+registry_mcp.set_db_provider(_db)
+
 try:
     import yaml
 except ImportError:  # pragma: no cover
@@ -314,7 +319,10 @@ class Handler(BaseHTTPRequestHandler):
                                status=400)
                     return
                 body = self.rfile.read(length)
-                resp, status = registry_mcp.handle_request(body)
+                auth = self.headers.get("Authorization", "")
+                supplied = auth[7:] if auth.startswith("Bearer ") else ""
+                resp, status = registry_mcp.handle_request(body,
+                                                           auth_bearer=supplied)
                 self._json(resp, status=status)
                 return
             if parsed.path != "/publish":
@@ -329,22 +337,23 @@ class Handler(BaseHTTPRequestHandler):
             # Publish authn: any client that can reach the Ingress may write
             # catalog rows — require the shared-secret bearer token
             # (PDD_PUBLISH_TOKEN env from the pdd-publish-token Secret;
-            # push.sh seeds with it). Fail closed when unset.
+            # push.sh seeds with it) OR an ACTIVE minted per-agent token
+            # (MCP Phase B, registry_db.verify_publish_token — hashed at
+            # rest, revocable). Fail closed when neither path can pass.
             expected = os.environ.get("PDD_PUBLISH_TOKEN")
-            if not expected:
-                self._json({"error": {"kind": "internal",
-                                      "message": "publish disabled: "
-                                                 "PDD_PUBLISH_TOKEN is not set"}},
-                           status=500)
-                return
             auth = self.headers.get("Authorization", "")
             supplied = auth[7:] if auth.startswith("Bearer ") else ""
             # hmac.compare_digest raises TypeError on non-ASCII str (headers
             # are latin-1-decoded): map that to 401, never a 500.
-            try:
-                token_ok = bool(supplied) and hmac.compare_digest(supplied, expected)
-            except TypeError:
-                token_ok = False
+            token_ok = False
+            if expected:
+                try:
+                    token_ok = bool(supplied) and hmac.compare_digest(
+                        supplied, expected)
+                except TypeError:
+                    token_ok = False
+            if not token_ok and DATABASE_URL and supplied:
+                token_ok = registry_db.verify_publish_token(_db(), supplied)
             if not token_ok:
                 self._json({"error": {"kind": "invalid_request",
                                       "message": "publish requires a valid "

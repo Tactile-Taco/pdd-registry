@@ -52,7 +52,7 @@ M6 mini-pc, `deploy/postgres.yaml`; pdd-registry protocol 1.2.0, S-006):
   pointing at the author's validator-loop execution record (e.g. a CI/CD
   results page). `pdd evidence build --validation-resource <url>` binds
   it into the signed provenance.
-- **MCP server (pdd-registry-mcp, Phase A)**: `POST /mcp` on the same
+- **MCP server (pdd-registry-mcp, Phase A+B)**: `POST /mcp` on the same
   endpoint serves the read-only MCP JSON-RPC surface (tools:
   `registry.version`, `registry.search`, `registry.index`,
   `registry.evidence.verify`, `registry.submission.check`; resources:
@@ -61,7 +61,15 @@ M6 mini-pc, `deploy/postgres.yaml`; pdd-registry protocol 1.2.0, S-006):
   operations — the tool surface is generated from the sealed
   pdd-registry-mcp bundle, so it cannot drift from the protocol; this
   skill is the design narrative and fallback. Publishing is NOT an MCP
-  tool (Phase A read-only): keep using `pdd publish`.
+  tool: keep using `pdd publish` (or, if you have a per-agent token from
+  the admin tools, send it as the Bearer).
+- **Per-agent publish tokens (Phase B, v1.1.0)**: operators holding
+  `PDD_ADMIN_TOKEN` can mint/revoke per-agent tokens via the MCP admin
+  tools (`registry.admin.token.mint` with a label, `…revoke` with the
+  token_id). Minted tokens are returned once, stored hashed, and are
+  accepted by `POST /publish` alongside the shared env token; revoked
+  tokens are rejected. Mint a token per agent instead of sharing
+  `PDD_PUBLISH_TOKEN`.
 - **Evidence freshness gate (S-008, v1.3.0)**: the latest admission
   evidence must attest the CURRENT on-disk bundle digest — any bundle
   change without re-validation + re-attestation is a violation. Keyless

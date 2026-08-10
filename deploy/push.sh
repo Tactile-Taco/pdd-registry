@@ -135,6 +135,29 @@ printf 'PDD_PUBLISH_TOKEN=%s\n' "${PUB_TOK}" \
   | ssh_guest 'sudo k3s kubectl create secret generic pdd-publish-token \
       --from-env-file=/dev/stdin --dry-run=client -o yaml | sudo k3s kubectl apply -f -'
 
+echo "==> Creating pdd-admin-token Secret on ${STAGING_TAILSCALE_IP} (idempotent, self-healing)"
+# Admin authn (MCP Phase B): registry.admin.* tools (token.mint/revoke)
+# require Bearer PDD_ADMIN_TOKEN; minted per-agent tokens are stored
+# hashed in the DB, never in this Secret. Same confirmed-absence rule.
+GET_OUT="$(ssh_guest 'sudo k3s kubectl get secret pdd-admin-token 2>&1' || true)"
+case "${GET_OUT}" in
+  *NotFound*) ADM_TOK="" ;;
+  *pdd-admin-token*)
+    ADM_TOK="$(ssh_guest 'sudo k3s kubectl get secret pdd-admin-token -o jsonpath={.data.PDD_ADMIN_TOKEN}' 2>/dev/null | base64 -d || true)"
+    if [ -z "${ADM_TOK}" ]; then
+      echo "ERROR: pdd-admin-token secret exists but its value could not be read" >&2
+      exit 1
+    fi
+    ;;
+  *) echo "ERROR: cannot determine pdd-admin-token secret state: ${GET_OUT}" >&2; exit 1 ;;
+esac
+if [ -z "${ADM_TOK}" ]; then
+  ADM_TOK="$(od -An -tx1 -N24 /dev/urandom | tr -d ' \n')"
+fi
+printf 'PDD_ADMIN_TOKEN=%s\n' "${ADM_TOK}" \
+  | ssh_guest 'sudo k3s kubectl create secret generic pdd-admin-token \
+      --from-env-file=/dev/stdin --dry-run=client -o yaml | sudo k3s kubectl apply -f -'
+
 echo "==> Applying postgres manifest (v1.2 DB-backed registry, S-006)"
 ssh_guest 'sudo k3s kubectl apply -f -' < deploy/postgres.yaml
 

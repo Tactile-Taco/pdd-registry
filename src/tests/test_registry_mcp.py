@@ -26,9 +26,11 @@ server.EVIDENCE = ROOT / "evidence"
 server.SKILLS = ROOT / ".reasonix" / "skills"
 
 import registry_mcp  # noqa: E402
+import registry_db  # noqa: E402
 
 EXPECTED_TOOLS = {"registry.version", "registry.search", "registry.index",
-                  "registry.evidence.verify", "registry.submission.check"}
+                  "registry.evidence.verify", "registry.submission.check",
+                  "registry.admin.token.mint", "registry.admin.token.revoke"}
 
 
 @pytest.fixture()
@@ -54,15 +56,35 @@ def _post(base, payload, headers=None):
 
 
 def _bundle(**over):
-    b = {"namespace": "pdd", "name": "pdd-registry-mcp", "version": "1.0.0",
-         "digest": "sha256:" + "a" * 64, "tags": ["mcp-server", "registry-client"]}
+    b = {"namespace": "pdd", "name": "pdd-registry-mcp", "version": "1.1.0",
+         "status": "sealed", "digest": "sha256:" + "a" * 64,
+         "purpose": "MCP client interface", "tags": ["mcp-server"],
+         "depends_on": [], "provides": {},
+         "invariants": {"structural": [{"id": "S-001"}]},
+         "capabilities": {}, "boundary": {"in_scope": []}}
     b.update(over)
     return b
 
 
 def _evidence(**over):
-    e = {"resource_identifier": "https://github.com/example/repo/actions/runs/1",
-         "decision": "attest-pass", "bundle_digest": "sha256:" + "a" * 64}
+    e = {"artifact_id": "pdd-registry-mcp-python-stdlib",
+         "resource_identifier": "https://github.com/example/repo/actions/runs/1",
+         "decision": "attest-pass",
+         "signed_object": {"ok": True},
+         "digest": "sha256:" + "c" * 64,
+         "bundle_digest": "sha256:" + "a" * 64}
+    e.update(over)
+    return e
+
+
+def _publish_evidence(**over):
+    """Evidence shaped for the REST publish schema (no bundle_digest —
+    additionalProperties:false; submission.check's evidence arg is a
+    different contract)."""
+    e = {"artifact_id": "pdd-registry-mcp-python-stdlib",
+         "resource_identifier": "https://github.com/example/repo/actions/runs/1",
+         "decision": "attest-pass", "signed_object": {"ok": True},
+         "digest": "sha256:" + "c" * 64}
     e.update(over)
     return e
 
@@ -200,3 +222,119 @@ def test_mcp_invalid_json_body(mcp_client):
 def test_surface_fresh_gate_ok():
     fresh, reason = registry_mcp.surface_fresh()
     assert fresh is True, reason
+
+
+# --- MCP Phase B: admin token mint/revoke + publish authn -----------------
+
+
+@pytest.fixture()
+def admin_env(monkeypatch, tmp_path):
+    """DB-backed server (sqlite :memory:) with admin token set and the
+    shared publish token unset, so minted tokens are the only publish
+    path."""
+    monkeypatch.setattr(server, "DATABASE_URL", "sqlite:///:memory:")
+    monkeypatch.setattr(server, "_db_conn", None)
+    # registry_mcp is a shared module whose _db_provider may have been
+    # bound to ANOTHER test module's server instance (each test module
+    # exec's its own copy of server.py) — rebind it to THIS instance.
+    monkeypatch.setattr(registry_mcp, "_db_provider", server._db)
+    monkeypatch.delenv("PDD_PUBLISH_TOKEN", raising=False)
+    monkeypatch.setattr(registry_mcp, "ADMIN_TOKEN", "admin-test-token-123")
+    httpd = HTTPServer(("127.0.0.1", 0), server.Handler)
+    thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+    thread.start()
+    base = f"http://127.0.0.1:{httpd.server_address[1]}"
+    yield base
+    httpd.shutdown()
+
+
+def _post_auth(base, payload, token):
+    headers = {"Content-Type": "application/json"}
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    req = urllib.request.Request(base + "/mcp", data=json.dumps(payload).encode(),
+                                 headers=headers, method="POST")
+    try:
+        with urllib.request.urlopen(req) as resp:
+            return resp.status, json.loads(resp.read().decode())
+    except urllib.error.HTTPError as err:
+        return err.code, json.loads(err.read().decode())
+
+
+def test_admin_mint_requires_valid_bearer(admin_env):
+    status, out = _post_auth(admin_env,
+                             {"jsonrpc": "2.0", "id": 1, "method": "tools/call",
+                              "params": {"name": "registry.admin.token.mint",
+                                         "arguments": {"label": "agent-x"}}},
+                             token=None)
+    assert status == 401
+    assert "PDD_ADMIN_TOKEN" in out["error"]["message"]
+    status, out = _post_auth(admin_env,
+                             {"jsonrpc": "2.0", "id": 1, "method": "tools/call",
+                              "params": {"name": "registry.admin.token.mint",
+                                         "arguments": {"label": "agent-x"}}},
+                             token="wrong-token")
+    assert status == 401
+
+
+def test_admin_mint_revoke_and_publish_flow(admin_env):
+    # mint (admin bearer) -> plaintext returned once
+    status, out = _post_auth(admin_env,
+                             {"jsonrpc": "2.0", "id": 1, "method": "tools/call",
+                              "params": {"name": "registry.admin.token.mint",
+                                         "arguments": {"label": "agent-y"}}},
+                             token="admin-test-token-123")
+    assert status == 200
+    minted = out["result"]["token"]
+    assert len(minted) == 48
+    tid = out["result"]["token_id"]
+    # publish with the minted token succeeds (env token is unset)
+    status, out = _post_auth(admin_env,
+                             {"jsonrpc": "2.0", "id": 2, "method": "tools/call",
+                              "params": {"name": "registry.submission.check",
+                                         "arguments": {"bundle": _bundle(),
+                                                        "evidence": _evidence()}}},
+                             token=None)
+    assert status == 200
+    req = urllib.request.Request(
+        admin_env + "/publish",
+        data=json.dumps({"bundle": _bundle(), "evidence": _publish_evidence()}).encode(),
+        headers={"Content-Type": "application/json",
+                 "Authorization": f"Bearer {minted}"},
+        method="POST")
+    with urllib.request.urlopen(req) as resp:
+        body = json.loads(resp.read().decode())
+    assert body["ok"] is True
+    # revoke -> the same token is rejected
+    status, out = _post_auth(admin_env,
+                             {"jsonrpc": "2.0", "id": 3, "method": "tools/call",
+                              "params": {"name": "registry.admin.token.revoke",
+                                         "arguments": {"token_id": tid}}},
+                             token="admin-test-token-123")
+    assert status == 200
+    assert out["result"]["revoked"] is True
+    req = urllib.request.Request(
+        admin_env + "/publish",
+        data=json.dumps({"bundle": _bundle(), "evidence": _publish_evidence()}).encode(),
+        headers={"Content-Type": "application/json",
+                 "Authorization": f"Bearer {minted}"},
+        method="POST")
+    try:
+        urllib.request.urlopen(req)
+        raise AssertionError("revoked token must be rejected")
+    except urllib.error.HTTPError as err:
+        assert err.code == 401
+
+
+def test_minted_token_stored_hashed_not_plaintext(admin_env):
+    status, out = _post_auth(admin_env,
+                             {"jsonrpc": "2.0", "id": 1, "method": "tools/call",
+                              "params": {"name": "registry.admin.token.mint",
+                                         "arguments": {"label": "hash-check"}}},
+                             token="admin-test-token-123")
+    minted = out["result"]["token"]
+    rows = registry_db.list_publish_tokens(server._db())
+    assert rows and rows[-1]["label"] == "hash-check"
+    assert all(minted not in str(r) for r in rows)  # plaintext never at rest
+    audit = registry_db.token_audit_rows(server._db())
+    assert audit[0]["action"] == "mint"

@@ -1,4 +1,10 @@
-# Per-agent publish tokens + durable token sync (sketch)
+# Per-agent publish tokens + durable token sync
+
+**Status: partially landed (2026-08-10, MCP Phase B).** Mint/revoke tools
+(`registry.admin.token.mint`/`revoke`, admin-gated by `PDD_ADMIN_TOKEN`),
+hash-at-rest storage, and the append-only token_audit trail are live in
+pdd-registry-mcp 1.1.0; the publish route accepts minted tokens and rejects
+revoked ones. Remaining ideas below.
 
 **Problem.** `PDD_PUBLISH_TOKEN` is a single shared credential. Today it is
 mirrored into Infisical (see `docs/onboarding.md`) so Infisical members can

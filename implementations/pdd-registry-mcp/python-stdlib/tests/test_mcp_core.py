@@ -36,7 +36,9 @@ def test_S001_tools_list_matches_contract():
     names = [t["name"] for t in out["result"]["tools"]]
     assert names == sorted({"registry.version", "registry.search",
                             "registry.index", "registry.evidence.verify",
-                            "registry.submission.check"})
+                            "registry.submission.check",
+                            "registry.admin.token.mint",
+                            "registry.admin.token.revoke"})
     for t in out["result"]["tools"]:
         assert t["description"] and isinstance(t["inputSchema"], dict)
 
@@ -50,6 +52,45 @@ def test_S002_error_envelope_shape():
         assert err["data"]["kind"] in ("invalid_request", "not_found",
                                        "internal")
         assert err["message"]
+
+
+def test_B004_admin_mint_dispatch_passthrough():
+    captured = {}
+    def mint_fn(args):
+        captured.update(args)
+        return {"token_id": 7, "token": "t" * 48, "label": args["label"],
+                "active": True}
+    core = McpCore(mint_fn=mint_fn)
+    out = core.handle(_req("tools/call", {"name": "registry.admin.token.mint",
+                                          "arguments": {"label": "agent-1"}}))
+    assert out["result"]["token_id"] == 7
+    assert captured["label"] == "agent-1"
+
+
+def test_B004_admin_mint_requires_label():
+    core = McpCore(mint_fn=lambda a: {"ok": True})
+    out = core.handle(_req("tools/call", {"name": "registry.admin.token.mint",
+                                          "arguments": {}}))
+    assert out["error"]["data"]["kind"] == "invalid_request"
+
+
+def test_B005_admin_revoke_dispatch_passthrough():
+    captured = {}
+    def revoke_fn(args):
+        captured.update(args)
+        return {"revoked": True}
+    core = McpCore(revoke_fn=revoke_fn)
+    out = core.handle(_req("tools/call", {"name": "registry.admin.token.revoke",
+                                          "arguments": {"token_id": 7}}))
+    assert out["result"]["revoked"] is True
+    assert captured["token_id"] == 7
+
+
+def test_B005_admin_unconfigured_store_fails_closed():
+    core = McpCore()  # no revoke_fn
+    out = core.handle(_req("tools/call", {"name": "registry.admin.token.revoke",
+                                          "arguments": {"token_id": 7}}))
+    assert out["error"]["data"]["kind"] == "internal"
 
 
 def test_B001_unknown_tool_fails_closed():

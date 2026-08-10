@@ -24,7 +24,9 @@
           "registry.search",
           "registry.index",
           "registry.evidence.verify",
-          "registry.submission.check"
+          "registry.submission.check",
+          "registry.admin.token.mint",
+          "registry.admin.token.revoke"
         ]},
         "description": {"type": "string", "minLength": 1},
         "inputSchema": {"type": "object"}

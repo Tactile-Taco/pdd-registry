@@ -1,0 +1,48 @@
+{
+  "files": [
+    "mcp_core.py",
+    "tests/test_mcp_core.py"
+  ],
+  "dependencies": {
+    "runtime": [
+      "stdlib only"
+    ],
+    "dev": [
+      "pytest",
+      "hypothesis",
+      "jsonschema"
+    ]
+  },
+  "invariant_lineage": {
+    "B-001": [
+      "test_B001_unknown_tool_fails_closed",
+      "test_B001_unknown_resource_fails_closed",
+      "test_B001_unknown_method_fails_closed"
+    ],
+    "B-002": [
+      "test_B002_search_passthrough_unchanged",
+      "test_B002_search_requires_query",
+      "test_B002_unconfigured_registry_fails_closed"
+    ],
+    "B-003": [
+      "test_B003_submission_checks_pass",
+      "test_B003_submission_checks_report_reasons",
+      "test_B003_submission_checks_never_claim_validation"
+    ],
+    "B-004": [
+      "test_B004_admin_mint_dispatch_passthrough",
+      "test_B004_admin_mint_requires_label"
+    ],
+    "B-005": [
+      "test_B005_admin_revoke_dispatch_passthrough",
+      "test_B005_admin_unconfigured_store_fails_closed"
+    ]
+  },
+  "known_limitations": [
+    "Attests the pure JSON-RPC dispatch core only; transport (stdio, /mcp streamable HTTP) and the registry HTTP client are deployment surface (src/registry_mcp.py), not the attested artifact",
+    "Registry-facing tools (search/index/evidence.verify) delegate to caller-injected functions \u2014 the core performs no network IO",
+    "submission.check is structural (shape, S-007 resource_identifier format, digest consistency); file-level S-008 staleness runs in the deployment surface, never claimed by the core",
+    "Publishing is not an MCP tool in Phase A (read-only surface); publish remains the REST /publish handshake",
+    "Performance budgets (O-005) are advisory should-tier; measured by benchmark, not admission-gating"
+  ]
+}

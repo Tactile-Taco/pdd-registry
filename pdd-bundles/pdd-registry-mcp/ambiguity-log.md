@@ -23,3 +23,13 @@
   arguments (mirroring the pdd-registry candidate's caller-supplied
   catalog): filesystem reads, network fetches, and the registry HTTP client
   are deployment surface (src/registry_mcp.py + the /mcp route).
+- **Revocation vs append-only (v1.1.0).** token rows are REVOCABLE state
+  (active=0) — this is a deliberate, audited state change on per-agent
+  credentials, NOT ledger/evidence data: bundle ledger blocks and evidence
+  rows stay append-only (S-009 of pdd-registry). The token_audit table is
+  itself append-only (no update/delete path).
+- **Minted tokens vs the shared token.** The publish route accepts the
+  shared env token OR an active minted token. Minted tokens are
+  indistinguishable at the pod from the env token (both are Bearer
+  credentials); the hash-at-rest design means a DB leak exposes no usable
+  credentials.

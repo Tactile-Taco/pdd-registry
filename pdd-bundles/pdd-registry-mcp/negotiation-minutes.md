@@ -30,3 +30,24 @@
   deployment surface; registry fetch is caller-injected for the core;
   publish is not an MCP tool in Phase A; skills resources are served from
   the image's .reasonix/skills (pdd-* only).
+
+## v1.1.0 version event (admin token mint/revoke, MCP Phase B)
+
+- **Decision (2026-08-10)**: the phased authz plan's Phase B lands: a
+  separate PDD_ADMIN_TOKEN (cluster Secret `pdd-admin-token`, created
+  idempotently by push.sh, mirrored into Infisical misc-secrets) gates the
+  new `registry.admin.token.mint` / `registry.admin.token.revoke` tools;
+  per-agent publish tokens are stored HASHED in the DB (plaintext returned
+  once), every mint/revoke appends to the token_audit trail, and the
+  publish route accepts either the shared env token or an ACTIVE minted
+  token (revoked tokens are rejected).
+- **Version**: 1.1.0 minor (S-003: optional ADDITIONS only — two new tools
+  + two new invariants; nothing removed/renamed/made-required).
+- **Invariants**: B-004 (mint: once-only plaintext, hash at rest, audit,
+  admin bearer), B-005 (revoke: deactivates, audit, never re-activates).
+- **Enforcement**: admin bearer at the /mcp route (constant-time compare,
+  TypeError->401), registry_db mint/revoke/verify (parameterized,
+  serialized, audited), contract tests at both layers (candidate dispatch
+  + service flows), publish-route acceptance of minted tokens.
+- **Compatibility matrix**: pdd-registry-mcp 1.1.0 (1.0.0 in git history),
+  sealed; same depends_on (pdd-registry); no dependents; additive surface.
