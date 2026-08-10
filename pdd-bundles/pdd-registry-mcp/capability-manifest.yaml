@@ -1,0 +1,24 @@
+capabilities:
+  network:
+    outbound_allowed: false
+    allowed_destinations: []   # registry fetch is caller-injected for the
+                               # attested core (O-001); the deployment surface
+                               # talks to the configured registry URL
+  filesystem:
+    read_allowed: false        # candidate is pure: bundle/evidence contents are
+    write_allowed: false       # caller-supplied in tool arguments (like the
+    allowed_paths: []          # pdd-registry candidate's caller-supplied catalog)
+  database:
+    allowed: false
+  secrets:
+    allowed_environment_variables: []
+  resources:
+    max_latency_ms: 200        # severity: should (advisory budget)
+    max_memory_mb: 32          # severity: should (advisory budget)
+    max_cpu_ms: null
+    max_concurrency: 1
+  background_work:
+    allowed: false
+  telemetry:
+    required_fields:
+      - protocol_version

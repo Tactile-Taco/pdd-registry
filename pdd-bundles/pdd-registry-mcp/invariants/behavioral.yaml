@@ -1,0 +1,30 @@
+behavioral_invariants:
+  - id: B-001
+    statement: >
+      Unknown method or tool fails closed: tools/call with an unknown tool
+      name and resources/read with an unknown URI return the S-002 error
+      envelope and never mutate state.
+    severity: must
+    validation:
+      - contract_tests
+      - mutation_sanity_check
+
+  - id: B-002
+    statement: >
+      Registry passthrough: registry.search and registry.index return the
+      registry API's ranked/listed results unchanged (deterministic
+      delegation; the registry is the source of truth).
+    severity: must
+    validation:
+      - contract_tests
+
+  - id: B-003
+    statement: >
+      Submission checks: registry.submission.check runs the structural
+      pre-push checks (bundle shape, S-007 resource_identifier format,
+      S-008 freshness) and returns per-check pass/fail with reasons. It
+      never claims the validator loop ran (honor system, S-007 of
+      pdd-registry).
+    severity: must
+    validation:
+      - contract_tests

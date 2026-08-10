@@ -68,7 +68,8 @@ def _decode(raw: bytes):
 
 def test_index_catalog_shape():
     catalog = registry_index.load_catalog(ROOT / "pdd-bundles")
-    assert sorted(b["name"] for b in catalog) == ["pdd-registry", "user-registry"]
+    assert sorted(b["name"] for b in catalog) == [
+        "pdd-registry", "pdd-registry-mcp", "user-registry"]
     b = next(b for b in catalog if b["name"] == "user-registry")
     assert b["status"] == "sealed"
     assert b["version"] == "1.1.0"
@@ -207,7 +208,8 @@ def test_get_healthz(client):
 def test_get_bundles_filtered(client):
     status, body = client("/bundles?status=sealed")
     assert status == 200
-    assert sorted(b["name"] for b in body["bundles"]) == ["pdd-registry", "user-registry"]
+    assert sorted(b["name"] for b in body["bundles"]) == [
+        "pdd-registry", "pdd-registry-mcp", "user-registry"]
     status, body = client("/bundles?status=draft")
     assert status == 200
     assert body["bundles"] == []
@@ -224,7 +226,7 @@ def test_get_bundles_namespace_tag_filters(client):
     assert [b["name"] for b in body["bundles"]] == ["user-registry"]
     status, body = client("/bundles?namespace=pdd")
     assert status == 200
-    assert [b["name"] for b in body["bundles"]] == ["pdd-registry"]
+    assert [b["name"] for b in body["bundles"]] == ["pdd-registry", "pdd-registry-mcp"]
     status, body = client("/bundles?tag=engine")
     assert status == 200
     assert [b["name"] for b in body["bundles"]] == ["pdd-registry"]

@@ -1,0 +1,66 @@
+protocol:
+  name: pdd-registry-mcp
+  version: 1.0.0
+  status: sealed
+
+# v1.0.0: the MCP client-interface protocol for the pdd registry. Agents
+# (Reasonix, kimi, other MCP clients) talk to the registry through this
+# surface: JSON-RPC tools + content-addressed resources. The tool and
+# resource shapes ARE the contract — the server's tools/list and
+# resources/list are generated from these schemas, so the served surface
+# can never drift from the sealed protocol (S-004).
+namespace: pdd
+tags: [mcp-server, registry-client]
+
+purpose: >
+  MCP client interface for the pdd protocol registry. Given a sealed
+  pdd-registry bundle and a reachable registry URL, the protocol describes
+  the JSON-RPC 2.0 tool surface by which agents search the catalog, view
+  bundles, verify evidence records, run pre-push submission checks
+  (lint, S-007 evidence shape, S-008 freshness), and fetch the PDD skills
+  as versioned resources. The surface is read-only in this version
+  (Phase A: publishing stays on the REST publish handshake with the
+  bearer token); transport (stdio, streamable HTTP) is deployment surface.
+
+boundary:
+  in_scope:
+    - "Tool contract: registry.version, registry.search, registry.index,
+      registry.evidence.verify, registry.submission.check"
+    - "Resource contract: version manifest + PDD skills catalog (skills://)"
+    - Deterministic, strictly non-mutating tool calls (read-only surface)
+    - "Surface freshness: the served surface must derive from the current
+      sealed bundle digest (S-004 startup check)"
+  out_of_scope:
+    - "Transport wiring (stdio / streamable HTTP) and deployment: src/registry_mcp.py
+      + the /mcp route are the production surface; the attested candidate is the
+      pure JSON-RPC dispatch core"
+    - "Publishing bundles: Phase A exposes no write tools; publish remains the
+      REST /publish handshake with PDD_PUBLISH_TOKEN"
+    - Authentication and authorization (Phase A is read-only; Phase B adds
+      PDD_ADMIN_TOKEN-gated mint tools)
+    - "Running or re-proving the validator loop: evidence.verify reports the
+      registry's S-007 honor-system records; submission.check verifies shape
+      and freshness, never claims independent validation"
+
+handshakes:
+  request_schema: schemas/mcp-request.schema.json
+  response_schema: schemas/mcp-response.schema.json
+  tools_schema: schemas/tool-registry.schema.json
+  resources_schema: schemas/resource-registry.schema.json
+  error_schema: schemas/error.schema.json
+
+depends_on:
+  - pdd-registry
+provides:
+  pdd-registry-mcp.tools: schemas/tool-registry.schema.json
+  pdd-registry-mcp.resources: schemas/resource-registry.schema.json
+  pdd-registry-mcp.errors: schemas/error.schema.json
+
+invariants:
+  structural: invariants/structural.yaml
+  behavioral: invariants/behavioral.yaml
+  operational: invariants/operational.yaml
+
+capabilities: capability-manifest.yaml
+validators: validators/validation-plan.yaml
+evidence: evidence-requirements.yaml

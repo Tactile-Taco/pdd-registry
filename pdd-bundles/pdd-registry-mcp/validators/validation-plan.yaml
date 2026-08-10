@@ -1,0 +1,44 @@
+validation_plan:
+  structural:
+    - id: schema-validation
+      validates: [S-001]
+      method: json_schema_validation
+      validator: schema-validator@1.0.0
+    - id: contract-tests
+      validates: [S-001, S-002, S-004]
+      method: contract_tests
+      validator: contract-runner@1.0.0
+    - id: schema-diff
+      validates: [S-003]
+      method: schema_diff_check
+      validator: bundle-linter@1.0.0
+    - id: bundle-lint
+      validates: [S-001]
+      method: linter
+      validator: bundle-linter@1.0.0
+    - id: staleness-gate
+      validates: [S-004]
+      method: staleness_gate
+      validator: contract-runner@1.0.0
+  behavioral:
+    - id: contract-tests
+      validates: [B-001, B-002, B-003]
+      method: contract_tests
+      validator: contract-runner@1.0.0
+    - id: mutation-sanity
+      validates: [B-001]
+      method: mutation_sanity_check
+      validator: mutation-sanity@1.0.0
+  operational:
+    - id: import-scan
+      validates: [O-001, O-002, O-003, O-004]
+      method: import_scan
+      validator: import-scanner@1.0.0
+    - id: sandbox-checks
+      validates: [O-001, O-002, O-004]
+      method: sandbox_policy_check
+      validator: capability-monitor@1.0.0
+    - id: benchmark
+      validates: [O-005]
+      method: benchmark
+      validator: benchmark-runner@1.0.0

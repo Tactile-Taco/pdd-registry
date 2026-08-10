@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://pdd-repository/schemas/pdd-registry-mcp/resource-registry.schema.json",
+  "title": "pdd-registry-mcp resource registry (S-001: resources/list must equal this set)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["resources", "manifest"],
+  "properties": {
+    "resources": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/resource"}
+    },
+    "manifest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["protocol", "latest_skill_versions"],
+      "properties": {
+        "protocol": {"type": "string"},
+        "latest_skill_versions": {"type": "object", "additionalProperties": {"type": "string"}}
+      }
+    }
+  },
+  "$defs": {
+    "resource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["uri", "name", "mimeType", "description"],
+      "properties": {
+        "uri": {"type": "string", "pattern": "^(skills://pdd-[a-z-]+/(latest|[0-9]+\\.[0-9]+\\.[0-9]+)|registry://version)$"},
+        "name": {"type": "string", "minLength": 1},
+        "mimeType": {"type": "string"},
+        "description": {"type": "string"}
+      }
+    }
+  }
+}

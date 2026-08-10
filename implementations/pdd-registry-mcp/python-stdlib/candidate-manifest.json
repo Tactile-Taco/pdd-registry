@@ -1,0 +1,42 @@
+{
+  "artifact_id": "pdd-registry-mcp-python-stdlib",
+  "protocol": {"name": "pdd-registry-mcp", "version": "1.0.0", "status": "sealed"},
+  "language": "python",
+  "runtime": "python-3.12",
+  "files": [
+    "mcp_core.py",
+    "tests/test_mcp_core.py"
+  ],
+  "dependencies": {"runtime": ["stdlib only"], "dev": ["pytest", "hypothesis", "jsonschema"]},
+  "entry_module": "mcp_core",
+  "entry_class": "McpCore",
+  "smoke": {
+    "method": "handle",
+    "args": {"jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {}},
+    "assert_expr": "r['result']['tools']"
+  },
+  "benchmark": {
+    "method": "handle",
+    "iterations": 1000,
+    "args_template": {"jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {}}
+  },
+  "mutation_sanity": {
+    "invariant": "B-001",
+    "pytest_filter": "B001_unknown_tool",
+    "find": "        if name not in self._tool_names:",
+    "replace": "        if False:  # MUTANT: unknown-tool guard removed (B-001)"
+  },
+  "invariant_lineage": {
+    "B-001": ["test_B001_unknown_tool_fails_closed", "test_B001_unknown_resource_fails_closed", "test_B001_unknown_method_fails_closed"],
+    "B-002": ["test_B002_search_passthrough_unchanged", "test_B002_search_requires_query", "test_B002_unconfigured_registry_fails_closed"],
+    "B-003": ["test_B003_submission_checks_pass", "test_B003_submission_checks_report_reasons", "test_B003_submission_checks_never_claim_validation"]
+  },
+  "known_limitations": [
+    "Attests the pure JSON-RPC dispatch core only; transport (stdio, /mcp streamable HTTP) and the registry HTTP client are deployment surface (src/registry_mcp.py), not the attested artifact",
+    "Registry-facing tools (search/index/evidence.verify) delegate to caller-injected functions — the core performs no network IO",
+    "submission.check is structural (shape, S-007 resource_identifier format, digest consistency); file-level S-008 staleness runs in the deployment surface, never claimed by the core",
+    "Publishing is not an MCP tool in Phase A (read-only surface); publish remains the REST /publish handshake",
+    "Performance budgets (O-005) are advisory should-tier; measured by benchmark, not admission-gating"
+  ],
+  "self_check": "non-authoritative: run locally, still a candidate until the Validation Engine admits"
+}

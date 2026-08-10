@@ -1,0 +1,40 @@
+operational_invariants:
+  - id: O-001
+    statement: The implementation must not initiate outbound network connections (the registry fetch is caller-injected for the attested core).
+    severity: must
+    infra_assumption: sandbox network denial (docker --network none) or static import/call scan
+    validation:
+      - import_scan
+      - sandbox_policy_check
+
+  - id: O-002
+    statement: The implementation must not write to the filesystem.
+    severity: must
+    infra_assumption: sandbox read-only fs; static scan
+    validation:
+      - import_scan
+      - sandbox_policy_check
+
+  - id: O-003
+    statement: The implementation must use only the approved stdlib import allowlist.
+    severity: must
+    infra_assumption: AST import scan (no third-party runtime deps)
+    validation:
+      - import_scan
+
+  - id: O-004
+    statement: The implementation must not spawn background work (threads, timers, detached processes).
+    severity: must
+    infra_assumption: static call scan; docker sandbox if available
+    validation:
+      - import_scan
+      - sandbox_policy_check
+
+  - id: O-005
+    statement: >
+      Performance budget (advisory): p95 dispatch latency under the
+      benchmark workload below 200 ms; peak memory below 32 MB.
+    severity: should
+    infra_assumption: benchmark harness; excess recorded as observation, not admission failure
+    validation:
+      - benchmark

@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://pdd-repository/schemas/pdd-registry-mcp/mcp-response.schema.json",
+  "title": "MCP JSON-RPC response",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["jsonrpc", "id"],
+  "properties": {
+    "jsonrpc": {"const": "2.0"},
+    "id": {"type": ["string", "number", "null"]},
+    "result": {},
+    "error": {"$ref": "error.schema.json"}
+  }
+}

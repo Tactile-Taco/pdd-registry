@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://pdd-repository/schemas/pdd-registry-mcp/error.schema.json",
+  "title": "MCP JSON-RPC error envelope",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["code", "message"],
+  "properties": {
+    "code": {
+      "type": "integer",
+      "description": "Stable error kind from the enumerated set (S-002): -32602 invalid_request, -32601 method_not_found, -32000 internal. Tool-level failures carry data.kind from {invalid_request, not_found, internal}.",
+      "enum": [-32602, -32601, -32000]
+    },
+    "message": {"type": "string", "minLength": 1},
+    "data": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind"],
+      "properties": {
+        "kind": {"enum": ["invalid_request", "not_found", "internal"]},
+        "detail": {"type": "string"}
+      }
+    }
+  }
+}

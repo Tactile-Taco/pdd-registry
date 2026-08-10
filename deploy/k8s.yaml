@@ -44,6 +44,10 @@ spec:
                   name: pdd-postgres
                   key: PDD_DATABASE_URL
                   optional: false
+            # MCP surface (pdd-registry-mcp Phase A): /mcp delegates the
+            # registry-facing tools to this same pod's REST API.
+            - name: PDD_REGISTRY_URL
+              value: "pdd+http://localhost:8080"
             # Publish authn (POST /publish bearer token; the in-cluster seed
             # sends it via this env). Created idempotently by push.sh.
             - name: PDD_PUBLISH_TOKEN

@@ -45,6 +45,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import registry_index  # noqa: E402  (shared catalog/search with scripts/pdd.py)
 import registry_db  # noqa: E402  (DB-backed storage adapter, v1.2 S-006)
+import registry_mcp  # noqa: E402  (MCP surface, pdd-registry-mcp Phase A)
 
 _db_conn = None
 _db_lock = threading.Lock()
@@ -283,7 +284,9 @@ class Handler(BaseHTTPRequestHandler):
         {bundle, evidence} validates against the publish schema and the
         storage adapter, then persists idempotently. Only available in
         DB-backed mode (PDD_DATABASE_URL) — the filesystem path is
-        author-side (git + CLI) and never accepts writes over HTTP."""
+        author-side (git + CLI) and never accepts writes over HTTP.
+        Phase A also serves POST /mcp: the read-only MCP JSON-RPC surface
+        (pdd-registry-mcp protocol); no token needed (no write tools)."""
         # Slow-dribble hardening (security review MEDIUM): the token lives
         # in the HEADERS — check it BEFORE reading the body, and cap the
         # socket read, so unauthenticated clients cannot pin threads by
@@ -291,6 +294,29 @@ class Handler(BaseHTTPRequestHandler):
         self.connection.settimeout(30)
         try:
             parsed = urlparse(self.path)
+            if parsed.path == "/mcp":
+                if registry_mcp.CORE is None:
+                    self._json({"jsonrpc": "2.0", "id": None,
+                                "error": {"code": -32000,
+                                          "message": "S-004 surface stale",
+                                          "data": {"kind": "internal"}}},
+                               status=503)
+                    return
+                try:
+                    length = int(self.headers.get("Content-Length", "0"))
+                except ValueError:
+                    length = 0
+                if not 0 < length <= 8 * 1024 * 1024:
+                    self._json({"jsonrpc": "2.0", "id": None,
+                                "error": {"code": -32602,
+                                          "message": "body must be 1..8 MiB",
+                                          "data": {"kind": "invalid_request"}}},
+                               status=400)
+                    return
+                body = self.rfile.read(length)
+                resp, status = registry_mcp.handle_request(body)
+                self._json(resp, status=status)
+                return
             if parsed.path != "/publish":
                 self._json({"error": {"kind": "not_found",
                                       "message": "unknown route"}}, status=404)
