@@ -1,0 +1,39 @@
+structural_invariants:
+  - id: S-001
+    statement: >
+      TEMPLATE (should): receipt attachment — an author claiming a
+      validator-loop execution should carry its receipt inside the
+      evidence record's signed_object under the key validator_receipt
+      (author-signed content; the registry never requires it).
+    severity: should
+    validation:
+      - template
+
+  - id: S-002
+    statement: >
+      TEMPLATE (should): artifact digests — a receipt should pin every
+      artifact it claims with a sha256: digest so third parties can
+      re-check without trusting the author.
+    severity: should
+    validation:
+      - template
+
+  - id: S-003
+    statement: >
+      TEMPLATE (should): shape conformance — a receipt should match its
+      declared provider's shape in this taxonomy (the shape validator
+      reports deviations).
+    severity: should
+    validation:
+      - template
+      - contract_tests
+
+  - id: S-004
+    statement: >
+      TEMPLATE (should): pointer discipline — the resource_identifier
+      (S-007 of pdd-registry) should remain the canonical pointer to the
+      execution record; the receipt is structured re-checkable content,
+      not a replacement pointer.
+    severity: should
+    validation:
+      - template

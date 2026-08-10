@@ -1,0 +1,15 @@
+capabilities:
+  receipt_providers:
+    github-actions-run: "GitHub Actions workflow run: repository, run_id, workflow, conclusion, started_at, artifacts[]"
+    generic-ci: "Any other CI: pipeline_url, conclusion, started_at, artifacts[]"
+    local-attestation: "Local/offline attestation: tool, tool_version, timestamp, artifact_digests[]"
+  network:
+    outbound_allowed: false
+  filesystem:
+    read_allowed: false
+    write_allowed: false
+  background_work:
+    allowed: false
+  telemetry:
+    required_fields:
+      - protocol_version

@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://pdd-repository/schemas/taxonomy/validator-receipt/receipts.schema.json",
+  "title": "taxonomy/validator-receipt shapes",
+  "type": "object",
+  "additionalProperties": false,
+  "oneOf": [
+    {
+      "required": ["provider", "repository", "run_id", "workflow", "conclusion", "started_at", "artifacts"],
+      "properties": {
+        "provider": {"const": "github-actions-run"},
+        "repository": {"type": "string", "pattern": "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$"},
+        "run_id": {"type": "integer", "minimum": 1},
+        "workflow": {"type": "string", "minLength": 1},
+        "conclusion": {"enum": ["success", "failure", "cancelled"]},
+        "started_at": {"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T"},
+        "artifacts": {"type": "array", "minItems": 1,
+                      "items": {"type": "object", "additionalProperties": false,
+                                "required": ["name", "digest"],
+                                "properties": {"name": {"type": "string", "minLength": 1},
+                                               "digest": {"type": "string",
+                                                          "pattern": "^sha256:[0-9a-f]{64}$"}}}}
+      }
+    },
+    {
+      "required": ["provider", "pipeline_url", "conclusion", "started_at", "artifacts"],
+      "properties": {
+        "provider": {"const": "generic-ci"},
+        "pipeline_url": {"type": "string", "pattern": "^https?://"},
+        "conclusion": {"enum": ["success", "failure", "cancelled"]},
+        "started_at": {"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T"},
+        "artifacts": {"type": "array", "minItems": 1,
+                      "items": {"type": "object", "additionalProperties": false,
+                                "required": ["name", "digest"],
+                                "properties": {"name": {"type": "string", "minLength": 1},
+                                               "digest": {"type": "string",
+                                                          "pattern": "^sha256:[0-9a-f]{64}$"}}}}
+      }
+    },
+    {
+      "required": ["provider", "tool", "tool_version", "timestamp", "artifact_digests"],
+      "properties": {
+        "provider": {"const": "local-attestation"},
+        "tool": {"type": "string", "minLength": 1},
+        "tool_version": {"type": "string", "minLength": 1},
+        "timestamp": {"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T"},
+        "artifact_digests": {"type": "array", "minItems": 1,
+                             "items": {"type": "string",
+                                       "pattern": "^sha256:[0-9a-f]{64}$"}}
+      }
+    }
+  ]
+}

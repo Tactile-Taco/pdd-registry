@@ -1,0 +1,11 @@
+behavioral_invariants:
+  - id: B-001
+    statement: >
+      Receipt shape validation: given a receipt dict, the validator
+      reports unknown providers, missing/invalid required fields, invalid
+      conclusions, and malformed artifact digests; valid receipts for all
+      three providers pass. Deterministic and non-mutating.
+    severity: must
+    validation:
+      - contract_tests
+      - mutation_sanity_check

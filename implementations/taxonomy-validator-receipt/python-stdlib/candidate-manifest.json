@@ -1,0 +1,43 @@
+{
+  "artifact_id": "taxonomy-validator-receipt-python-stdlib",
+  "protocol": {"name": "validator-receipt", "version": "1.0.0", "status": "sealed"},
+  "language": "python",
+  "runtime": "python-3.12",
+  "files": [
+    "receipt_validator.py",
+    "tests/test_receipt_validator.py"
+  ],
+  "dependencies": {"runtime": ["stdlib only"], "dev": ["pytest"]},
+  "entry_module": "receipt_validator",
+  "entry_class": null,
+  "smoke": {
+    "method": "validate_receipt",
+    "args": {"provider": "github-actions-run", "repository": "a/b",
+             "run_id": 1, "workflow": "w", "conclusion": "success",
+             "started_at": "2026-08-10T00:00:00Z",
+             "artifacts": [{"name": "r", "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}]},
+    "assert_expr": "r == []"
+  },
+  "benchmark": {
+    "method": "validate_receipt",
+    "iterations": 1000,
+    "args_template": {"provider": "generic-ci", "pipeline_url": "https://x/1",
+                      "conclusion": "success", "started_at": "2026-08-10T00:00:00Z",
+                      "artifacts": [{"name": "a", "digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}]}
+  },
+  "mutation_sanity": {
+    "invariant": "B-001",
+    "pytest_filter": "B001_unknown_provider",
+    "find": "    if provider not in PROVIDERS:",
+    "replace": "    if False:  # MUTANT: unknown-provider guard removed (B-001)"
+  },
+  "invariant_lineage": {
+    "B-001": ["test_B001_valid_receipts_for_all_providers", "test_B001_unknown_provider_reported", "test_B001_missing_required_fields_reported", "test_B001_invalid_conclusion_reported", "test_B001_malformed_digests_reported", "test_B001_non_dict_receipt_fails", "test_B001_deterministic_and_non_mutating"]
+  },
+  "known_limitations": [
+    "Validates receipt SHAPES only; the registry never re-checks receipts against the external system (honor system) and never re-runs validation",
+    "Replay-on-demand is deferred (DB-side replay is only meaningful for registry-owned canonicalization)",
+    "New provider shapes are additive-only (never break parsing of existing receipts)"
+  ],
+  "self_check": "non-authoritative: run locally, still a candidate until the Validation Engine admits"
+}

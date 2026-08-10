@@ -1,0 +1,57 @@
+protocol:
+  name: validator-receipt
+  version: 1.0.0
+  status: sealed
+
+# Taxonomy bundle (namespace `taxonomy`): cross-harness validator-loop
+# EXECUTION RECEIPTS — structured evidence that a validator loop ran and
+# how to re-check it, independent of the harness (GitHub Actions, other
+# CI, local attestation). This evolves the S-007 honor system additively:
+# receipts are OPTIONAL author content carried inside the signed_object;
+# the registry parses them per this taxonomy and reports validity as an
+# observation, without requiring them and without re-running validation.
+namespace: taxonomy
+tags: [taxonomy]
+
+purpose: >
+  Validator-execution receipt taxonomy. Given an evidence record's
+  signed_object, the taxonomy defines three receipt shapes
+  (github-actions-run, generic-ci, local-attestation) with their required
+  fields (provider, conclusion, timestamps, artifact digests) so that any
+  verifier — registry, agent, or human — can parse and re-check an
+  author's validator-loop execution record without trusting the author
+  and without knowing the harness. Receipts are optional (S-007 honor
+  system unchanged for records without one).
+
+boundary:
+  in_scope:
+    - "Receipt shapes: schemas/receipts.schema.json (oneOf per provider)"
+    - "Shape validation (B-001, must): unknown providers, missing fields,
+      invalid conclusions, and malformed artifact digests are reported"
+    - "Additive S-007 evolution: the registry reports a receipt observation
+      when signed_object carries a validator_receipt; it never requires
+      one, never re-runs validation, and never claims the receipt is true"
+  out_of_scope:
+    - "Re-running the validator loop or verifying the receipt against the
+      external system (that remains the honor system; a receipt is
+      re-checkable, not re-checked by the registry)"
+    - "Registry replay-on-demand (deferred: only meaningful for
+      registry-owned canonicalization — see the three-state verify work)"
+    - "Registry mechanics"
+
+handshakes:
+  request_schema: schemas/receipts.schema.json
+
+depends_on: []
+provides:
+  taxonomy.validator-receipt.shapes: schemas/receipts.schema.json
+  taxonomy.validator-receipt.validator: invariants/behavioral.yaml
+
+invariants:
+  structural: invariants/structural.yaml
+  behavioral: invariants/behavioral.yaml
+  operational: invariants/operational.yaml
+
+capabilities: capability-manifest.yaml
+validators: validators/validation-plan.yaml
+evidence: evidence-requirements.yaml

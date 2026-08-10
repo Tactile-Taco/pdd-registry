@@ -911,3 +911,33 @@ def test_S010_http_version_event_preserves_prior_versions(db_client):
     _, body = db_client("/evidence/admission")
     assert len(body["admissions"]) == 2
     assert registry_db.verify_ledger_chain(server._db())["ok"] is True
+
+
+def test_receipt_observation_valid_and_malformed(db_client):
+    """Validator-attestation observation (taxonomy/validator-receipt):
+    an author receipt inside signed_object is parsed and reported; a
+    malformed receipt is an observation, not a verification failure; no
+    receipt -> receipt: null (S-007 additive, honor system intact)."""
+    import json as _json
+    good = {"validator_receipt": {
+        "provider": "github-actions-run", "repository": "a/b", "run_id": 7,
+        "workflow": "pdd-validator-loop", "conclusion": "success",
+        "started_at": "2026-08-10T00:00:00Z",
+        "artifacts": [{"name": "r", "digest": "sha256:" + "a" * 64}]}}
+    bad = {"validator_receipt": {"provider": "gitlab-ci"}}
+    registry_db.publish(server._db(), _bundle(), _evidence(
+        artifact_id="receipt-good", digest="sha256:" + "1" * 64,
+        signed_object=good))
+    registry_db.publish(server._db(), _bundle(), _evidence(
+        artifact_id="receipt-bad", digest="sha256:" + "2" * 64,
+        signed_object=bad))
+    registry_db.publish(server._db(), _bundle(), _evidence(
+        artifact_id="receipt-none", digest="sha256:" + "3" * 64,
+        signed_object={"ok": True}))
+    status, body = db_client("/evidence/verify?bundle=pdd-registry")
+    assert status == 200
+    by_artifact = {r["artifact_id"]: r for r in body["results"]}
+    assert by_artifact["receipt-good"]["receipt"]["valid"] is True
+    assert by_artifact["receipt-bad"]["receipt"]["valid"] is False
+    assert by_artifact["receipt-bad"]["receipt"]["errors"]
+    assert by_artifact["receipt-none"]["receipt"] is None

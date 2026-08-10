@@ -70,13 +70,20 @@ M6 mini-pc, `deploy/postgres.yaml`; pdd-registry protocol 1.2.0, S-006):
   accepted by `POST /publish` alongside the shared env token; revoked
   tokens are rejected. Mint a token per agent instead of sharing
   `PDD_PUBLISH_TOKEN`.
-- **Taxonomy bundles (2026-08-10)**: `taxonomy/web-service` and
-  `taxonomy/ai-agent` are sealed catalog entries defining component
-  vocabularies + should-tier invariant templates; discover them with
-  `pdd search taxonomy --registry …` or `GET /bundles?tag=taxonomy`.
-  Concrete protocols declare conformance with
+- **Taxonomy bundles (2026-08-10)**: `taxonomy/web-service`,
+  `taxonomy/ai-agent`, and `taxonomy/validator-receipt` are sealed catalog
+  entries defining component vocabularies + should-tier invariant
+  templates; discover them with `pdd search taxonomy --registry …` or
+  `GET /bundles?tag=taxonomy`. Concrete protocols declare conformance with
   `depends_on: [taxonomy/<name>]` and map components into
   `capabilities.components` (see the bundles' ambiguity logs).
+- **Validator receipts (2026-08-10)**: optional structured execution
+  receipts (provider shapes: `github-actions-run`, `generic-ci`,
+  `local-attestation`) carried inside an evidence record's `signed_object`
+  under `validator_receipt`. The registry parses them per
+  `taxonomy/validator-receipt` and reports `receipt: {provider, valid,
+  errors}` in `/evidence/verify` — re-checkable, never re-run, never
+  required (S-007 additive).
 - **Evidence freshness gate (S-008, v1.3.0)**: the latest admission
   evidence must attest the CURRENT on-disk bundle digest — any bundle
   change without re-validation + re-attestation is a violation. Keyless

@@ -263,11 +263,61 @@ def _db_evidence_verify(name: str, namespace: str | None = None,
                 row_ok, reason = False, "verification unavailable"
         elif row_ok:
             row_ok, reason = False, "verification unavailable"
-        out.append({"bundle": name, "artifact_id": row["artifact_id"],
-                    "resource_identifier": row["resource_identifier"],
-                    "decision": row["decision"], "signature_valid": row_ok,
-                    "verified": row_ok, "reason": reason})
+        record = {"bundle": name, "artifact_id": row["artifact_id"],
+                  "resource_identifier": row["resource_identifier"],
+                  "decision": row["decision"], "signature_valid": row_ok,
+                  "verified": row_ok, "reason": reason}
+        # Validator-attestation observation (taxonomy/validator-receipt,
+        # additive S-007 evolution): when the author carried a receipt
+        # inside the signed object, parse it per the receipt taxonomy and
+        # report validity. Receipts are OPTIONAL; a malformed receipt is an
+        # observation, not a verification failure.
+        record["receipt"] = _receipt_observation(row["signed_object"])
+        out.append(record)
     return out
+
+
+_receipt_validator = None
+
+
+def _load_receipt_validator():
+    """Lazy-load taxonomy/validator-receipt's shape validator from the
+    image (importlib; guarded so an absent bundle degrades to None)."""
+    global _receipt_validator
+    if _receipt_validator is not None:
+        return _receipt_validator
+    import importlib.util as _iu
+    try:
+        path = (ROOT / "implementations" / "taxonomy-validator-receipt"
+                / "python-stdlib" / "receipt_validator.py")
+        spec = _iu.spec_from_file_location("receipt_validator", path)
+        mod = _iu.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        _receipt_validator = mod
+    except Exception:  # noqa: BLE001
+        _receipt_validator = False
+    return _receipt_validator
+
+
+def _receipt_observation(signed_object_json: str) -> dict | None:
+    """Parse signed_object.validator_receipt per taxonomy/validator-receipt.
+    None = no receipt attached (honor system unchanged)."""
+    try:
+        obj = json.loads(signed_object_json)
+        receipt = (obj or {}).get("validator_receipt")
+    except (json.JSONDecodeError, AttributeError):
+        return None
+    if not isinstance(receipt, dict):
+        return None
+    validator = _load_receipt_validator()
+    if validator is False:
+        return {"provider": receipt.get("provider"),
+                "valid": None,
+                "errors": ["receipt validator unavailable"]}
+    errors = validator.validate_receipt(receipt)
+    return {"provider": receipt.get("provider"),
+            "valid": len(errors) == 0,
+            "errors": errors or None}
 
 
 class Handler(BaseHTTPRequestHandler):
