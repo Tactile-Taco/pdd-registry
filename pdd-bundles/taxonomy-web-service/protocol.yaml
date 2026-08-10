@@ -1,0 +1,55 @@
+protocol:
+  name: web-service
+  version: 1.0.0
+  status: sealed
+
+# Taxonomy bundle (namespace `taxonomy`): a shared vocabulary + SHOULD-tier
+# invariant templates for web-service protocols. Concrete bundles declare
+# conformance with a depends_on: [taxonomy/web-service] edge and map their
+# components to this vocabulary (capabilities.components of the concrete
+# bundle). Templates are advisory by design: concrete bundles adapt them
+# and document overrides — taxonomies are opinionated, not mandatory.
+namespace: taxonomy
+tags: [taxonomy]
+
+purpose: >
+  Web-service protocol taxonomy. Given a concrete web-service protocol
+  bundle, the taxonomy provides the canonical component vocabulary
+  (ingress, api, authn, authorization, database, cache, queue, storage,
+  observability, config, scheduler, worker) and should-tier invariant
+  templates that the concrete protocol adapts (severity may be raised to
+  must with a documented reason; templates may be narrowed, never
+  silently dropped).
+
+boundary:
+  in_scope:
+    - "Component vocabulary: capabilities.components maps each canonical
+      component to its role"
+    - "Invariant templates: S-001..S-005 in invariants/structural.yaml
+      (all severity: should — advisory by design)"
+    - "Conformance convention: a concrete bundle declares
+      depends_on: [taxonomy/web-service] and maps its components to this
+      vocabulary (the registry already expresses the edge)"
+  out_of_scope:
+    - "Enforcing conformance: the taxonomy is vocabulary + templates; it
+      does not validate concrete bundles (the attested candidate validates
+      the vocabulary SHAPE, not any concrete protocol)"
+    - "Registry mechanics (search/filter/publish): those are pdd-registry's
+      surface"
+
+handshakes:
+  request_schema: schemas/components.schema.json
+
+depends_on: []
+provides:
+  taxonomy.web-service.vocabulary: schemas/components.schema.json
+  taxonomy.web-service.templates: invariants/structural.yaml
+
+invariants:
+  structural: invariants/structural.yaml
+  behavioral: invariants/behavioral.yaml
+  operational: invariants/operational.yaml
+
+capabilities: capability-manifest.yaml
+validators: validators/validation-plan.yaml
+evidence: evidence-requirements.yaml

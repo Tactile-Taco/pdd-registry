@@ -1,0 +1,20 @@
+evidence_requirements:
+  required:
+    - protocol_version
+    - implementation_artifact_hash
+    - validator_versions
+    - validation_results
+    - dependency_manifest
+    - discovery_log
+    - resource_identifier   # S-007 of pdd-registry (honor system)
+    - freshness             # S-008 of pdd-registry: latest admission attests
+                            # the current bundle digest
+  attestations:
+    signed: true
+    signer: evidence-keeper (HMAC-SHA256, production PDD_EVIDENCE_KEY from Infisical, nixos-infra project)
+  replay:
+    deterministic_replay_required: true
+    required_environment_metadata:
+      - runtime
+      - operating_system
+      - dependency_lockfile

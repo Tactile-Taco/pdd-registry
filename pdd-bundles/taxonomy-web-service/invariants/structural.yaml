@@ -1,0 +1,44 @@
+structural_invariants:
+  - id: S-001
+    statement: >
+      TEMPLATE (should): idempotent writes — mutation endpoints should be
+      idempotent (stable request ids / unique keys) or document their
+      non-idempotence explicitly.
+    severity: should
+    validation:
+      - template
+
+  - id: S-002
+    statement: >
+      TEMPLATE (should): error envelope — failures should return a stable
+      error shape with a machine-readable kind and a human-readable
+      message.
+    severity: should
+    validation:
+      - template
+
+  - id: S-003
+    statement: >
+      TEMPLATE (should): read discipline — reads should be deterministic
+      and strictly non-mutating.
+    severity: should
+    validation:
+      - template
+
+  - id: S-004
+    statement: >
+      TEMPLATE (should): component mapping — a conforming bundle should
+      map every component it declares to this vocabulary (no invented
+      component names without a documented override).
+    severity: should
+    validation:
+      - template
+      - contract_tests
+
+  - id: S-005
+    statement: >
+      TEMPLATE (should): observability — key operations should emit
+      structured telemetry (request ids, durations, outcomes).
+    severity: should
+    validation:
+      - template

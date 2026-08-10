@@ -1,0 +1,20 @@
+capabilities:
+  components:
+    tool-runtime: "execution of external tool calls with the S-001 envelope"
+    memory: "durable agent state across turns"
+    context: "bounded working window (S-002 boundary discipline)"
+    guardrails: "pre-action safety checks (S-003 ordering)"
+    skills-registry: "discoverable, versioned agent skills"
+    mcp-transport: "MCP client/server transport"
+    vector-store: "embedding/similarity retrieval"
+    evals: "offline/online evaluation of agent behavior"
+  network:
+    outbound_allowed: false
+  filesystem:
+    read_allowed: false
+    write_allowed: false
+  background_work:
+    allowed: false
+  telemetry:
+    required_fields:
+      - protocol_version

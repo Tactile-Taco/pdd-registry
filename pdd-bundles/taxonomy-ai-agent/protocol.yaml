@@ -1,0 +1,49 @@
+protocol:
+  name: ai-agent
+  version: 1.0.0
+  status: sealed
+
+# Taxonomy bundle (namespace `taxonomy`): vocabulary + SHOULD-tier invariant
+# templates for AI-agent protocols. Composes the web-service taxonomy
+# (depends_on) — agents typically expose api/authn/observability surfaces —
+# and adds agent-specific components (tool-runtime, memory, context,
+# guardrails, skills-registry, mcp-transport, vector-store, evals).
+namespace: taxonomy
+tags: [taxonomy]
+
+purpose: >
+  AI-agent protocol taxonomy. Given a concrete agent protocol bundle, the
+  taxonomy provides the canonical component vocabulary (tool-runtime,
+  memory, context, guardrails, skills-registry, mcp-transport, vector-store,
+  evals, plus the web-service components it composes) and should-tier
+  invariant templates that the concrete protocol adapts.
+
+boundary:
+  in_scope:
+    - "Component vocabulary: capabilities.components (agent-specific set;
+      the composed web-service vocabulary applies for web-facing parts)"
+    - "Invariant templates: S-001..S-005 in invariants/structural.yaml
+      (all severity: should)"
+    - "Conformance convention: depends_on: [taxonomy/web-service,
+      taxonomy/ai-agent] for a full agent-with-web-surface protocol"
+  out_of_scope:
+    - "Enforcing conformance (vocabulary + templates only)"
+    - "Registry mechanics"
+
+handshakes:
+  request_schema: schemas/components.schema.json
+
+depends_on:
+  - taxonomy/web-service
+provides:
+  taxonomy.ai-agent.vocabulary: schemas/components.schema.json
+  taxonomy.ai-agent.templates: invariants/structural.yaml
+
+invariants:
+  structural: invariants/structural.yaml
+  behavioral: invariants/behavioral.yaml
+  operational: invariants/operational.yaml
+
+capabilities: capability-manifest.yaml
+validators: validators/validation-plan.yaml
+evidence: evidence-requirements.yaml

@@ -1,0 +1,10 @@
+behavioral_invariants:
+  - id: B-001
+    statement: >
+      Vocabulary validation: given a component map and template
+      references, the validator reports unknown components and unknown
+      template ids; known entries pass. Deterministic and non-mutating.
+    severity: must
+    validation:
+      - contract_tests
+      - mutation_sanity_check

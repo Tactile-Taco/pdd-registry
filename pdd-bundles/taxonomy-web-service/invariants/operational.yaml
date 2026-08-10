@@ -1,0 +1,31 @@
+operational_invariants:
+  - id: O-001
+    statement: The implementation must not initiate outbound network connections.
+    severity: must
+    infra_assumption: sandbox network denial or static scan
+    validation:
+      - import_scan
+      - sandbox_policy_check
+
+  - id: O-002
+    statement: The implementation must not write to the filesystem.
+    severity: must
+    infra_assumption: sandbox read-only fs; static scan
+    validation:
+      - import_scan
+      - sandbox_policy_check
+
+  - id: O-003
+    statement: The implementation must use only the approved stdlib import allowlist.
+    severity: must
+    infra_assumption: AST import scan
+    validation:
+      - import_scan
+
+  - id: O-004
+    statement: The implementation must not spawn background work.
+    severity: must
+    infra_assumption: static call scan; docker sandbox if available
+    validation:
+      - import_scan
+      - sandbox_policy_check

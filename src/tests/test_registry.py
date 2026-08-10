@@ -69,7 +69,8 @@ def _decode(raw: bytes):
 def test_index_catalog_shape():
     catalog = registry_index.load_catalog(ROOT / "pdd-bundles")
     assert sorted(b["name"] for b in catalog) == [
-        "pdd-registry", "pdd-registry-mcp", "user-registry"]
+        "pdd-registry", "pdd-registry-mcp", "taxonomy-ai-agent",
+        "taxonomy-web-service", "user-registry"]
     b = next(b for b in catalog if b["name"] == "user-registry")
     assert b["status"] == "sealed"
     assert b["version"] == "1.1.0"
@@ -209,7 +210,8 @@ def test_get_bundles_filtered(client):
     status, body = client("/bundles?status=sealed")
     assert status == 200
     assert sorted(b["name"] for b in body["bundles"]) == [
-        "pdd-registry", "pdd-registry-mcp", "user-registry"]
+        "pdd-registry", "pdd-registry-mcp", "taxonomy-ai-agent",
+        "taxonomy-web-service", "user-registry"]
     status, body = client("/bundles?status=draft")
     assert status == 200
     assert body["bundles"] == []

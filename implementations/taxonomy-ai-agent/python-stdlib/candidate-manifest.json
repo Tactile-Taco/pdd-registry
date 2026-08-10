@@ -1,0 +1,37 @@
+{
+  "artifact_id": "taxonomy-ai-agent-python-stdlib",
+  "protocol": {"name": "ai-agent", "version": "1.0.0", "status": "sealed"},
+  "language": "python",
+  "runtime": "python-3.12",
+  "files": [
+    "ai_agent_vocab.py",
+    "tests/test_ai_agent_vocab.py"
+  ],
+  "dependencies": {"runtime": ["stdlib only"], "dev": ["pytest"]},
+  "entry_module": "ai_agent_vocab",
+  "entry_class": null,
+  "smoke": {
+    "method": "validate_against",
+    "args": {"components": {"memory": "state"}},
+    "assert_expr": "r == []"
+  },
+  "benchmark": {
+    "method": "validate_against",
+    "iterations": 1000,
+    "args_template": {"components": {"memory": "x", "guardrails": "y"}}
+  },
+  "mutation_sanity": {
+    "invariant": "B-001",
+    "pytest_filter": "B001",
+    "find": "        if name not in VOCABULARY:",
+    "replace": "        if False:  # MUTANT: unknown-component guard removed (B-001)"
+  },
+  "invariant_lineage": {
+    "B-001": ["test_B001_known_components_pass", "test_B001_unknown_component_reported", "test_B001_unknown_template_ref_reported", "test_B001_non_dict_components_fail", "test_B001_deterministic_and_non_mutating"]
+  },
+  "known_limitations": [
+    "Validates the AGENT vocabulary shape only; web-facing parts use the composed taxonomy/web-service vocabulary at the document level",
+    "No cross-taxonomy conformance engine (vocabulary + templates by design)"
+  ],
+  "self_check": "non-authoritative: run locally, still a candidate until the Validation Engine admits"
+}

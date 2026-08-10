@@ -1,0 +1,24 @@
+capabilities:
+  components:
+    ingress: "external entry point (reverse proxy / edge)"
+    api: "request/response surface (REST, RPC, or event endpoints)"
+    authn: "identity verification"
+    authorization: "access decisions"
+    database: "primary durable state"
+    cache: "read-optimized ephemeral state"
+    queue: "async message transport"
+    storage: "blob/object or file storage"
+    observability: "metrics, logs, traces"
+    config: "runtime configuration"
+    scheduler: "time/cron driven work"
+    worker: "background task execution"
+  network:
+    outbound_allowed: false
+  filesystem:
+    read_allowed: false
+    write_allowed: false
+  background_work:
+    allowed: false
+  telemetry:
+    required_fields:
+      - protocol_version

@@ -70,6 +70,13 @@ M6 mini-pc, `deploy/postgres.yaml`; pdd-registry protocol 1.2.0, S-006):
   accepted by `POST /publish` alongside the shared env token; revoked
   tokens are rejected. Mint a token per agent instead of sharing
   `PDD_PUBLISH_TOKEN`.
+- **Taxonomy bundles (2026-08-10)**: `taxonomy/web-service` and
+  `taxonomy/ai-agent` are sealed catalog entries defining component
+  vocabularies + should-tier invariant templates; discover them with
+  `pdd search taxonomy --registry …` or `GET /bundles?tag=taxonomy`.
+  Concrete protocols declare conformance with
+  `depends_on: [taxonomy/<name>]` and map components into
+  `capabilities.components` (see the bundles' ambiguity logs).
 - **Evidence freshness gate (S-008, v1.3.0)**: the latest admission
   evidence must attest the CURRENT on-disk bundle digest — any bundle
   change without re-validation + re-attestation is a violation. Keyless

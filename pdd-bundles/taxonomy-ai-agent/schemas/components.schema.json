@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://pdd-repository/schemas/taxonomy/ai-agent/components.schema.json",
+  "title": "taxonomy/ai-agent component vocabulary",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["components"],
+  "properties": {
+    "components": {
+      "type": "object",
+      "minProperties": 1,
+      "propertyNames": {"enum": ["tool-runtime", "memory", "context",
+                                  "guardrails", "skills-registry",
+                                  "mcp-transport", "vector-store", "evals"]},
+      "additionalProperties": {"type": "string", "minLength": 1}
+    }
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://pdd-repository/schemas/taxonomy/web-service/components.schema.json",
+  "title": "taxonomy/web-service component vocabulary",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["components"],
+  "properties": {
+    "components": {
+      "type": "object",
+      "minProperties": 1,
+      "propertyNames": {"enum": ["ingress", "api", "authn", "authorization",
+                                  "database", "cache", "queue", "storage",
+                                  "observability", "config", "scheduler",
+                                  "worker"]},
+      "additionalProperties": {"type": "string", "minLength": 1}
+    }
+  }
+}

@@ -98,12 +98,23 @@ def layer_structural(bundle: Path, impl: Path) -> list[dict]:
     results.append({"invariant_id": "S-001", "layer": "structural", "outcome": "pass",
                     "evidence": f"compile ok for {len(impl_files)} module(s)"})
     # S-002: error-envelope contract is covered by contract tests (pytest);
-    # static check: allowed kinds used in implementation
-    src = "\n".join(f.read_text() for f in impl_files)
-    allowed = {"invalid_request", "conflict", "not_found", "internal"}
-    results.append({"invariant_id": "S-002", "layer": "structural",
-                    "outcome": "pass" if "invalid_request" in src else "fail",
-                    "evidence": "enumerated error kinds referenced in candidate source"})
+    # static check: allowed kinds used in implementation. Only enforced for
+    # MUST-tier S-002 (the registry's error-envelope contract); should-tier
+    # templates (taxonomy bundles, advisory by design) skip with a reason.
+    s_inv = load_yaml(bundle / "invariants" / "structural.yaml") or {}
+    s002 = next((i for i in s_inv.get("structural_invariants", [])
+                 if i.get("id") == "S-002"), {})
+    if s002.get("severity") != "must":
+        results.append({"invariant_id": "S-002", "layer": "structural",
+                        "outcome": "skip",
+                        "evidence": "should-tier template; not enforced by "
+                                    "the hardcoded structural layer"})
+    else:
+        src = "\n".join(f.read_text() for f in impl_files)
+        results.append({"invariant_id": "S-002", "layer": "structural",
+                        "outcome": "pass" if "invalid_request" in src else "fail",
+                        "evidence": "enumerated error kinds referenced in "
+                                    "candidate source"})
     results.append({"invariant_id": "S-003", "layer": "structural", "outcome": "skip",
                     "evidence": "schema_diff_check requires a stored baseline; the bundle keeps no "
                                 "schema history — version-event schema changes are reviewed in git "
