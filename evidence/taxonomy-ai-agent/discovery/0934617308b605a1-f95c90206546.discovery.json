@@ -1,0 +1,27 @@
+{
+  "files": [
+    "ai_agent_vocab.py",
+    "tests/test_ai_agent_vocab.py"
+  ],
+  "dependencies": {
+    "runtime": [
+      "stdlib only"
+    ],
+    "dev": [
+      "pytest"
+    ]
+  },
+  "invariant_lineage": {
+    "B-001": [
+      "test_B001_known_components_pass",
+      "test_B001_unknown_component_reported",
+      "test_B001_unknown_template_ref_reported",
+      "test_B001_non_dict_components_fail",
+      "test_B001_deterministic_and_non_mutating"
+    ]
+  },
+  "known_limitations": [
+    "Validates the AGENT vocabulary shape only; web-facing parts use the composed taxonomy/web-service vocabulary at the document level",
+    "No cross-taxonomy conformance engine (vocabulary + templates by design)"
+  ]
+}

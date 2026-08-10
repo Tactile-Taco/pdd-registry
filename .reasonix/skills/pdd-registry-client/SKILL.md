@@ -42,7 +42,11 @@ M6 mini-pc, `deploy/postgres.yaml`; pdd-registry protocol 1.2.0, S-006):
   set (the registry pod + deploy runner have it from the pdd-publish-token
   Secret); unauthenticated publishes are rejected 401. The token travels in
   the header — use `pdd+https://` for remote registries, `pdd+http://` only
-  for localhost/tailnet-LAN (the in-cluster seed uses localhost). The registry does
+  for localhost/tailnet-LAN (the in-cluster seed uses localhost). Registry-owned
+  namespaces (`pdd`, `user`, `taxonomy`) additionally require the evidence's
+  `signed_object` to be HMAC-signed with the registry's `PDD_EVIDENCE_KEY`
+  (the signed admission objects `pdd evidence build` produces) — a token
+  holder cannot squat them with an unsigned/stub object (publish 400). The registry does
   NOT own a git repo of protocols; the author-side git chain stays the
   source of truth and `deploy/push.sh` seeds the DB on deploy
   (via `pdd evidence latest <name>`).

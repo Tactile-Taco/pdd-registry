@@ -1,0 +1,30 @@
+{
+  "files": [
+    "receipt_validator.py",
+    "tests/test_receipt_validator.py"
+  ],
+  "dependencies": {
+    "runtime": [
+      "stdlib only"
+    ],
+    "dev": [
+      "pytest"
+    ]
+  },
+  "invariant_lineage": {
+    "B-001": [
+      "test_B001_valid_receipts_for_all_providers",
+      "test_B001_unknown_provider_reported",
+      "test_B001_missing_required_fields_reported",
+      "test_B001_invalid_conclusion_reported",
+      "test_B001_malformed_digests_reported",
+      "test_B001_non_dict_receipt_fails",
+      "test_B001_deterministic_and_non_mutating"
+    ]
+  },
+  "known_limitations": [
+    "Validates receipt SHAPES only; the registry never re-checks receipts against the external system (honor system) and never re-runs validation",
+    "Replay-on-demand is deferred (DB-side replay is only meaningful for registry-owned canonicalization)",
+    "New provider shapes are additive-only (never break parsing of existing receipts)"
+  ]
+}

@@ -21,6 +21,7 @@ import json
 import os
 import subprocess
 import sys
+import tempfile
 import threading
 import traceback
 from http.server import BaseHTTPRequestHandler, HTTPServer, ThreadingHTTPServer
@@ -226,6 +227,23 @@ def _admission(name: str) -> list[dict]:
     return result
 
 
+def _load_chain():
+    """Load the evidence-chain verifier module once per call. Returns None
+    when unavailable (no key, missing skill files, any import failure) —
+    callers fail closed on None. SystemExit (BaseException) from the module
+    when PDD_EVIDENCE_KEY is unset must not escape to the request handler."""
+    import importlib.util as _iu
+    try:
+        spec = _iu.spec_from_file_location(
+            "evidence_chain_db",
+            SKILLS / "pdd-evidence-keeper" / "scripts" / "evidence_chain.py")
+        chain = _iu.module_from_spec(spec)
+        spec.loader.exec_module(chain)
+        return chain
+    except BaseException:  # noqa: BLE001 — SystemExit on missing key included
+        return None
+
+
 def _db_evidence_verify(name: str, namespace: str | None = None,
                         bundle_digest: str | None = None) -> list[dict]:
     """DB-backed evidence verification (v1.2, S-007): the registry stores the
@@ -236,19 +254,9 @@ def _db_evidence_verify(name: str, namespace: str | None = None,
     attributed to the digest it attests."""
     rows = registry_db.evidence_records(_db(), name, namespace, bundle_digest)
     out = []
-    import tempfile
-    import importlib.util as _iu
     # Load the verifier once (exec_module re-executes on every call — the
     # per-row load in the original code re-read the module each time).
-    chain = None
-    try:
-        spec = _iu.spec_from_file_location(
-            "evidence_chain_db",
-            SKILLS / "pdd-evidence-keeper" / "scripts" / "evidence_chain.py")
-        chain = _iu.module_from_spec(spec)
-        spec.loader.exec_module(chain)
-    except Exception:  # noqa: BLE001 — per-record 'unavailable' below
-        chain = None
+    chain = _load_chain()
     for row in rows:
         owned = (row.get("namespace") or "") in OWNED_NAMESPACES
         reason = None
@@ -260,11 +268,34 @@ def _db_evidence_verify(name: str, namespace: str | None = None,
         if reason is None and owned:
             # Registry-owned namespace: full crypto verification (digest +
             # signature) against the registry's key — verified or unverified.
-            if chain is not None:
+            # Replay binding: the signed object must attest THIS row — its
+            # embedded protocol name/bundle_digest/artifact_digest are
+            # cross-checked so a genuine object replayed under a different
+            # record cannot report verified (integrity review finding).
+            try:
+                obj = json.loads(row["signed_object"])
+                proto = obj.get("protocol") or {}
+                impl = obj.get("implementation") or {}
+                if proto.get("name") != row["name"]:
+                    reason = "object/row binding"
+                elif str(proto.get("version")) != str(row["version"]):
+                    reason = "object/row binding"
+                elif (proto.get("namespace") is not None
+                      and proto.get("namespace") != row["namespace"]):
+                    reason = "object/row binding"
+                elif proto.get("bundle_digest") != row["bundle_digest"]:
+                    reason = "object/row binding"
+                elif (row["artifact_id"].startswith("sha256:")
+                      and impl.get("artifact_digest") != row["artifact_id"]):
+                    reason = "object/row binding"
+            except (ValueError, TypeError, json.JSONDecodeError,
+                    AttributeError, RecursionError):
+                reason = "object/row binding"
+            if reason is None and chain is not None:
                 try:
                     with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as f:
-                        f.write(row["signed_object"])
                         tmp = f.name
+                        f.write(row["signed_object"])
                     try:
                         ver = chain.verify_evidence_object(tmp)
                         if not ver.get("ok"):
@@ -272,8 +303,12 @@ def _db_evidence_verify(name: str, namespace: str | None = None,
                     finally:
                         os.unlink(tmp)
                 except Exception:  # noqa: BLE001
+                    try:
+                        os.unlink(tmp)
+                    except (OSError, NameError):
+                        pass
                     reason = "verification unavailable"
-            else:
+            elif reason is None:
                 reason = "verification unavailable"
         if reason is None and not owned:
             # Author-owned namespace (honor system, S-007): structural checks
@@ -340,7 +375,7 @@ def _receipt_observation(signed_object_json: str) -> dict | None:
     try:
         obj = json.loads(signed_object_json)
         receipt = (obj or {}).get("validator_receipt")
-    except (json.JSONDecodeError, AttributeError):
+    except (json.JSONDecodeError, AttributeError, RecursionError, TypeError):
         return None
     if not isinstance(receipt, dict):
         return None
@@ -451,7 +486,13 @@ class Handler(BaseHTTPRequestHandler):
                                       "message": "publish payload too large "
                                                  "(max 8 MiB)"}}, status=400)
                 return
-            payload = json.loads(self.rfile.read(length).decode() or "{}")
+            try:
+                payload = json.loads(self.rfile.read(length).decode() or "{}")
+            except RecursionError:
+                self._json({"error": {"kind": "invalid_request",
+                                      "message": "request body too deeply nested"}},
+                           status=400)
+                return
             if not isinstance(payload, dict):
                 self._json({"error": {"kind": "invalid_request",
                                       "message": "publish body must be a JSON "
@@ -474,6 +515,61 @@ class Handler(BaseHTTPRequestHandler):
                                       "message": f"publish rejected: {exc}"}},
                            status=400)
                 return
+            # Registry-owned namespaces (pdd/user/taxonomy) may only be
+            # claimed by evidence SIGNED with the registry key AND attesting
+            # THIS bundle: the classifier advertises them as crypto-verified,
+            # so a token holder must not be able to squat them — replaying a
+            # genuine signed admission object under an arbitrary name must be
+            # rejected (integrity review findings). Foreign namespaces stay
+            # honor-system (S-007).
+            ns = (payload["bundle"].get("namespace") or "")
+            if ns in OWNED_NAMESPACES:
+                chain = _load_chain()
+                sig_ok = False
+                if chain is not None:
+                    try:
+                        so = payload["evidence"]["signed_object"]
+                        with tempfile.NamedTemporaryFile("w", suffix=".json",
+                                                         delete=False) as f:
+                            tmp = f.name
+                            f.write(so if isinstance(so, str)
+                                    else json.dumps(so))
+                        try:
+                            ver = chain.verify_evidence_object(tmp)
+                            if ver.get("ok"):
+                                # Object must attest THIS bundle: name,
+                                # version, digest, artifact — otherwise a
+                                # signed object for a different record is
+                                # being replayed.
+                                b = payload["bundle"]
+                                obj = json.loads(so) if isinstance(so, str) \
+                                    else so
+                                proto = obj.get("protocol") or {}
+                                impl = obj.get("implementation") or {}
+                                art = payload["evidence"].get("artifact_id") or ""
+                                if (proto.get("name") == b.get("name")
+                                        and str(proto.get("version")) == str(b.get("version"))
+                                        and proto.get("namespace") == b.get("namespace")
+                                        and proto.get("bundle_digest") == b.get("digest")
+                                        and impl.get("artifact_digest") == art):
+                                    sig_ok = True
+                        finally:
+                            os.unlink(tmp)
+                    except BaseException:  # noqa: BLE001 — fail closed
+                        try:
+                            os.unlink(tmp)
+                        except (OSError, NameError):
+                            pass
+                        sig_ok = False
+                if not sig_ok:
+                    self._json({"error": {"kind": "invalid_request",
+                                          "message": f"publish rejected: namespace "
+                                                     f"{ns!r} is registry-owned; "
+                                                     "evidence must be signed with "
+                                                     "the registry key and attest "
+                                                     "this bundle"}},
+                               status=400)
+                    return
             record = registry_db.publish(_db(), payload["bundle"],
                                          payload["evidence"])
             self._json({"ok": True, "record": record["bundle"]})

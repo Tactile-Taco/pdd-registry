@@ -56,7 +56,7 @@ def _post(base, payload, headers=None):
 
 
 def _bundle(**over):
-    b = {"namespace": "pdd", "name": "pdd-registry-mcp", "version": "1.1.0",
+    b = {"namespace": "acme", "name": "pdd-registry-mcp", "version": "1.1.0",
          "status": "sealed", "digest": "sha256:" + "a" * 64,
          "purpose": "MCP client interface", "tags": ["mcp-server"],
          "depends_on": [], "provides": {},

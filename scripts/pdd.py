@@ -378,6 +378,7 @@ def cmd_evidence_build(argv: list[str]) -> int:
 
     evidence = {
         "protocol": {"name": name, "version": version,
+                     "namespace": _b.get("namespace"),
                      "bundle_digest": results["protocol"]["bundle_digest"]},
         "implementation": {"artifact_id": manifest["artifact_id"],
                            "artifact_digest": impl_digest,
@@ -892,7 +893,9 @@ def cmd_publish(argv: list[str]) -> int:
         "capabilities": b.get("capabilities") or {},
         "boundary": b.get("boundary") or {},
     }, "evidence": {
-        "artifact_id": ev.get("artifact_id") or b.get("name"),
+        "artifact_id": (ev.get("artifact_id")
+                        or (ev.get("implementation") or {}).get("artifact_digest")
+                        or b.get("name")),
         "resource_identifier": (
             ev.get("resource_identifier")
             or (ev.get("provenance") or {}).get("validation_resource")

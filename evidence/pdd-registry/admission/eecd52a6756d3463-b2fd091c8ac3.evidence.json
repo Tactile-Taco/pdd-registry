@@ -1,0 +1,154 @@
+{
+  "protocol": {
+    "name": "pdd-registry",
+    "version": "1.4.0",
+    "namespace": "pdd",
+    "bundle_digest": "sha256:b2fd091c8ac382ce659f254f01f70a7eb15bde1ed1d425cf7f552ff200b14262"
+  },
+  "implementation": {
+    "artifact_digest": "sha256:eecd52a6756d34632fea281ef7cdbbd31b7a44bd31f0ce07632e186914f84ae5"
+  },
+  "validators": [
+    {
+      "id": "schema-validator",
+      "version": "1.0.0",
+      "layer": "structural"
+    },
+    {
+      "id": "contract-runner",
+      "version": "1.0.0",
+      "layer": "structural"
+    },
+    {
+      "id": "property-runner",
+      "version": "1.0.0",
+      "layer": "behavioral"
+    },
+    {
+      "id": "mutation-sanity",
+      "version": "1.0.0",
+      "layer": "behavioral"
+    },
+    {
+      "id": "import-scanner",
+      "version": "1.0.0",
+      "layer": "operational"
+    },
+    {
+      "id": "capability-monitor",
+      "version": "1.0.0",
+      "layer": "operational"
+    },
+    {
+      "id": "benchmark-runner",
+      "version": "1.0.0",
+      "layer": "operational"
+    }
+  ],
+  "results": [
+    {
+      "invariant_id": "S-001",
+      "layer": "structural",
+      "outcome": "pass",
+      "evidence": "compile ok for 1 module(s)"
+    },
+    {
+      "invariant_id": "S-002",
+      "layer": "structural",
+      "outcome": "pass",
+      "evidence": "enumerated error kinds referenced in candidate source"
+    },
+    {
+      "invariant_id": "S-003",
+      "layer": "structural",
+      "outcome": "skip",
+      "evidence": "schema_diff_check requires a stored baseline; the bundle keeps no schema history \u2014 version-event schema changes are reviewed in git history. Not a pass: not enforced here."
+    },
+    {
+      "invariant_id": "S-004",
+      "layer": "structural",
+      "outcome": "pass",
+      "evidence": "namespace 'pdd' is kebab-case (1..63 chars)"
+    },
+    {
+      "invariant_id": "S-005",
+      "layer": "structural",
+      "outcome": "pass",
+      "evidence": "3 tags, kebab-case, unique, <=8"
+    },
+    {
+      "invariant_id": "S-006",
+      "layer": "structural",
+      "outcome": "pass",
+      "evidence": "publish handshake + schema declared in bundle"
+    },
+    {
+      "invariant_id": "S-007",
+      "layer": "structural",
+      "outcome": "pass",
+      "evidence": "evidence-requirements declares resource_identifier"
+    },
+    {
+      "invariant_id": "S-009",
+      "layer": "structural",
+      "outcome": "skip",
+      "evidence": "registry-side ledger durability/append-only is enforced by the service contract tests (src/tests/test_registry_db.py), not by the pure-core candidate"
+    },
+    {
+      "invariant_id": "S-010",
+      "layer": "structural",
+      "outcome": "skip",
+      "evidence": "version-event preservation is enforced by the service contract tests (src/tests/test_registry_db.py), not by the pure-core candidate"
+    },
+    {
+      "invariant_id": "O-003",
+      "layer": "operational",
+      "outcome": "pass",
+      "evidence": "imports=['dataclasses', 'json', 're']; unapproved=[]"
+    },
+    {
+      "invariant_id": "O-001,O-002,O-004",
+      "layer": "operational",
+      "outcome": "pass",
+      "evidence": "forbidden signals=[]"
+    },
+    {
+      "invariant_id": "B-001,B-002,B-003,B-004,B-005",
+      "layer": "behavioral",
+      "outcome": "pass",
+      "evidence": "pytest: 22 passed in 1.17s"
+    },
+    {
+      "invariant_id": "B-006",
+      "layer": "behavioral",
+      "outcome": "skip",
+      "evidence": "no candidate-level tests in invariant_lineage; enforcement lands with the publish/storage service contract tests (implementation phase)"
+    },
+    {
+      "invariant_id": "B-001",
+      "layer": "behavioral",
+      "outcome": "pass",
+      "evidence": "mutant rejected by B001_deterministic (exit 1, assertion failure) \u2014 property is not vacuous"
+    },
+    {
+      "invariant_id": "O-001,O-002",
+      "layer": "operational",
+      "outcome": "skip",
+      "evidence": "sandbox not requested or docker not found; static scan only"
+    },
+    {
+      "invariant_id": "O-005",
+      "layer": "operational",
+      "outcome": "observe",
+      "evidence": "p95=0.01ms over 1000 calls (budget 500ms, should-tier)"
+    }
+  ],
+  "provenance": {
+    "time": "2026-08-10T02:43:36Z",
+    "manifest": "pdd-registry-python-stdlib",
+    "discovery_digest": "sha256:5b6c915dcc39b214e2826cbe23c892d1351e607d2210300c7b114488d0239357",
+    "validation_resource": "https://github.com/Tactile-Taco/pdd-repository/actions/workflows/pdd-validator-loop.yml"
+  },
+  "digest": "sha256:b82e5687aefeb09307bfadbf7d6035087ec60e8e74e622128e138a7a4abd78de",
+  "signature": "hmac-sha256:a8952a51d464e3d17574b24b4c5bcdf204e56382fecb09e0dc829a1ea5428ffe"
+}

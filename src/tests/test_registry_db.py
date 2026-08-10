@@ -32,7 +32,7 @@ import registry_db  # noqa: E402 (src/ on sys.path via server import)
 
 def _bundle(**overrides) -> dict:
     b = {
-        "namespace": "pdd", "name": "pdd-registry", "version": "1.2.0",
+        "namespace": "acme", "name": "pdd-registry", "version": "1.2.0",
         "status": "sealed", "digest": "sha256:" + "a" * 64,
         "purpose": "catalog search and read views",
         "tags": ["engine"], "depends_on": [], "provides": {},
@@ -55,6 +55,28 @@ def _evidence(**overrides) -> dict:
     return e
 
 
+def _signed_evidence(bundle_name="pdd-registry", bundle_version="1.2.0",
+                     bundle_ns="pdd", bundle_digest=None, artifact_id=None,
+                     meta=None, **overrides) -> dict:
+    """A genuinely signed evidence object (requires PDD_EVIDENCE_KEY, like
+    the rest of src/tests): built via the evidence chain so the registry's
+    owned-namespace publish gate and crypto verification accept it."""
+    import importlib.util as _iu
+    spec = _iu.spec_from_file_location(
+        "evidence_chain_test",
+        server.SKILLS / "pdd-evidence-keeper" / "scripts" / "evidence_chain.py")
+    chain = _iu.module_from_spec(spec)
+    spec.loader.exec_module(chain)
+    obj = chain.build_evidence(
+        {"name": bundle_name, "version": bundle_version,
+         "namespace": bundle_ns,
+         "bundle_digest": bundle_digest or ("sha256:" + "a" * 64)},
+        artifact_id or ("sha256:" + "a" * 64), [], [], meta or {})
+    return _evidence(signed_object=obj,
+                     artifact_id=artifact_id or ("sha256:" + "a" * 64),
+                     **overrides)
+
+
 @pytest.fixture
 def conn():
     c = registry_db.connect("sqlite:///:memory:")
@@ -74,15 +96,15 @@ def test_publish_roundtrip(conn):
     assert len(catalog) == 1
     entry = catalog[0]
     assert entry["name"] == "pdd-registry"
-    assert entry["namespace"] == "pdd"
+    assert entry["namespace"] == "acme"
     assert entry["tags"] == ["engine"]
-    assert entry["address"] == "pdd/pdd-registry"
+    assert entry["address"] == "acme/pdd-registry"
     assert entry["version"] == "1.2.0"
     ev = registry_db.evidence_records(conn, "pdd-registry")
     assert len(ev) == 1
     assert ev[0]["resource_identifier"].startswith("https://")
     # the registry-side ledger gains exactly one block per first publish
-    blocks = registry_db.ledger_blocks(conn, "pdd/pdd-registry")
+    blocks = registry_db.ledger_blocks(conn, "acme/pdd-registry")
     assert len(blocks) == 1
     assert blocks[0]["bundle_digest"] == "sha256:" + "a" * 64
     assert blocks[0]["previous"].startswith("sha256:")
@@ -96,14 +118,14 @@ def test_B006_publish_idempotent_by_digest(conn):
     again = registry_db.publish(conn, _bundle(), _evidence())
     assert again["ok"] is True
     assert len(registry_db.list_catalog(conn)) == 1  # no duplicate
-    assert len(registry_db.ledger_blocks(conn, "pdd/pdd-registry")) == 1  # B-006: no-op
+    assert len(registry_db.ledger_blocks(conn, "acme/pdd-registry")) == 1  # B-006: no-op
     # distinct digest -> distinct record (new version of the same bundle)
     registry_db.publish(conn, _bundle(digest="sha256:" + "b" * 64), _evidence())
     catalog = registry_db.list_catalog(conn)
     assert len(catalog) == 2
     digests = {b["version"] for b in catalog}
     assert digests == {"1.2.0"}
-    assert len(registry_db.ledger_blocks(conn, "pdd/pdd-registry")) == 2  # new block
+    assert len(registry_db.ledger_blocks(conn, "acme/pdd-registry")) == 2  # new block
 
 
 def test_S007_evidence_requires_resource_identifier(conn):
@@ -155,14 +177,14 @@ def test_namespace_keeps_same_name_apart(conn):
                                       digest="sha256:" + "d" * 64),
                         _evidence(artifact_id="b"))
     # namespace-scoped evidence lookup returns only that namespace's rows
-    rows = registry_db.evidence_records(conn, "pdd-registry", "pdd")
+    rows = registry_db.evidence_records(conn, "pdd-registry", "acme")
     assert [r["artifact_id"] for r in rows] == ["a"]
     rows = registry_db.evidence_records(conn, "pdd-registry", "other")
     assert [r["artifact_id"] for r in rows] == ["b"]
     assert len(registry_db.evidence_records(conn, "pdd-registry")) == 2
     # get_bundle picks the newest version within the requested namespace
-    b = registry_db.get_bundle(conn, "pdd-registry", "pdd")
-    assert b["namespace"] == "pdd"
+    b = registry_db.get_bundle(conn, "pdd-registry", "acme")
+    assert b["namespace"] == "acme"
     b = registry_db.get_bundle(conn, "pdd-registry", "other")
     assert b["namespace"] == "other"
 
@@ -218,14 +240,14 @@ def test_evidence_attributed_per_bundle_digest(conn):
                         _evidence(artifact_id="e1"))
     registry_db.publish(conn, _bundle(digest="sha256:" + "b" * 64),
                         _evidence(artifact_id="e2"))
-    rows = registry_db.evidence_records(conn, "pdd-registry", "pdd")
+    rows = registry_db.evidence_records(conn, "pdd-registry", "acme")
     assert len(rows) == 2  # both evidence rows present, none dropped
     by_digest = {r["bundle_digest"]: r["artifact_id"] for r in rows}
     assert by_digest == {"sha256:" + "a" * 64: "e1",
                          "sha256:" + "b" * 64: "e2"}
     # scope by bundle digest returns only that record's evidence
     scoped = registry_db.evidence_records(
-        conn, "pdd-registry", "pdd", "sha256:" + "a" * 64)
+        conn, "pdd-registry", "acme", "sha256:" + "a" * 64)
     assert [r["artifact_id"] for r in scoped] == ["e1"]
 
 
@@ -246,7 +268,7 @@ def test_publish_server_stamps_published_at(conn):
     """published_at is server-stamped when neither side carries one (an
     empty timestamp would make ordering/auditing meaningless)."""
     registry_db.publish(conn, _bundle(), _evidence())
-    ev = registry_db.evidence_records(conn, "pdd-registry", "pdd")
+    ev = registry_db.evidence_records(conn, "pdd-registry", "acme")
     assert ev[0]["published_at"] != ""
     assert ev[0]["published_at"].endswith("Z")
 
@@ -373,11 +395,11 @@ def test_evidence_only_republish_appends_ledger_block(conn):
     the same bundle record) is a write event — the ledger records it;
     identical re-publishes stay no-ops (B-006)."""
     registry_db.publish(conn, _bundle(), _evidence(artifact_id="e1"))
-    assert len(registry_db.ledger_blocks(conn, "pdd/pdd-registry")) == 1
+    assert len(registry_db.ledger_blocks(conn, "acme/pdd-registry")) == 1
     registry_db.publish(conn, _bundle(), _evidence(artifact_id="e2"))
-    assert len(registry_db.ledger_blocks(conn, "pdd/pdd-registry")) == 2
+    assert len(registry_db.ledger_blocks(conn, "acme/pdd-registry")) == 2
     registry_db.publish(conn, _bundle(), _evidence(artifact_id="e2"))
-    assert len(registry_db.ledger_blocks(conn, "pdd/pdd-registry")) == 2  # no-op
+    assert len(registry_db.ledger_blocks(conn, "acme/pdd-registry")) == 2  # no-op
 
 
 # --- S-009: registry-side ledger durability / append-only -------------------
@@ -399,7 +421,7 @@ def test_S009_ledger_tamper_modify_detected(conn):
     """S-009: rewriting a stored block's content via raw SQL is detected —
     the recomputed digest no longer matches the stored block_digest."""
     registry_db.publish(conn, _bundle(), _evidence())
-    blocks = registry_db.ledger_blocks(conn, "pdd/pdd-registry")
+    blocks = registry_db.ledger_blocks(conn, "acme/pdd-registry")
     tampered = dict(blocks[0])
     tampered["bundle_digest"] = "sha256:" + "f" * 64
     conn.execute("UPDATE ledger SET block = ? WHERE seq = ?",
@@ -477,12 +499,12 @@ def test_S010_version_event_preserves_prior_versions(conn):
     newest = registry_db.get_bundle(conn, "pdd-registry")
     assert newest["version"] == "1.3.0" and newest["digest"] == "sha256:" + "b" * 64
     # both evidence rows exist, each attributed to its own bundle digest
-    ev = registry_db.evidence_records(conn, "pdd-registry", "pdd")
+    ev = registry_db.evidence_records(conn, "pdd-registry", "acme")
     assert {(r["version"], r["bundle_digest"], r["artifact_id"]) for r in ev} == {
         ("1.2.0", "sha256:" + "a" * 64, "e1"),
         ("1.3.0", "sha256:" + "b" * 64, "e2")}
     # ledger has blocks for BOTH versions; the full chain still verifies
-    blocks = registry_db.ledger_blocks(conn, "pdd/pdd-registry")
+    blocks = registry_db.ledger_blocks(conn, "acme/pdd-registry")
     assert [b["version"] for b in blocks] == ["1.2.0", "1.3.0"]
     assert registry_db.verify_ledger_chain(conn)["ok"] is True
     # row-level: nothing overwritten or deleted
@@ -500,8 +522,8 @@ def test_S010_different_digest_same_version_preserves_prior(conn):
     registry_db.publish(conn, _bundle(digest="sha256:" + "b" * 64),
                         _evidence(artifact_id="e2"))
     assert len(registry_db.list_catalog(conn)) == 2
-    assert len(registry_db.evidence_records(conn, "pdd-registry", "pdd")) == 2
-    blocks = registry_db.ledger_blocks(conn, "pdd/pdd-registry")
+    assert len(registry_db.evidence_records(conn, "pdd-registry", "acme")) == 2
+    blocks = registry_db.ledger_blocks(conn, "acme/pdd-registry")
     assert [b["bundle_digest"] for b in blocks] == [
         "sha256:" + "a" * 64, "sha256:" + "b" * 64]
     assert registry_db.verify_ledger_chain(conn)["ok"] is True
@@ -605,8 +627,8 @@ def test_publish_endpoint_then_db_backed_reads(db_client):
     names = [b["name"] for b in body["bundles"]]
     assert names == ["pdd-registry"]
     row = body["bundles"][0]
-    assert row["address"] == "pdd/pdd-registry"
-    status, body = db_client("/bundles?namespace=pdd&tag=engine")
+    assert row["address"] == "acme/pdd-registry"
+    status, body = db_client("/bundles?namespace=acme&tag=engine")
     assert status == 200 and len(body["bundles"]) == 1
     status, body = db_client("/search?q=idempotent")
     assert status == 200  # searchable from the DB materialization
@@ -781,12 +803,13 @@ def test_cli_remote_commands_same_surface(db_client, capsys, monkeypatch):
     # index lists the DB-backed catalog with namespace/address
     rc = pdd.cmd_index(["--registry", registry])
     out = capsys.readouterr().out
-    assert rc == 0 and '"namespace": "pdd"' in out and '"address"' in out
+    assert rc == 0 and '"namespace": "acme"' in out and '"address"' in out
     # evidence verify against the registry (S-007 honor-system surface)
     rc = pdd.cmd_evidence_verify(["--registry", registry])
     out = capsys.readouterr().out
-    assert rc == 1  # the seeded stub object is not signed -> not verified
+    assert rc == 0  # foreign-namespace stub -> attested (honor system)
     assert '"results"' in out and '"verified": false' in out
+    assert '"status": "attested"' in out
     # invalid resource identifier fails closed
     with pytest.raises(SystemExit):
         pdd.cmd_search(["--registry", "ftp://x", "engine"])
@@ -804,15 +827,22 @@ def test_cli_publish_uses_validation_resource_fallback(db_client, capsys, monkey
     monkeypatch.setattr(pdd, "REPO_ROOT", ROOT)
     monkeypatch.setattr(pdd, "EVIDENCE", ROOT / "evidence")
     monkeypatch.setattr(pdd, "BUNDLES", ROOT / "pdd-bundles")
-    # an admission-shaped evidence file: no top-level resource_identifier,
-    # only provenance.validation_resource (as the signed admission objects)
+    # an admission-shaped evidence file: genuinely signed for THIS bundle
+    # (name/version/digest attested), no top-level resource_identifier, only
+    # provenance.validation_resource (as the signed admission objects push.sh
+    # seeds the DB with) — the owned-namespace gate requires the object to
+    # attest the published bundle
+    from registry_index import load_bundle  # noqa: E402
+    b = load_bundle(ROOT / "pdd-bundles" / "user-registry")
     ev_file = tmp_path / "evidence.json"
-    ev_file.write_text(json.dumps({
-        "artifact_id": "user-registry-python-stdlib",
-        "decision": "attest-pass",
-        "provenance": {"validation_resource": "https://ci.example/runs/7"},
-        "digest": "sha256:" + "c" * 64,
-    }))
+    ev_file.write_text(json.dumps(
+        _signed_evidence(bundle_name=b["name"], bundle_version=b["version"],
+                         bundle_ns=b.get("namespace", "user"),
+                         bundle_digest=pdd._bundle_digest(
+                             ROOT / "pdd-bundles" / "user-registry"),
+                         artifact_id="user-registry-python-stdlib",
+                         meta={"validation_resource":
+                               "https://ci.example/runs/7"})["signed_object"]))
     rc = pdd.cmd_publish([str(ROOT / "pdd-bundles" / "user-registry"),
                           "--evidence", str(ev_file),
                           "--registry", "pdd+" + db_client.base_url])
@@ -864,7 +894,7 @@ def test_db_mode_ledger_limit_semantics(db_client):
         conn.execute(
             "INSERT INTO ledger (bundle_ref, block, block_digest, seq) "
             "VALUES (?, ?, ?, ?)",
-            ("pdd/pdd-registry", json.dumps({"i": i}), f"digest{i}", i))
+            ("acme/pdd-registry", json.dumps({"i": i}), f"digest{i}", i))
     conn.commit()
     _, body = db_client("/bundles/pdd-registry/ledger")
     assert body["count"] == 4
@@ -884,7 +914,7 @@ def test_S009_http_publish_tamper_detected(db_client):
     assert status == 200
     conn = server._db()
     assert registry_db.verify_ledger_chain(conn)["ok"] is True
-    blocks = registry_db.ledger_blocks(conn, "pdd/pdd-registry")
+    blocks = registry_db.ledger_blocks(conn, "acme/pdd-registry")
     tampered = dict(blocks[0])
     tampered["bundle_digest"] = "sha256:" + "f" * 64
     conn.execute("UPDATE ledger SET block = ? WHERE seq = ?",
@@ -991,12 +1021,124 @@ def test_three_state_evidence_foreign_structural_failure_invalid(db_client):
 
 def test_three_state_evidence_owned_stub_unverified(db_client):
     """Registry-owned namespace with a stub (unsigned) object: crypto path
-    fails closed -> status 'unverified', never attested."""
-    status, _ = db_client("/publish", {"bundle": _bundle(),
-                                       "evidence": _evidence()})
-    assert status == 200
+    fails closed -> status 'unverified', never attested. Inserted at the DB
+    layer (the HTTP gate rejects unsigned owned-namespace publishes — that
+    is tested separately); this tests the classifier's crypto path."""
+    registry_db.publish(server._db(), _bundle(namespace="pdd"),
+                        _evidence())
     status, body = db_client("/evidence/verify?bundle=pdd-registry")
     assert status == 200
     assert body["results"][0]["status"] == "unverified"
     assert body["results"][0]["verified"] is False
+    assert body["ok"] is False
+
+
+def test_publish_owned_namespace_requires_registry_signature(db_client):
+    """Integrity gate: registry-owned namespaces (pdd/user/taxonomy) may
+    only be claimed by evidence signed with the registry key — a token
+    holder with a stub/foreign object is rejected 400 (no squatting on
+    namespaces the classifier advertises as crypto-verified)."""
+    # stub object under pdd -> rejected
+    status, body = db_client("/publish", {"bundle": _bundle(namespace="pdd"),
+                                          "evidence": _evidence()})
+    assert status == 400
+    assert "registry-owned" in body["error"]["message"]
+    # unsigned object under user -> rejected
+    status, _ = db_client("/publish", {"bundle": _bundle(namespace="user"),
+                                       "evidence": _evidence()})
+    assert status == 400
+    # same stub under a foreign namespace -> accepted (honor system)
+    status, _ = db_client("/publish", {"bundle": _bundle(namespace="acme"),
+                                       "evidence": _evidence()})
+    assert status == 200
+    # a genuinely signed object under pdd -> accepted and crypto-verified
+    status, body = db_client("/publish", {
+        "bundle": _bundle(namespace="pdd", name="pdd-registry",
+                          digest="sha256:" + "a" * 64),
+        "evidence": _signed_evidence(bundle_name="pdd-registry",
+                                     bundle_version="1.2.0",
+                                     bundle_digest="sha256:" + "a" * 64,
+                                     artifact_id="sha256:" + "a" * 64)})
+    assert status == 200, body
+    status, body = db_client("/evidence/verify?bundle=pdd-registry")
+    rows = [r for r in body["results"] if r["artifact_id"].startswith("sha256:")]
+    assert rows and rows[0]["status"] == "verified"
+    assert rows[0]["verified"] is True
+
+
+def test_legacy_signed_object_without_namespace_still_verified(db_client):
+    """Backwards compatibility: pre-namespace-attestation signed objects
+    (no protocol.namespace) and name-form artifact_ids — as the live DB's
+    legacy rows — still verify: the binding checks skip fields the object
+    does not attest, crypto verification still runs. New publishes cannot
+    create such rows (the gate requires namespace + artifact equality)."""
+    import importlib.util as _iu
+    spec = _iu.spec_from_file_location(
+        "evidence_chain_legacy",
+        server.SKILLS / "pdd-evidence-keeper" / "scripts" / "evidence_chain.py")
+    chain = _iu.module_from_spec(spec)
+    spec.loader.exec_module(chain)
+    legacy = chain.build_evidence(  # old-style: NO namespace in protocol
+        {"name": "pdd-registry", "version": "1.2.0",
+         "bundle_digest": "sha256:" + "a" * 64},
+        "sha256:" + "a" * 64, [], [], {})
+    registry_db.publish(server._db(), _bundle(namespace="pdd"),
+                        _evidence(signed_object=legacy,
+                                  artifact_id="pdd-registry-python-stdlib"))
+    status, body = db_client("/evidence/verify?bundle=pdd-registry")
+    rows = [r for r in body["results"] if r["artifact_id"].startswith("pdd-")]
+    assert rows, body["results"]
+    assert rows[0]["status"] == "verified", rows[0]
+    assert rows[0]["verified"] is True
+
+
+def test_gate_rejects_signed_object_attesting_different_bundle(db_client):
+    """Publish-time replay branch: a GENUINELY signed object whose attested
+    fields diverge from the payload (here: bundle_digest) must be rejected
+    400 even though the signature is valid — the gate binds every attested
+    field (integrity review finding)."""
+    status, body = db_client("/publish", {
+        "bundle": _bundle(namespace="pdd", name="pdd-registry",
+                          digest="sha256:" + "a" * 64),
+        "evidence": _signed_evidence(bundle_name="pdd-registry",
+                                     bundle_version="1.2.0",
+                                     bundle_digest="sha256:" + "d" * 64,
+                                     artifact_id="sha256:" + "a" * 64)})
+    assert status == 400, body
+    assert "registry-owned" in body["error"]["message"]
+    # nothing was written
+    _, body = db_client("/bundles")
+    assert body["bundles"] == []
+
+
+def test_evidence_replay_binding_cross_check(db_client):
+    """A genuine signed object replayed under a DIFFERENT record must not
+    report verified: the object's embedded protocol name / version /
+    bundle_digest / artifact_digest are cross-checked against the row
+    (integrity review findings). Here the evidence row is tampered (S-009-
+    style) so object and row diverge -> binding mismatch -> unverified."""
+    status, _ = db_client("/publish", {
+        "bundle": _bundle(namespace="pdd", name="pdd-registry",
+                          digest="sha256:" + "a" * 64),
+        "evidence": _signed_evidence(bundle_name="pdd-registry",
+                                     bundle_version="1.2.0",
+                                     bundle_digest="sha256:" + "a" * 64,
+                                     artifact_id="sha256:" + "a" * 64)})
+    assert status == 200
+    # Tamper BOTH the catalog record and the evidence row to digest e64:
+    # the verify target (driven by the catalog) then finds the row, but the
+    # object still attests a64 -> binding check fails closed.
+    conn = server._db()
+    conn.execute("UPDATE bundles SET digest = ? "
+                 "WHERE name = 'pdd-registry' AND namespace = 'pdd'",
+                 ("sha256:" + "e" * 64,))
+    conn.execute("UPDATE evidence SET bundle_digest = ? "
+                 "WHERE name = 'pdd-registry' AND namespace = 'pdd'",
+                 ("sha256:" + "e" * 64,))
+    conn.commit()
+    status, body = db_client("/evidence/verify?bundle=pdd-registry")
+    rows = [r for r in body["results"] if r["artifact_id"].startswith("sha256:")]
+    assert rows, body["results"]
+    assert rows[0]["status"] == "unverified", rows[0]
+    assert rows[0]["reason"] == "object/row binding"
     assert body["ok"] is False

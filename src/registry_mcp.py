@@ -227,7 +227,7 @@ def handle_request(body: bytes, auth_bearer: str = "") -> tuple[dict, int]:
                            "data": {"kind": "internal"}}}), 503
     try:
         request = json.loads(body.decode("utf-8"))
-    except (UnicodeDecodeError, json.JSONDecodeError):
+    except (UnicodeDecodeError, json.JSONDecodeError, RecursionError):
         return ({"jsonrpc": "2.0", "id": None,
                  "error": {"code": -32602, "message": "invalid JSON body",
                            "data": {"kind": "invalid_request"}}}), 400
