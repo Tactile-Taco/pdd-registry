@@ -105,7 +105,7 @@ CREATE TABLE IF NOT EXISTS ledger (
 -- active=0 revokes. Revocation is a deliberate state change to a token row
 -- (NOT ledger/evidence data — those stay append-only, S-009).
 CREATE TABLE IF NOT EXISTS publish_tokens (
-  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  id         INTEGER PRIMARY KEY {IDENTITY},
   label      TEXT NOT NULL,
   token_hash TEXT NOT NULL UNIQUE,
   active     INTEGER NOT NULL DEFAULT 1,
@@ -114,7 +114,7 @@ CREATE TABLE IF NOT EXISTS publish_tokens (
 );
 -- Append-only audit trail for mint/revoke actions (no update/delete path).
 CREATE TABLE IF NOT EXISTS token_audit (
-  id        INTEGER PRIMARY KEY AUTOINCREMENT,
+  id        INTEGER PRIMARY KEY {IDENTITY},
   action    TEXT NOT NULL,
   token_id  INTEGER,
   actor     TEXT NOT NULL,
@@ -155,9 +155,14 @@ def connect(url: str):
 @_serialized
 def init_schema(conn) -> None:
     # execute one statement at a time (portable across sqlite3/psycopg)
+    # {IDENTITY} is a dialect placeholder: sqlite3 has no GENERATED
+    # ALWAYS AS IDENTITY and postgres has no AUTOINCREMENT, so the token
+    # tables branch here (sqlite: AUTOINCREMENT; postgres: identity).
+    identity = "AUTOINCREMENT" if isinstance(conn, sqlite3.Connection) \
+        else "GENERATED ALWAYS AS IDENTITY"
     for stmt in SCHEMA.split(";"):
         if stmt.strip():
-            conn.execute(stmt)
+            conn.execute(stmt.replace("{IDENTITY}", identity))
     # COMMIT BEFORE the migration ALTER: psycopg runs every statement in ONE
     # transaction — on a fresh PostgreSQL database the duplicate-column
     # rollback below would otherwise discard the CREATE TABLEs just issued
@@ -490,9 +495,9 @@ def mint_publish_token(conn, label: str, actor: str) -> dict:
     now = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     cur = _exec(conn,
         "INSERT INTO publish_tokens (label, token_hash, active, created_at, "
-        "created_by) VALUES (?, ?, 1, ?, ?)",
+        "created_by) VALUES (?, ?, 1, ?, ?) RETURNING id",
         (label.strip(), _token_hash(token), now, actor))
-    tid = cur.lastrowid
+    tid = cur.fetchone()["id"]
     _exec(conn,
         "INSERT INTO token_audit (action, token_id, actor, detail, at) "
         "VALUES ('mint', ?, ?, ?, ?)",
