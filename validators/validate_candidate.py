@@ -301,10 +301,19 @@ def _assert_bench_meta(bench: dict) -> dict:
     return {**bench, "iterations": iterations}
 
 
-def layer_operational_static(bundle: Path, impl: Path) -> list[dict]:
+def layer_operational_static(bundle: Path, impl: Path, manifest: dict) -> list[dict]:
     """Static O-layer checks — runs BEFORE any candidate code executes, so a
     hostile candidate cannot pass the scan by evading it at runtime."""
     results = []
+    # Language gate: the AST scans are Python-shaped; non-python candidates
+    # have no Python import/forbidden-call surface (O-* is enforced for them
+    # by the docker sandbox when available — see layer_operational_dynamic).
+    lang = _candidate_language(manifest)
+    if lang != "python":
+        return [{"invariant_id": "O-001,O-002,O-003,O-004", "layer": "operational",
+                 "outcome": "skip",
+                 "evidence": f"language {lang}: no Python AST surface; O-* enforced "
+                              "by the docker sandbox when available"}]
     impl_files = [p for p in impl.rglob("*.py") if "tests" not in p.parts]
     src = "\n".join(p.read_text() for p in impl_files)
     try:
@@ -349,6 +358,64 @@ def layer_operational_static(bundle: Path, impl: Path) -> list[dict]:
     return results
 
 
+def _candidate_language(manifest: dict) -> str:
+    """Language-agnostic harness: the manifest declares the candidate
+    language (default python, back-compat). Python-shaped layers (AST
+    scans, smoke/benchmark/mutant harnesses) apply only to python;
+    non-python candidates run their declared test_command instead."""
+    return str(manifest.get("language") or "python").lower()
+
+
+def _test_command(manifest: dict):
+    """Language-agnostic harness: manifest test_command (an argv list)
+    replaces the default pytest invocation for the behavioral layer.
+    None = the python pytest path (back-compat). Shape-validated: 1..8
+    argv strings, each 1..200 chars, no newlines (the command runs in a
+    temp copy with scrubbed env — the same containment as pytest)."""
+    tc = manifest.get("test_command")
+    if tc is None:
+        return None
+    if (not isinstance(tc, list) or not 1 <= len(tc) <= 8
+            or not all(isinstance(a, str) and 0 < len(a) <= 200
+                       and "\n" not in a for a in tc)):
+        raise SystemExit("candidate-manifest.json test_command must be a list "
+                         "of 1..8 argv strings (each 1..200 chars, no "
+                         "newlines)")
+    return tc
+
+
+def _candidate_digest(impl: Path, manifest: dict, entry_module: str) -> str:
+    """Language-agnostic candidate digest: hash the manifest-declared files
+    (all languages); fall back to the python entry module (back-compat).
+    Declared paths must be relative and stay inside the impl dir (host
+    files must never enter the attestation digest); a missing declared file
+    is a manifest lie -> fail closed."""
+    declared = manifest.get("files") or []
+    if declared:
+        if not isinstance(declared, list) or not all(
+                isinstance(f, str) for f in declared):
+            raise SystemExit("candidate-manifest.json files must be a list of "
+                             "strings (relative paths inside the candidate)")
+        digest_parts = []
+        root = impl.resolve()
+        for f in declared:
+            p = (root / f).resolve()
+            try:
+                p.relative_to(root)
+            except ValueError:
+                raise SystemExit(f"candidate-manifest.json declares file outside "
+                                 f"the candidate dir: {f}")
+            if not p.is_file():
+                raise SystemExit(f"candidate-manifest.json declares missing file: {f}")
+            digest_parts.append(file_digest(p))
+        return "sha256:" + hashlib.sha256(
+            "|".join(digest_parts).encode()).hexdigest()
+    if not entry_module:
+        raise SystemExit("candidate-manifest.json must declare a non-empty `files` "
+                         "list or a python `entry_module`")
+    return file_digest(impl / f"{entry_module}.py")
+
+
 def _behavioral_coverage(bids: list[str], lineage: dict) -> tuple[list[str], list[str]]:
     """Split behavioral invariant ids into (covered, uncovered) relative to the
     candidate manifest's invariant_lineage. A pass label may only claim the
@@ -373,11 +440,20 @@ def layer_behavioral(bundle: Path, impl: Path, pbt_runs: int, manifest: dict) ->
     with tempfile.TemporaryDirectory(prefix="pdd-behavioral-") as td:
         run_dir = Path(td) / "candidate"
         shutil.copytree(impl, run_dir)
+        # Language-agnostic harness: a declared test_command replaces the
+        # default pytest invocation (non-python candidates); runs from the
+        # temp copy with scrubbed env — same containment as pytest.
+        test_cmd = _test_command(manifest)
+        if test_cmd is None:
+            test_cmd = [sys.executable, "-m", "pytest",
+                        str(run_dir / "tests"), "-q", "--tb=short"]
         proc = subprocess.run(
-            [sys.executable, "-m", "pytest", str(run_dir / "tests"), "-q", "--tb=short"],
+            test_cmd,
             cwd=run_dir, capture_output=True, text=True,
             env=_scrubbed_env(pbt_runs), timeout=900)
-        summary = proc.stdout.strip().splitlines()[-1] if proc.stdout.strip() else proc.stderr[-200:]
+        summary = proc.stdout.strip().splitlines()[-1] if proc.stdout.strip() \
+            else (proc.stderr.strip().splitlines()[-1] if proc.stderr.strip()
+                  else f"exit {proc.returncode}")
     # Label the behavioral check with the bundle's own invariant ids.
     bid_data = {}
     try:
@@ -392,12 +468,14 @@ def layer_behavioral(bundle: Path, impl: Path, pbt_runs: int, manifest: dict) ->
     lineage = manifest.get("invariant_lineage") or {}
     covered, uncovered = _behavioral_coverage(bids, lineage)
     label = ",".join(covered) if covered else "B-(none)"
+    # Harness label: pytest (default python path) vs the declared test_command.
+    harness = "pytest" if "pytest" in test_cmd else " ".join(test_cmd[:2])
     if proc.returncode == 0:
         results.append({"invariant_id": label, "layer": "behavioral",
-                        "outcome": "pass", "evidence": f"pytest: {summary}"})
+                        "outcome": "pass", "evidence": f"{harness}: {summary}"})
     else:
         results.append({"invariant_id": label, "layer": "behavioral",
-                        "outcome": "fail", "evidence": f"pytest failed: {summary}"})
+                        "outcome": "fail", "evidence": f"{harness} failed: {summary}"})
         # keep going: mutation sanity may still add signal
     # Honesty: behavioral ids WITHOUT candidate-level tests are NOT covered by
     # this pytest run — label them skip-with-reason (e.g. B-006 publish
@@ -433,8 +511,14 @@ def _docker_infra_error(returncode: int, cidfile: Path) -> bool:
 def mutation_sanity(impl: Path, testdir: Path, pbt_runs: int, manifest: dict) -> dict:
     """Manifest-driven mutant: the candidate declares the exact source span to
     break and the pytest filter that must FAIL against the mutant (proves the
-    property is not vacuous). Missing definition → mutation-suspect (fail-closed)."""
+    property is not vacuous). Missing definition → mutation-suspect (fail-closed).
+    Non-python candidates: the mutant harness is Python-shaped (AST find/replace
+    + pytest) — honest skip, no vacuity claim."""
     mutant_def = manifest.get("mutation_sanity") or {}
+    if _candidate_language(manifest) != "python":
+        return {"invariant_id": "B-001", "layer": "behavioral", "outcome": "skip",
+                "evidence": "language " + _candidate_language(manifest)
+                             + ": mutant harness is Python-shaped; not applicable"}
     entry_module = manifest.get("entry_module") or "user_registry"
     missing = [k for k in ("find", "replace", "pytest_filter") if not mutant_def.get(k)]
     if missing:
@@ -482,6 +566,79 @@ def layer_operational_dynamic(bundle: Path, impl: Path, sandbox: bool, pbt_runs:
     results = []
     entry_module = manifest.get("entry_module") or "user_registry"
     entry_class = manifest.get("entry_class") or "UserRegistry"
+    lang = _candidate_language(manifest)
+
+    # Language gate: smoke + benchmark are Python-shaped (entry import /
+    # eval-mode assert_expr / python:3.12-slim sandbox image). Non-python
+    # candidates instead get REAL sandbox enforcement: their declared
+    # test_command runs inside the docker sandbox (network none, read-only)
+    # when available; a runtime absent from the sandbox image is an infra
+    # skip, never a pass claim.
+    if lang != "python":
+        test_cmd = _test_command(manifest)
+        if test_cmd is None:
+            # Honesty: no declared test_command means nothing to run — a pass
+            # label must never imply sandbox enforcement over no code.
+            results.append({"invariant_id": "O-001,O-002", "layer": "operational",
+                            "outcome": "skip",
+                            "evidence": "language " + lang + ": no test_command "
+                                        "declared in candidate-manifest.json; "
+                                        "nothing executed in the sandbox"})
+            results.append({"invariant_id": "O-005", "layer": "operational",
+                            "outcome": "skip",
+                            "evidence": "language " + lang + ": benchmark "
+                                        "harness is Python-shaped; not applicable "
+                                        "(should-tier)"})
+            return results
+        if sandbox and shutil.which("docker"):
+            with tempfile.TemporaryDirectory(prefix="pdd-cid-") as cid_td:
+                cidfile = Path(cid_td) / "cid"
+                proc = subprocess.run(
+                    ["docker", "run", "--rm", "--network", "none", "--read-only",
+                     *_SANDBOX_DOCKER_FLAGS, "--security-opt", "no-new-privileges",
+                     "--cidfile", str(cidfile),
+                     "-e", f"PBT_RUNS={pbt_runs}",
+                     "-v", f"{impl.resolve()}:/candidate:ro", "-w", "/candidate",
+                     "python:3.12-slim@sha256:d657ab0ade19f404a6ccc883ab399540de667aff751748ce23c07330c5a89e64",
+                     *test_cmd],
+                    capture_output=True, text=True, timeout=300)
+            if proc.returncode == 0:
+                results.append({"invariant_id": "O-001,O-002", "layer": "operational",
+                                "outcome": "pass",
+                                "evidence": "docker sandbox (network none, read-only fs): "
+                                            + " ".join(test_cmd[:2]) + ": "
+                                            + proc.stdout.strip()})
+            elif (proc.returncode == 125 and not cidfile.exists()
+                  and "executable file not found in $PATH" in proc.stderr):
+                # Unspoofable infra classification: rc=125 + no cidfile means
+                # the container never started (docker CLI error before exec);
+                # a candidate script that prints the marker exits WITHIN a
+                # started container (cidfile exists) and is a candidate failure.
+                results.append({"invariant_id": "O-001,O-002", "layer": "operational",
+                                "outcome": "skip",
+                                "evidence": f"runtime {test_cmd[0]} absent from the "
+                                            "sandbox image; sandbox not executed"})
+            elif _docker_infra_error(proc.returncode, cidfile):
+                results.append({"invariant_id": "O-001,O-002", "layer": "operational",
+                                "outcome": "skip",
+                                "evidence": f"docker sandbox infra failure (exit "
+                                            f"{proc.returncode}): {proc.stderr.strip()[:200]}"})
+            else:
+                results.append({"invariant_id": "O-001,O-002", "layer": "operational",
+                                "outcome": "fail",
+                                "evidence": f"sandbox {test_cmd[0]} run failed: "
+                                            f"{proc.stderr.strip()[:200]}"})
+        else:
+            results.append({"invariant_id": "O-001,O-002", "layer": "operational",
+                            "outcome": "skip",
+                            "evidence": f"language {lang}: sandbox not requested or "
+                                        "docker not found; behavioral test_command ran "
+                                        "with host containment (temp copy + scrubbed env)"})
+        results.append({"invariant_id": "O-005", "layer": "operational",
+                        "outcome": "skip",
+                        "evidence": f"language {lang}: benchmark harness is "
+                                    "Python-shaped; not applicable (should-tier)"})
+        return results
 
     # Docker sandbox (optional, infra contingency): network none + read-only fs.
     if sandbox and shutil.which("docker"):
@@ -660,15 +817,19 @@ def _main(argv: list[str]) -> int:
             return 2
 
     results = (layer_structural(bundle, impl)
-               + layer_operational_static(bundle, impl)   # static scan BEFORE any execution
+               + layer_operational_static(bundle, impl, manifest)   # static scan BEFORE any execution
                + layer_behavioral(bundle, impl, pbt_runs, manifest)
                + layer_operational_dynamic(bundle, impl, sandbox, pbt_runs, manifest))
     verdict_text, reason = verdict(results)
 
+    # Language-agnostic candidate digest: hash the manifest-declared files
+    # (all languages); fall back to the python entry module (back-compat).
+    candidate_digest = _candidate_digest(impl, manifest, entry_module)
+
     out = {
         "protocol": {"name": name, "version": version,
                      "bundle_digest": bundle_digest(bundle)},
-        "candidate_digest": file_digest(impl / f"{entry_module}.py"),
+        "candidate_digest": candidate_digest,
         "validators": [
             {"id": "schema-validator", "version": "1.0.0", "layer": "structural"},
             {"id": "contract-runner", "version": "1.0.0", "layer": "structural"},

@@ -1,0 +1,25 @@
+{
+  "files": [
+    "validate.sh",
+    "tests/run.sh"
+  ],
+  "dependencies": {
+    "runtime": [
+      "POSIX sh + POSIX utilities"
+    ],
+    "dev": []
+  },
+  "invariant_lineage": {
+    "B-001": [
+      "B001_known_components_pass",
+      "B001_unknown_component_reported",
+      "B001_unknown_template_ref_reported",
+      "B001_empty_components_pass",
+      "B001_full_vocabulary_pass"
+    ]
+  },
+  "known_limitations": [
+    "demo candidate for the language-agnostic harness: Python-shaped layers (O-003 AST scan, sandbox smoke, benchmark, mutant harness) are skipped for language shell",
+    "component entries are 'name=value' pairs (no nested JSON) \u2014 a deliberately simple surface"
+  ]
+}

@@ -227,13 +227,34 @@ def cmd_evidence_build(argv: list[str]) -> int:
     force = "--force" in argv
     proto = bundle_dir(name)
     manifest = json.loads((impl / "candidate-manifest.json").read_text())
+    # Language-agnostic attestation: mirror the validator's candidate digest
+    # (manifest `files` list for any language; entry module for python).
     entry_module = manifest.get("entry_module")
-    if not entry_module:
-        sys.exit("candidate-manifest.json must declare `entry_module`")
-    if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", entry_module):
-        sys.exit(f"entry_module must be a Python identifier, got {entry_module!r}")
-    impl_src = impl / f"{entry_module}.py"
-    impl_digest = "sha256:" + hashlib.sha256(impl_src.read_bytes()).hexdigest()
+    declared = manifest.get("files") or []
+    if declared:
+        # Mirror the validator's digest byte-for-byte (attestations must
+        # match) with the same confinement: relative paths inside impl only,
+        # missing declared file -> fail closed.
+        def _fd(f: str) -> str:
+            p = (impl.resolve() / f).resolve()
+            try:
+                p.relative_to(impl.resolve())
+            except ValueError:
+                sys.exit(f"candidate-manifest.json declares file outside "
+                         f"the candidate dir: {f}")
+            if not p.is_file():
+                sys.exit(f"candidate-manifest.json declares missing file: {f}")
+            return "sha256:" + hashlib.sha256(p.read_bytes()).hexdigest()
+        impl_digest = "sha256:" + hashlib.sha256(
+            "|".join(_fd(f) for f in declared).encode()).hexdigest()
+    else:
+        if not entry_module:
+            sys.exit("candidate-manifest.json must declare a non-empty `files` "
+                     "list or a python `entry_module`")
+        if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", entry_module):
+            sys.exit(f"entry_module must be a Python identifier, got {entry_module!r}")
+        impl_src = impl / f"{entry_module}.py"
+        impl_digest = "sha256:" + hashlib.sha256(impl_src.read_bytes()).hexdigest()
     # Version comes from the sealed protocol, not a hardcoded literal.
     import registry_index  # lazy: pyyaml, same index as pdd index/search
     _b = registry_index.load_bundle(proto)

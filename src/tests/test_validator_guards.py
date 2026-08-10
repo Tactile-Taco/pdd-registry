@@ -109,3 +109,96 @@ def test_pdd_assert_safe_expression_matches_validator():
         pdd_cli._assert_safe_expression(ok)
     for bad in ("sys.modules['os'].system('id')", "open('/etc/passwd')", "f()"):
         assert _raises_systemexit(pdd_cli._assert_safe_expression, bad), bad
+
+
+# --- language-agnostic candidate harness -------------------------------------
+
+def test_test_command_shape_validation():
+    assert vc._test_command({"test_command": ["sh", "tests/run.sh"]}) == ["sh", "tests/run.sh"]
+    assert vc._test_command({}) is None
+    assert _raises_systemexit(vc._test_command, {"test_command": "sh x"})       # not a list
+    assert _raises_systemexit(vc._test_command, {"test_command": []})           # empty
+    assert _raises_systemexit(vc._test_command, {"test_command": ["sh", "a\nb"]})  # newline
+
+
+def test_behavioral_layer_runs_test_command(tmp_path):
+    impl = tmp_path / "cand"
+    (impl / "tests").mkdir(parents=True)
+    (impl / "tests" / "run.sh").write_text(
+        "#!/bin/sh\necho custom-harness-ok\nexit 0\n")
+    manifest = {"language": "shell", "invariant_lineage": {},
+                "test_command": ["sh", "tests/run.sh"]}
+    results = vc.layer_behavioral(REPO_ROOT / "pdd-bundles" / "taxonomy-web-service",
+                                  impl, 10, manifest)
+    passes = [r for r in results if r["outcome"] == "pass"]
+    assert any("custom-harness-ok" in r["evidence"] and "sh tests/run.sh:" in r["evidence"]
+               for r in passes), results
+
+
+def test_behavioral_default_python_path_keeps_pytest_label(tmp_path):
+    # Back-compat regression guard: the default python path must still be
+    # labeled "pytest:" in its evidence (prior evidence files rely on it).
+    impl = tmp_path / "cand"
+    (impl / "tests").mkdir(parents=True)
+    (impl / "tests" / "test_x.py").write_text("def test_ok():\n    assert True\n")
+    results = vc.layer_behavioral(REPO_ROOT / "pdd-bundles" / "taxonomy-web-service",
+                                  impl, 10, {"invariant_lineage": {}})
+    passes = [r for r in results if r["outcome"] == "pass"]
+    assert any(r["evidence"].startswith("pytest:") for r in passes), results
+
+
+def test_behavioral_layer_reports_failed_test_command(tmp_path):
+    impl = tmp_path / "cand"
+    (impl / "tests").mkdir(parents=True)
+    (impl / "tests" / "run.sh").write_text("#!/bin/sh\necho boom; exit 3\n")
+    manifest = {"language": "shell", "invariant_lineage": {},
+                "test_command": ["sh", "tests/run.sh"]}
+    results = vc.layer_behavioral(REPO_ROOT / "pdd-bundles" / "taxonomy-web-service",
+                                  impl, 10, manifest)
+    assert any(r["outcome"] == "fail" for r in results), results
+
+
+def test_operational_static_skips_non_python():
+    results = vc.layer_operational_static(
+        REPO_ROOT / "pdd-bundles" / "taxonomy-web-service",
+        REPO_ROOT / "implementations" / "taxonomy-web-service" / "shell-stdlib",
+        {"language": "shell"})
+    assert results and results[0]["outcome"] == "skip"
+    assert "no Python AST surface" in results[0]["evidence"]
+
+
+def test_mutation_sanity_skips_non_python(tmp_path):
+    impl = tmp_path / "cand"
+    result = vc.mutation_sanity(impl, impl / "tests", 10,
+                                {"language": "shell", "mutation_sanity": {}})
+    assert result["outcome"] == "skip"
+    assert "Python-shaped" in result["evidence"]
+
+
+def test_candidate_digest_confinement_and_empty_list(tmp_path):
+    (tmp_path / "a.sh").write_text("one\n")
+    # traversal: ".." must fail closed, never hash host files
+    assert _raises_systemexit(vc._candidate_digest, tmp_path,
+                              {"files": ["../outside.sh"]}, "entry")
+    assert _raises_systemexit(vc._candidate_digest, tmp_path,
+                              {"files": ["/etc/hostname"]}, "entry")
+    # missing declared file -> fail closed
+    assert _raises_systemexit(vc._candidate_digest, tmp_path,
+                              {"files": ["a.sh", "nope.sh"]}, "entry")
+    # empty list == absent -> python fallback or clean error
+    (tmp_path / "entry.py").write_text("x = 1\n")
+    assert vc._candidate_digest(tmp_path, {"files": []}, "entry").startswith("sha256:")
+    assert _raises_systemexit(vc._candidate_digest, tmp_path, {"files": []}, None)
+
+
+def test_candidate_digest_from_manifest_files(tmp_path):
+    (tmp_path / "a.sh").write_text("one\n")
+    (tmp_path / "b.sh").write_text("two\n")
+    manifest = {"files": ["a.sh", "b.sh"]}
+    d = vc._candidate_digest(tmp_path, manifest, "entry")
+    # order-sensitive, content-based: touching b.sh changes the digest
+    (tmp_path / "b.sh").write_text("two!\n")
+    assert vc._candidate_digest(tmp_path, manifest, "entry") != d
+    # back-compat fallback: no files list -> entry module digest
+    (tmp_path / "entry.py").write_text("x = 1\n")
+    assert vc._candidate_digest(tmp_path, {}, "entry").startswith("sha256:")

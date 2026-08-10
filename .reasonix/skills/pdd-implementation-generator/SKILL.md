@@ -39,7 +39,7 @@ The paper's Implementation Generator: explore candidate realizations I1..In unti
 3. **Green step.** Implement the minimal realization satisfying S (compiles/serializes per schema), B (passes properties), O (stays inside capability manifest: no undeclared deps, no network/disk outside allowlist, within budgets).
 4. **Refactor within bounds.** Internal structure is free; protocol-visible behavior is not. Depend only on protocol guarantees of dependencies, never incidental behavior (substitutability).
 5. **Self-check (non-authoritative).** Run the harness locally. Failures -> iterate. Success -> still just a candidate.
-6. **Emit candidate manifest** (`candidate-manifest.json`): artifact id, file digests, language/runtime versions, dependency list with hashes, invariant-lineage map (invariant id -> test file/test name), known limitations.
+6. **Emit candidate manifest** (`candidate-manifest.json`): artifact id, file digests, language/runtime versions, dependency list with hashes, invariant-lineage map (invariant id -> test file/test name), known limitations. For a non-Python candidate, declare `test_command` (argv list — the validator's behavioral layer runs it instead of pytest; the Python-shaped layers — O-003 AST scan, sandbox smoke, benchmark, mutant harness — are honestly skipped for `language != python`, per the language-agnostic harness).
 
 ## Modern spec/TDD coverage expectations
 - Example tests for boundary cases; property tests for laws; metamorphic tests where no oracle exists (e.g. "shuffling presentation order must not change the computed aggregate of identical inputs").
