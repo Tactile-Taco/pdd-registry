@@ -145,3 +145,25 @@ validator loop + evidence) happens only when a bundle is actually being built ag
 - Chunk-size defaults: `target_chars: 80000`, `boundary_overlap_turns: 1` — sized for
   the cheapest capable model tier; may be tuned per pass without protocol change
   (parameters are explicit).
+
+## Implementation flags (open items the pipeline implementation must cover)
+
+These surfaced during the memory-plane design (`memory-plane-design.md`) and touch
+still-draft bundles — cheap to add now, costly to add after sealing.
+
+1. **skill-usage annotation layer** — which skills a topic span used, matched against
+   the canonical skill list. New signal; new pass or v0.2 extension of
+   topic-transition-pass. Powers the case-study trigger (skill-usage ∩ hot-patch).
+2. **hot-patch anomaly detection** in the heatmap — contiguous cells at z > 1.5
+   (deviation-from-baseline) = a "hot region". Powers the case-study + retrospective
+   triggers.
+3. **cluster lifecycle** (`active`/`dormant`/`concluded`) in the topic-graph + a
+   `concluded_clusters` list in the reflection packet. Powers the reflection
+   (long-running-topic conclusion) + retrospective (major-cluster-concludes) triggers.
+4. **topic_flow.flow_graph** — nodes + typed directed edges + a text/HTML render, as a
+   packet sibling of the heatmap. Schema extension to topic-flow-review response and
+   reflection-packet packet.
+5. **canonicalize.mjs must preserve the `## Provenance` section verbatim** — it is
+   content (skill self-documentation), not harness-specific noise to strip.
+6. **Idempotent, resumable-by-file passes + a checkpoint journal** — required by the
+   backlog runner (see `backlog-execution-plan.md`).
