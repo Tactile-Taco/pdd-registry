@@ -1,7 +1,7 @@
 protocol:
   name: topic-graph
   version: 0.1.0
-  status: draft
+  status: sealed
 
 purpose: >
   Cross-session incremental topic relationship graph. Adds a session's topic index

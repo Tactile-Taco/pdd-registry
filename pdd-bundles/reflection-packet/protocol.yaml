@@ -1,7 +1,7 @@
 protocol:
   name: reflection-packet
   version: 0.1.0
-  status: draft
+  status: sealed
 
 purpose: >
   Aggregate a session's annotation layers and statistics into the distilled

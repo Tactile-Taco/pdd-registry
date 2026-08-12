@@ -1,0 +1,59 @@
+{
+  "files": [
+    "transcript_chunking.py",
+    "tests/test_transcript_chunking.py"
+  ],
+  "dependencies": {
+    "runtime": [
+      "stdlib allowlist only"
+    ],
+    "dev": [
+      "pytest",
+      "hashlib"
+    ]
+  },
+  "invariant_lineage": {
+    "deterministic-render": [
+      "test_deterministic_render_identical_across_runs"
+    ],
+    "turn-integrity": [
+      "test_turn_integrity_no_turn_split"
+    ],
+    "chunk-coverage": [
+      "test_chunk_coverage_strict_partition"
+    ],
+    "hash-bound": [
+      "test_chunk_sha256_matches_slice",
+      "test_sha256_matches_hashlib"
+    ],
+    "unique-chunk-ids": [
+      "test_unique_chunk_ids_in_order"
+    ],
+    "stable-chunk-map-shape": [
+      "test_stable_chunk_map_shape_contiguous",
+      "test_response_shape"
+    ],
+    "schema-conformance": [
+      "test_response_shape",
+      "test_all_sources_render"
+    ],
+    "archive-read-only": [
+      "test_all_sources_render"
+    ],
+    "no-model-calls": [
+      "test_all_sources_render"
+    ],
+    "no-network": [
+      "test_all_sources_render"
+    ],
+    "memory-budget": [],
+    "latency-budget": [],
+    "capability-manifest-conformance": []
+  },
+  "known_limitations": [
+    "Attests the pure core only (render + strict-partition chunk map); archive reads and chunk-store writes are the deployment surface (backlog runner), not the attested artifact",
+    "sha256 is an inline pure-python implementation (cross-checked against hashlib in tests)",
+    "Malformed JSONL lines are skipped (best-effort fidelity per line)",
+    "Performance budgets are advisory should-tier; not admission-gating"
+  ]
+}

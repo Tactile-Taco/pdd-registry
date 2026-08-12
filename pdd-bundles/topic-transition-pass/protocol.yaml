@@ -1,7 +1,7 @@
 protocol:
   name: topic-transition-pass
   version: 0.1.0
-  status: draft
+  status: sealed
 
 purpose: >
   LLM-based topic and transition annotation of a chunked transcript. The pass

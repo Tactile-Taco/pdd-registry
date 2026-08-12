@@ -1,7 +1,7 @@
 protocol:
   name: annotation-store
   version: 0.1.0
-  status: draft
+  status: sealed
 
 purpose: >
   The sidecar annotation overlay for archived AI session transcripts. Span-grounded

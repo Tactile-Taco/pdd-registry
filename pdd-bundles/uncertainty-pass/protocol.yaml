@@ -1,7 +1,7 @@
 protocol:
   name: uncertainty-pass
   version: 0.1.0
-  status: draft
+  status: sealed
 
 purpose: >
   LLM-free grammatical and contention analysis of a chunked transcript. The pass

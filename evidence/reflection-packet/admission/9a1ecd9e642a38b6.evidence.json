@@ -1,0 +1,110 @@
+{
+  "protocol": {
+    "name": "reflection-packet",
+    "version": "0.1.0",
+    "bundle_digest": "sha256:f22d232331147e2fea789bf684dc24201404bb2f589220600eb5f66ca7e4bab3"
+  },
+  "implementation": {
+    "artifact_digest": "sha256:9a1ecd9e642a38b6a99628c160ce4457aeeabfdf5ad6cb1da7485e9b5ebd049f"
+  },
+  "validators": [
+    {
+      "id": "schema-validator",
+      "version": "1.0.0",
+      "layer": "structural"
+    },
+    {
+      "id": "contract-runner",
+      "version": "1.0.0",
+      "layer": "structural"
+    },
+    {
+      "id": "property-runner",
+      "version": "1.0.0",
+      "layer": "behavioral"
+    },
+    {
+      "id": "mutation-sanity",
+      "version": "1.0.0",
+      "layer": "behavioral"
+    },
+    {
+      "id": "import-scanner",
+      "version": "1.0.0",
+      "layer": "operational"
+    },
+    {
+      "id": "capability-monitor",
+      "version": "1.0.0",
+      "layer": "operational"
+    },
+    {
+      "id": "benchmark-runner",
+      "version": "1.0.0",
+      "layer": "operational"
+    }
+  ],
+  "results": [
+    {
+      "invariant_id": "S-001",
+      "layer": "structural",
+      "outcome": "pass",
+      "evidence": "compile ok for 2 module(s)"
+    },
+    {
+      "invariant_id": "S-002",
+      "layer": "structural",
+      "outcome": "pass",
+      "evidence": "enumerated error kinds referenced in candidate source"
+    },
+    {
+      "invariant_id": "S-003",
+      "layer": "structural",
+      "outcome": "pass",
+      "evidence": "no schema history yet; v1.0.0 baseline (schema-diff n/a)"
+    },
+    {
+      "invariant_id": "O-003",
+      "layer": "operational",
+      "outcome": "pass",
+      "evidence": "imports=['_hash', 'json', 'typing']; unapproved=[]"
+    },
+    {
+      "invariant_id": "O-001,O-002,O-004",
+      "layer": "operational",
+      "outcome": "pass",
+      "evidence": "forbidden signals=[]"
+    },
+    {
+      "invariant_id": "derived-only,no-raw-transcript,fidelity-flagged,deterministic-build",
+      "layer": "behavioral",
+      "outcome": "pass",
+      "evidence": "pytest: 8 passed in 0.04s"
+    },
+    {
+      "invariant_id": "fidelity-flagged",
+      "layer": "behavioral",
+      "outcome": "pass",
+      "evidence": "mutant rejected by lossy_fidelity (exit 1, assertion failure) \u2014 property is not vacuous"
+    },
+    {
+      "invariant_id": "O-001,O-002",
+      "layer": "operational",
+      "outcome": "skip",
+      "evidence": "sandbox not requested or docker not found; static scan only"
+    },
+    {
+      "invariant_id": "O-005",
+      "layer": "operational",
+      "outcome": "skip",
+      "evidence": "benchmark must be a dict in candidate-manifest.json"
+    }
+  ],
+  "provenance": {
+    "time": "2026-08-12T19:44:01Z",
+    "manifest": "reflection-packet-python-stdlib",
+    "discovery_digest": "sha256:0bd832c87d1eb5d6027667bfa5bf84547b9ae63d5b8bc223aca97e3c1857005e"
+  },
+  "digest": "sha256:24712772246e43b0e7dccc313561c2c15fffe8234da2fefa779dbf3a9a4c4c0d",
+  "signature": "hmac-sha256:3059ddb929f246f881ae01007713da4d5d4d384bfdbc6dd986f1b0a189d1b353"
+}

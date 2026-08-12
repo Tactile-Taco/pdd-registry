@@ -1,0 +1,55 @@
+{
+  "files": [
+    "reflection_packet.py",
+    "tests/test_reflection_packet.py"
+  ],
+  "dependencies": {
+    "runtime": [
+      "stdlib only"
+    ],
+    "dev": [
+      "pytest",
+      "jsonschema"
+    ]
+  },
+  "invariant_lineage": {
+    "derived-only": [
+      "test_derived_only_no_model_calls"
+    ],
+    "no-raw-transcript": [
+      "test_no_raw_transcript_content"
+    ],
+    "fidelity-flagged": [
+      "test_lossy_fidelity_null_cells"
+    ],
+    "deterministic-build": [
+      "test_deterministic_build"
+    ],
+    "schema-conformance": [
+      "test_response_schema_conformance"
+    ],
+    "packet-provenance-complete": [
+      "test_provenance_complete"
+    ],
+    "heatmap-matrix-shape": [
+      "test_heatmap_matrix_shape"
+    ],
+    "packet-output-only": [
+      "test_packet_output_only"
+    ],
+    "no-network": [
+      "test_derived_only_no_model_calls"
+    ],
+    "no-model-calls": [
+      "test_derived_only_no_model_calls"
+    ],
+    "memory-budget": [],
+    "latency-budget": [],
+    "capability-manifest-conformance": []
+  },
+  "known_limitations": [
+    "Heatmap normalization is raw by default; baseline-deviation requires a Baselines file (z-score per model)",
+    "Lossy-fidelity sessions get null heatmap cells (fidelity-flagged) per the bundle",
+    "Performance budgets are advisory should-tier; not admission-gating"
+  ]
+}

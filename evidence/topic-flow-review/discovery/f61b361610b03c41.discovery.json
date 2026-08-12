@@ -1,0 +1,55 @@
+{
+  "files": [
+    "topic_flow_review.py",
+    "tests/test_topic_flow_review.py"
+  ],
+  "dependencies": {
+    "runtime": [
+      "stdlib only"
+    ],
+    "dev": [
+      "pytest",
+      "jsonschema"
+    ]
+  },
+  "invariant_lineage": {
+    "flow-derived-only": [
+      "test_flow_edges_derived_from_transitions"
+    ],
+    "finding-grounded": [
+      "test_findings_grounded_refs_exist"
+    ],
+    "finding-reference-valid": [
+      "test_invalid_refs_dropped"
+    ],
+    "relation-type-enum": [
+      "test_relation_type_enum"
+    ],
+    "schema-conformance": [
+      "test_response_schema_conformance"
+    ],
+    "record-conformance": [
+      "test_records_append_to_store"
+    ],
+    "network-router-only": [
+      "test_network_router_only"
+    ],
+    "model-calls-bounded": [
+      "test_router_calls_bounded"
+    ],
+    "cost-budget": [
+      "test_tokens_reported"
+    ],
+    "archive-read-only": [
+      "test_archive_untouched"
+    ],
+    "memory-budget": [],
+    "latency-budget": [],
+    "capability-manifest-conformance": []
+  },
+  "known_limitations": [
+    "Findings target the session's first chunk (envelope requires a span address)",
+    "When the router returns nothing usable, mechanical fallback findings are emitted so the flow report is never empty",
+    "Performance budgets are advisory should-tier; not admission-gating"
+  ]
+}

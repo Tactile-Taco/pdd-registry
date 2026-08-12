@@ -1,0 +1,110 @@
+{
+  "protocol": {
+    "name": "topic-flow-review",
+    "version": "0.1.0",
+    "bundle_digest": "sha256:ec8a19868883910bee31dfb7ab7bde3fec097febe3de926f237fa7a22cf93eb7"
+  },
+  "implementation": {
+    "artifact_digest": "sha256:f61b361610b03c41fd5f18175400f3b252e81d6d93cc7bd40d7650478ebc8e0e"
+  },
+  "validators": [
+    {
+      "id": "schema-validator",
+      "version": "1.0.0",
+      "layer": "structural"
+    },
+    {
+      "id": "contract-runner",
+      "version": "1.0.0",
+      "layer": "structural"
+    },
+    {
+      "id": "property-runner",
+      "version": "1.0.0",
+      "layer": "behavioral"
+    },
+    {
+      "id": "mutation-sanity",
+      "version": "1.0.0",
+      "layer": "behavioral"
+    },
+    {
+      "id": "import-scanner",
+      "version": "1.0.0",
+      "layer": "operational"
+    },
+    {
+      "id": "capability-monitor",
+      "version": "1.0.0",
+      "layer": "operational"
+    },
+    {
+      "id": "benchmark-runner",
+      "version": "1.0.0",
+      "layer": "operational"
+    }
+  ],
+  "results": [
+    {
+      "invariant_id": "S-001",
+      "layer": "structural",
+      "outcome": "pass",
+      "evidence": "compile ok for 2 module(s)"
+    },
+    {
+      "invariant_id": "S-002",
+      "layer": "structural",
+      "outcome": "pass",
+      "evidence": "enumerated error kinds referenced in candidate source"
+    },
+    {
+      "invariant_id": "S-003",
+      "layer": "structural",
+      "outcome": "pass",
+      "evidence": "no schema history yet; v1.0.0 baseline (schema-diff n/a)"
+    },
+    {
+      "invariant_id": "O-003",
+      "layer": "operational",
+      "outcome": "pass",
+      "evidence": "imports=['_hash', 'json', 're', 'typing']; unapproved=[]"
+    },
+    {
+      "invariant_id": "O-001,O-002,O-004",
+      "layer": "operational",
+      "outcome": "pass",
+      "evidence": "forbidden signals=[]"
+    },
+    {
+      "invariant_id": "flow-derived-only,finding-grounded",
+      "layer": "behavioral",
+      "outcome": "pass",
+      "evidence": "pytest: 6 passed in 0.02s"
+    },
+    {
+      "invariant_id": "relation-type-enum",
+      "layer": "behavioral",
+      "outcome": "pass",
+      "evidence": "mutant rejected by relation_type_enum (exit 1, assertion failure) \u2014 property is not vacuous"
+    },
+    {
+      "invariant_id": "O-001,O-002",
+      "layer": "operational",
+      "outcome": "skip",
+      "evidence": "sandbox not requested or docker not found; static scan only"
+    },
+    {
+      "invariant_id": "O-005",
+      "layer": "operational",
+      "outcome": "skip",
+      "evidence": "benchmark must be a dict in candidate-manifest.json"
+    }
+  ],
+  "provenance": {
+    "time": "2026-08-12T19:44:01Z",
+    "manifest": "topic-flow-review-python-stdlib",
+    "discovery_digest": "sha256:59a342fd8062d54bab56f386d3cad33a193f82713898549bd4a4fbddeaf79321"
+  },
+  "digest": "sha256:cc251f9b76a564ce0c1b6f24bf2e3732ced32cee9824b11885c229592f4c1714",
+  "signature": "hmac-sha256:791f7b2300543a61396392122de9653786d6f3c79679432504c664046abb9669"
+}

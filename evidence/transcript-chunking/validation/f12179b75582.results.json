@@ -1,0 +1,107 @@
+{
+  "protocol": {
+    "name": "transcript-chunking",
+    "version": "0.1.0",
+    "bundle_digest": "sha256:f8311d9cdeb7062fef1b8133bab2687fef1fcbe651e38777b5a0dcc439e58905"
+  },
+  "candidate_digest": "sha256:f12179b75582002de95fae42f11c08c64f2710b7baf23a8cc21f3ef7a3d3d919",
+  "validators": [
+    {
+      "id": "schema-validator",
+      "version": "1.0.0",
+      "layer": "structural"
+    },
+    {
+      "id": "contract-runner",
+      "version": "1.0.0",
+      "layer": "structural"
+    },
+    {
+      "id": "property-runner",
+      "version": "1.0.0",
+      "layer": "behavioral"
+    },
+    {
+      "id": "mutation-sanity",
+      "version": "1.0.0",
+      "layer": "behavioral"
+    },
+    {
+      "id": "import-scanner",
+      "version": "1.0.0",
+      "layer": "operational"
+    },
+    {
+      "id": "capability-monitor",
+      "version": "1.0.0",
+      "layer": "operational"
+    },
+    {
+      "id": "benchmark-runner",
+      "version": "1.0.0",
+      "layer": "operational"
+    }
+  ],
+  "results": [
+    {
+      "invariant_id": "S-001",
+      "layer": "structural",
+      "outcome": "pass",
+      "evidence": "compile ok for 1 module(s)"
+    },
+    {
+      "invariant_id": "S-002",
+      "layer": "structural",
+      "outcome": "pass",
+      "evidence": "enumerated error kinds referenced in candidate source"
+    },
+    {
+      "invariant_id": "S-003",
+      "layer": "structural",
+      "outcome": "pass",
+      "evidence": "no schema history yet; v1.0.0 baseline (schema-diff n/a)"
+    },
+    {
+      "invariant_id": "O-003",
+      "layer": "operational",
+      "outcome": "pass",
+      "evidence": "imports=['json', 're', 'typing']; unapproved=[]"
+    },
+    {
+      "invariant_id": "O-001,O-002,O-004",
+      "layer": "operational",
+      "outcome": "pass",
+      "evidence": "forbidden signals=[]"
+    },
+    {
+      "invariant_id": "deterministic-render,turn-integrity,chunk-coverage,hash-bound",
+      "layer": "behavioral",
+      "outcome": "fail",
+      "evidence": "pytest failed: 1 failed, 15 passed in 0.32s"
+    },
+    {
+      "invariant_id": "chunk-coverage",
+      "layer": "behavioral",
+      "outcome": "pass",
+      "evidence": "mutant rejected by chunk_coverage (exit 1, assertion failure) \u2014 property is not vacuous"
+    },
+    {
+      "invariant_id": "O-001,O-002",
+      "layer": "operational",
+      "outcome": "skip",
+      "evidence": "sandbox not requested or docker not found; static scan only"
+    },
+    {
+      "invariant_id": "O-005",
+      "layer": "operational",
+      "outcome": "skip",
+      "evidence": "benchmark must be a dict in candidate-manifest.json"
+    }
+  ],
+  "verdict": "reject",
+  "verdict_reason": "1 must-invariant failure(s): deterministic-render,turn-integrity,chunk-coverage,hash-bound",
+  "environment": {
+    "runtime": "3.14.6",
+    "os": "linux"
+  }
+}

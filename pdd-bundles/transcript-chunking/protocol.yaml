@@ -1,7 +1,7 @@
 protocol:
   name: transcript-chunking
   version: 0.1.0
-  status: draft
+  status: sealed
 
 purpose: >
   Convert an archived AI session transcript (any supported harness source) into a

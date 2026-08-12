@@ -1,7 +1,7 @@
 protocol:
   name: topic-flow-review
   version: 0.1.0
-  status: draft
+  status: sealed
 
 purpose: >
   LLM review of a session's topic and transition annotations to understand the

@@ -1,0 +1,110 @@
+{
+  "protocol": {
+    "name": "uncertainty-pass",
+    "version": "0.1.0",
+    "bundle_digest": "sha256:9edb352d15dc7f696355aa66e00cded4b9cfe793fd84297dbe7a912d89f1f5da"
+  },
+  "implementation": {
+    "artifact_digest": "sha256:16d140e23071d0ba51b71b653d50d35d2796a9ee5427d4bd8e6fb6237c2bd07a"
+  },
+  "validators": [
+    {
+      "id": "schema-validator",
+      "version": "1.0.0",
+      "layer": "structural"
+    },
+    {
+      "id": "contract-runner",
+      "version": "1.0.0",
+      "layer": "structural"
+    },
+    {
+      "id": "property-runner",
+      "version": "1.0.0",
+      "layer": "behavioral"
+    },
+    {
+      "id": "mutation-sanity",
+      "version": "1.0.0",
+      "layer": "behavioral"
+    },
+    {
+      "id": "import-scanner",
+      "version": "1.0.0",
+      "layer": "operational"
+    },
+    {
+      "id": "capability-monitor",
+      "version": "1.0.0",
+      "layer": "operational"
+    },
+    {
+      "id": "benchmark-runner",
+      "version": "1.0.0",
+      "layer": "operational"
+    }
+  ],
+  "results": [
+    {
+      "invariant_id": "S-001",
+      "layer": "structural",
+      "outcome": "pass",
+      "evidence": "compile ok for 2 module(s)"
+    },
+    {
+      "invariant_id": "S-002",
+      "layer": "structural",
+      "outcome": "pass",
+      "evidence": "enumerated error kinds referenced in candidate source"
+    },
+    {
+      "invariant_id": "S-003",
+      "layer": "structural",
+      "outcome": "pass",
+      "evidence": "no schema history yet; v1.0.0 baseline (schema-diff n/a)"
+    },
+    {
+      "invariant_id": "O-003",
+      "layer": "operational",
+      "outcome": "pass",
+      "evidence": "imports=['_hash', 'json', 're', 'typing']; unapproved=[]"
+    },
+    {
+      "invariant_id": "O-001,O-002,O-004",
+      "layer": "operational",
+      "outcome": "pass",
+      "evidence": "forbidden signals=[]"
+    },
+    {
+      "invariant_id": "deterministic-output,span-bounds,source-segregation",
+      "layer": "behavioral",
+      "outcome": "pass",
+      "evidence": "pytest: 8 passed in 0.03s"
+    },
+    {
+      "invariant_id": "deterministic-output",
+      "layer": "behavioral",
+      "outcome": "pass",
+      "evidence": "mutant rejected by density_math (exit 1, assertion failure) \u2014 property is not vacuous"
+    },
+    {
+      "invariant_id": "O-001,O-002",
+      "layer": "operational",
+      "outcome": "skip",
+      "evidence": "sandbox not requested or docker not found; static scan only"
+    },
+    {
+      "invariant_id": "O-005",
+      "layer": "operational",
+      "outcome": "skip",
+      "evidence": "benchmark must be a dict in candidate-manifest.json"
+    }
+  ],
+  "provenance": {
+    "time": "2026-08-12T19:44:01Z",
+    "manifest": "uncertainty-pass-python-stdlib",
+    "discovery_digest": "sha256:fbe78892cf94da12bee733671d46cf25c3311c506d8850a77037c09c5a003ad9"
+  },
+  "digest": "sha256:7d037494e460e4a8fdf1706d098ebc233a0ea2959c0cef90d683b5479d5d7996",
+  "signature": "hmac-sha256:8b1a33139f10462b7666516e13f4caed60ec0f06a095076fa6a814e5b2909b23"
+}
