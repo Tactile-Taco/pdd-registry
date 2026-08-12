@@ -130,6 +130,12 @@ def store(tmp_path):
     s.close()
 
 
+def seed_artifact(store, artifact_id: str = "ref-1") -> None:
+    """Create the artifact a proposal/vote references (FKs are enforced)."""
+    store.add_artifact({"artifact_id": artifact_id, "type": "reflection",
+                        "agent": "agent-reflection", "evidence_links": []})
+
+
 @pytest.fixture
 def skills_repo(tmp_path):
     """A git repo shaped like the canonical skills repo, with a bare remote."""

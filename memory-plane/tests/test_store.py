@@ -3,7 +3,7 @@ proposals + votes, run state."""
 
 from __future__ import annotations
 
-from conftest import case_study_response
+from conftest import case_study_response, seed_artifact
 
 from memory_plane.proposals import extract_proposals
 from memory_plane.store import ArtifactStore
@@ -33,7 +33,15 @@ def test_influenced_skills_reverse_index(store):
     assert store.influenced_skills("nope") == []
 
 
+def test_link_skill_hallucinated_artifact_ignored(store):
+    """A cited artifact id that was never stored (agent hallucination) must
+    not raise — the push outcome must not depend on it."""
+    store.link_skill("ghost-artifact", "web-perf", None, "impact")
+    assert store.influenced_skills("web-perf") == []
+
+
 def test_proposals_and_votes(store):
+    seed_artifact(store)
     store.add_proposal({"proposal_id": "p1", "kind": "new-skill",
                         "skill_name": "x", "judgement": "concrete-fix",
                         "reasoning": "r", "motivated_by": [{"artifact_id": "cs-1",
@@ -52,6 +60,22 @@ def test_state_round_trip(store):
     assert store.get_state("nope") is None
     store.set_state("reflection.ts", "123")
     assert store.get_state("reflection.ts") == "123"
+
+
+def test_proposal_replace_cascades_stale_votes(store):
+    """INSERT OR REPLACE must not leave stale votes that still count in a
+    later tally (foreign keys ON + ON DELETE CASCADE)."""
+    seed_artifact(store)
+    store.add_proposal({"proposal_id": "p1", "kind": "no-proposal",
+                        "judgement": "naturally-hard", "reasoning": "r",
+                        "motivated_by": []}, "ref-1")
+    store.add_vote("p1", "agent-meta", "reject", "stale")
+    assert len(store.votes("p1")) == 1
+    # re-record the same proposal (a re-review path) -> old vote must vanish
+    store.add_proposal({"proposal_id": "p1", "kind": "no-proposal",
+                        "judgement": "naturally-hard", "reasoning": "r2",
+                        "motivated_by": []}, "ref-1")
+    assert store.votes("p1") == []
 
 
 def test_extract_proposals_assigns_ids():

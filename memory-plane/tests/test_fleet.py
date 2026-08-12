@@ -58,6 +58,10 @@ def test_reflection_proposal_reviewed_and_pushed(tmp_path, skills_repo):
         "meta-agent": [approval_vote("ok")],
     })
     runner = _runner(tmp_path, client, skills_repo=skills_repo)
+    # the cited case study exists in the store (realistic: curator ran first)
+    runner.store.add_artifact({"artifact_id": "cs-1", "type": "case-study",
+                               "agent": "agent-case-study-curator",
+                               "evidence_links": []})
     stats = runner.run_once()
     # agents are called by NAME (the Letta model handle), not registry id
     assert client.calls[0][0] == "reflection"

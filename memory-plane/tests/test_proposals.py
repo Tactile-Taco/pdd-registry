@@ -79,3 +79,16 @@ def test_process_skill_requires_body_or_description():
 def test_bad_kind_rejected():
     p = {"kind": "skill-bomb", "motivated_by": [], "reasoning": "x"}
     assert any("kind" in e for e in validate_proposal(p))
+
+
+def test_path_traversal_skill_names_rejected():
+    for bad in ("../../.ssh/authorized_keys", "/etc/passwd", "a/b", "..",
+                "web-perf\\evil", "a b"):
+        p = good_proposal()
+        p["skill_name"] = bad
+        assert any("skill_name" in e for e in validate_proposal(p)), bad
+    # valid names still pass
+    for ok in ("web-perf", "my.skill_2", "a-b"):
+        p = good_proposal()
+        p["skill_name"] = ok
+        assert validate_proposal(p) == [], ok

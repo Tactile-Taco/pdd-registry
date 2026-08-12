@@ -81,3 +81,95 @@ def test_plan_returns_rendered_content_without_writing(skills_repo):
     assert plan["action"] == "create"
     assert "## Provenance" in plan["content"]
     assert not (skills_repo / "skills" / "fleet-probe-skill").exists()
+
+
+def test_skill_name_traversal_blocked_defense_in_depth(skills_repo):
+    repo = SkillRepo(str(skills_repo))
+    for bad in ("../../escape", "/etc/passwd"):
+        p = good_proposal()
+        p["proposal_id"] = f"p-{bad.replace('/', '_')}"
+        p["skill_name"] = bad
+        try:
+            repo.apply(p)
+            raise AssertionError(f"expected ValueError for {bad!r}")
+        except ValueError:
+            pass
+    # nested-but-not-escaping names are rejected at the validation layer
+    # (proposals.SKILL_NAME_RE), not by the path check
+    assert not (skills_repo.parent / "escape").exists()
+
+
+def test_reapply_after_failed_push_is_idempotent(skills_repo, tmp_path):
+    """A failed push leaves the commit locally; re-approval must not duplicate
+    the change."""
+    p = good_proposal()
+    p["proposal_id"] = "p-retry"
+    repo = SkillRepo(str(skills_repo))
+
+    # Make the remote reject pushes: a non-bare repo with main checked out.
+    nonbare = tmp_path / "skills-nonbare"
+    subprocess.run(["git", "init", "-q", "-b", "main", str(nonbare)], check=True)
+    subprocess.run(["git", "-C", str(nonbare), "config", "user.name", "t"], check=True)
+    subprocess.run(["git", "-C", str(nonbare), "config", "user.email", "t@t"], check=True)
+    subprocess.run(["git", "-C", str(skills_repo), "remote", "set-url",
+                    "origin", str(nonbare)], check=True)
+    try:
+        repo.apply(p)
+        raise AssertionError("expected push rejection")
+    except RuntimeError:
+        pass  # push failed; local commit remains
+
+    # Restore the working bare remote and re-apply (as a re-review would).
+    bare = tmp_path / "skills-remote.git"
+    subprocess.run(["git", "-C", str(skills_repo), "remote", "set-url",
+                    "origin", str(bare)], check=True)
+    result = repo.apply(p)
+    assert result["action"] == "already-applied"
+    content = (skills_repo / "skills" / "fleet-probe-skill" / "SKILL.md").read_text()
+    assert content.count("## Provenance") == 1  # no duplicate section
+    log = subprocess.run(["git", "-C", str(skills_repo), "log", "--oneline"],
+                         capture_output=True, text=True, check=True).stdout
+    assert log.count("fleet proposal p-retry") == 1  # one commit, not two
+    assert _remote_head(skills_repo) == repo._git("rev-parse", "HEAD").strip()
+
+
+def test_reapply_with_stacked_commit_no_duplication(skills_repo, tmp_path):
+    """A later proposal committed on top of the failed push must not confuse
+    re-approval: the marker is searched across history, and re-apply must not
+    duplicate sections or wedge."""
+    p1 = good_proposal()
+    p1["proposal_id"] = "p-stack-1"
+    repo = SkillRepo(str(skills_repo))
+
+    # first apply: push fails (non-bare checked-out remote), commit stays
+    nonbare = tmp_path / "skills-nonbare2"
+    subprocess.run(["git", "init", "-q", "-b", "main", str(nonbare)], check=True)
+    subprocess.run(["git", "-C", str(nonbare), "config", "user.name", "t"], check=True)
+    subprocess.run(["git", "-C", str(nonbare), "config", "user.email", "t@t"], check=True)
+    subprocess.run(["git", "-C", str(skills_repo), "remote", "set-url",
+                    "origin", str(nonbare)], check=True)
+    try:
+        repo.apply(p1)
+        raise AssertionError("expected push rejection")
+    except RuntimeError:
+        pass
+
+    # a second, independent proposal commits on top (this push succeeds)
+    p2 = good_proposal()
+    p2["proposal_id"] = "p-stack-2"
+    p2["skill_name"] = "stacked-skill-2"
+    bare = tmp_path / "skills-remote.git"
+    subprocess.run(["git", "-C", str(skills_repo), "remote", "set-url",
+                    "origin", str(bare)], check=True)
+    repo.apply(p2)
+
+    # re-approval of p1: marker found in history -> no duplicate, remote converges
+    result = repo.apply(p1)
+    assert result["action"] == "already-applied"
+    content = (skills_repo / "skills" / "fleet-probe-skill" / "SKILL.md").read_text()
+    assert content.count("## Provenance") == 1
+    log = subprocess.run(["git", "-C", str(skills_repo), "log", "--oneline"],
+                         capture_output=True, text=True, check=True).stdout
+    assert log.count("fleet proposal p-stack-1") == 1
+    assert log.count("fleet proposal p-stack-2") == 1
+    assert _remote_head(skills_repo) == repo._git("rev-parse", "HEAD").strip()

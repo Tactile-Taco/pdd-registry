@@ -164,7 +164,6 @@ class TriggerEvaluator:
         """Clusters with >= cluster_min sessions whose last activity is older
         than dormant_days (v1 dormancy proxy: packet mtime)."""
         graph = load_graph(self.store_dir)
-        meta = {p["packet"]["session"]["filename"]: p for p in packets}
         activity: dict[str, float] = {}
         for p in packets:
             m = _packet_meta(p)

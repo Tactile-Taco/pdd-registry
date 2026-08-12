@@ -7,7 +7,7 @@ import json
 import os
 import time
 
-from conftest import make_graph, make_packet
+from conftest import make_graph, make_packet, seed_artifact
 
 from memory_plane.store import ArtifactStore
 from memory_plane.triggers import TriggerEvaluator, hot_patches
@@ -125,6 +125,7 @@ def test_retro_volume_floor(tmp_path):
 
 
 def test_meta_fires_on_proposal_accumulation(tmp_path, store):
+    seed_artifact(store)
     store.set_state("meta.ts", str(time.time()))
     for i in range(3):
         store.add_proposal({"proposal_id": f"p{i}", "kind": "no-proposal",
@@ -134,3 +135,18 @@ def test_meta_fires_on_proposal_accumulation(tmp_path, store):
     fired = _ev(str(tmp_path), store).evaluate()
     assert "meta" in fired
     assert "proposals accumulated" in fired["meta"][0]
+
+
+def test_malformed_packet_does_not_crash_evaluation(tmp_path):
+    """A valid-JSON packet missing session/heatmap keys (e.g. a partial write)
+    must not crash the whole trigger evaluation."""
+    import json as _json
+    pdir = tmp_path / "packets"
+    pdir.mkdir()
+    (pdir / "reasonix-broken.packet.json").write_text(
+        _json.dumps({"packet_id": "broken", "packet": {"stats": {}}}))
+    make_packet(tmp_path, "reasonix", "ok.jsonl", cells=[[0.1]])
+    db = ArtifactStore(":memory:")
+    fired = _ev(str(tmp_path), db).evaluate()
+    assert isinstance(fired, dict)
+    db.close()

@@ -15,3 +15,7 @@ jobs:
         run: for d in pdd-bundles/*/; do python3 .reasonix/skills/pdd-protocol-author/scripts/check_bundle.py "$d"; done
       - name: Cross-bundle compatibility
         run: python3 .reasonix/skills/pdd-contract-negotiator/scripts/check_compatibility.py pdd-bundles/
+      # The fleet is a client system outside the PDD loop (stochastic agents);
+      # its deterministic parts gate PRs here.
+      - name: Memory-plane fleet tests
+        run: python3 -m pytest memory-plane/tests/ -q

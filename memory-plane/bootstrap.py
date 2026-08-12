@@ -26,11 +26,16 @@ import argparse
 import base64
 import json
 import os
+import re
 import subprocess
 import sys
 import time
 
 from memory_plane.agent_defs import AGENT_DEFS, LETTA_MODEL
+
+# Agent ids/names become paths and shell literals on the remote; keep them
+# strictly safe (defense in depth even though the defs are in-repo constants).
+SAFE_NAME_RE = re.compile(r"^[a-z0-9-]+$")
 
 # Same model_settings as the memory-manager template (captured from the M6).
 MODEL_SETTINGS = {
@@ -72,6 +77,8 @@ def provision(host: str = "m6", dry_run: bool = False) -> None:
     agents_dir = "~/.letta/lc-local-backend/agents"
     memfs_dir = "~/.letta/lc-local-backend/memfs"
     for a in AGENT_DEFS:
+        if not (SAFE_NAME_RE.match(a["id"]) and SAFE_NAME_RE.match(a["name"])):
+            raise ValueError(f"unsafe agent id/name: {a['id']!r}/{a['name']!r}")
         b64 = base64.b64encode(a["id"].encode()).decode()
         reg_path = f"{agents_dir}/{b64}.json"
         mem_path = f"{memfs_dir}/{a['id']}/memory"
@@ -92,9 +99,9 @@ def provision(host: str = "m6", dry_run: bool = False) -> None:
               f"echo {reg_b64} | base64 -d > {reg_path} && "
               f"echo {persona_b64} | base64 -d > {mem_path}/system/persona.md && "
               f"echo {human_b64} | base64 -d > {mem_path}/system/human.md && "
-              f"cd {mem_path} && git init -q 2>/dev/null; "
-              f"git add -A && git -c user.name=memory-plane -c user.email=fleet@local "
-              f"commit -q -m 'provision {a['name']}' 2>/dev/null; true"])
+              f"cd {mem_path} && git init -q && git add -A && "
+              f"(git diff --cached --quiet || git -c user.name=memory-plane "
+              f"-c user.email=fleet@local commit -q -m 'provision {a['name']}')"])
         print(f"provisioned {a['name']} ({a['id']})")
     if dry_run:
         print("[dry-run] systemctl --user restart letta-app-server.service")

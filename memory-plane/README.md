@@ -57,6 +57,10 @@ equivalent signals from what the bundles DO emit:
 Floors are stored in the artifact-store `state` table, so runs are resumable
 and idempotent (a second run the same day does not re-fire).
 
+Schema note: `fleet.db` is versionless — if the store schema changes (e.g.
+constraint semantics), delete the db and let the fleet rebuild it; artifacts
+are derivable from the packets, so a reset is cheap.
+
 ## Backends
 
 - **letta** (default): drives the Letta agents on the M6 App Server

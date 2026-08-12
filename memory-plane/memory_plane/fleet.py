@@ -241,8 +241,12 @@ class FleetRunner:
                                         "status": "held (push failed)",
                                         "error": str(e)[:300]})
                 else:
+                    if review["verdict"] == "approved" and self.skill_repo is None:
+                        status = "approved (no skills repo configured)"
+                    else:
+                        status = review.get("verdict", "held")
                     results.append({"proposal_id": p["proposal_id"],
-                                    "status": review.get("verdict", "held"),
+                                    "status": status,
                                     "reasons": review.get("reasons", [])})
             else:
                 # process-skill / no-proposal: recorded, no repo push.

@@ -28,14 +28,14 @@ CREATE TABLE IF NOT EXISTS artifacts (
   model TEXT
 );
 CREATE TABLE IF NOT EXISTS evidence_edges (
-  artifact_id TEXT NOT NULL REFERENCES artifacts(id),
+  artifact_id TEXT NOT NULL REFERENCES artifacts(id) ON DELETE CASCADE,
   target_type TEXT NOT NULL,
   target_ref TEXT NOT NULL,
   note TEXT,
   PRIMARY KEY (artifact_id, target_type, target_ref)
 );
 CREATE TABLE IF NOT EXISTS skill_links (
-  artifact_id TEXT NOT NULL REFERENCES artifacts(id),
+  artifact_id TEXT NOT NULL REFERENCES artifacts(id) ON DELETE CASCADE,
   skill_name TEXT NOT NULL,
   section TEXT,
   impact TEXT,
@@ -43,7 +43,7 @@ CREATE TABLE IF NOT EXISTS skill_links (
 );
 CREATE TABLE IF NOT EXISTS proposals (
   id TEXT PRIMARY KEY,
-  artifact_id TEXT NOT NULL REFERENCES artifacts(id),
+  artifact_id TEXT NOT NULL REFERENCES artifacts(id) ON DELETE CASCADE,
   kind TEXT NOT NULL,
   skill_name TEXT,
   judgement TEXT,
@@ -52,7 +52,7 @@ CREATE TABLE IF NOT EXISTS proposals (
   created_at REAL NOT NULL
 );
 CREATE TABLE IF NOT EXISTS votes (
-  proposal_id TEXT NOT NULL REFERENCES proposals(id),
+  proposal_id TEXT NOT NULL REFERENCES proposals(id) ON DELETE CASCADE,
   voter TEXT NOT NULL,
   vote TEXT NOT NULL CHECK (vote IN ('approve', 'reject')),
   reason TEXT,
@@ -74,6 +74,7 @@ class ArtifactStore:
             os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
         self._db = sqlite3.connect(path)
         self._db.row_factory = sqlite3.Row
+        self._db.execute("PRAGMA foreign_keys = ON")
         self._db.executescript(SCHEMA)
         self._db.commit()
 
@@ -129,11 +130,17 @@ class ArtifactStore:
     # -- influenced-skills reverse index -----------------------------------
     def link_skill(self, artifact_id: str, skill_name: str, section: str | None,
                    impact: str) -> None:
-        self._db.execute(
-            "INSERT OR REPLACE INTO skill_links (artifact_id, skill_name, section, impact) "
-            "VALUES (?, ?, ?, ?)",
-            (artifact_id, skill_name, section, impact))
-        self._db.commit()
+        # Best-effort: a cited artifact that isn't in the store (e.g. the agent
+        # hallucinated the id) simply gets no reverse link — the push outcome
+        # must not depend on it. (OR IGNORE does not suppress FK violations.)
+        try:
+            self._db.execute(
+                "INSERT INTO skill_links "
+                "(artifact_id, skill_name, section, impact) VALUES (?, ?, ?, ?)",
+                (artifact_id, skill_name, section, impact))
+            self._db.commit()
+        except sqlite3.IntegrityError:
+            pass
 
     def influenced_skills(self, skill_name: str) -> list[dict]:
         """Reverse index: artifacts that influenced a skill."""

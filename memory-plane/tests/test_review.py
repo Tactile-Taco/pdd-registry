@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import json
 
-from conftest import approval_vote, reject_vote
+from conftest import approval_vote, reject_vote, seed_artifact
 
 from memory_plane.review import parse_vote, run_review, tally_votes
 
@@ -45,6 +45,7 @@ def test_run_review_approves_with_unanimous_votes(store):
 
     proposal = {"proposal_id": "p1", "kind": "new-skill", "skill_name": "x",
                 "reasoning": "grounded in cs-1"}
+    seed_artifact(store)
     store.add_proposal(proposal, "ref-1")
     result = run_review(proposal, V(), store, author="agent-reflection")
     assert result["verdict"] == "approved"
@@ -63,6 +64,7 @@ def test_run_review_holds_on_any_reject(store):
 
     proposal = {"proposal_id": "p2", "kind": "edit-skill", "skill_name": "y",
                 "reasoning": "grounded in cs-2"}
+    seed_artifact(store)
     store.add_proposal(proposal, "ref-1")
     result = run_review(proposal, V(), store, author="agent-reflection")
     assert result["verdict"] == "held"
@@ -74,7 +76,10 @@ def test_run_review_unparseable_counts_as_reject(store):
         def chat(self, agent_id, task):
             return "gibberish"
 
-    proposal = {"proposal_id": "p3", "kind": "new-skill", "skill_name": "z"}
+    proposal = {"proposal_id": "p3", "kind": "new-skill", "skill_name": "z",
+                "reasoning": "grounded in cs-3"}
+    seed_artifact(store)
+    store.add_proposal(proposal, "ref-1")
     result = run_review(proposal, V(), store, author="agent-reflection")
     assert result["verdict"] == "held"
     assert store.votes("p3")[0]["vote"] == "reject"

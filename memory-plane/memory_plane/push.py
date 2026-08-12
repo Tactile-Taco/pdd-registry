@@ -42,12 +42,22 @@ class SkillRepo:
         return out.stdout
 
     def skill_path(self, skill_name: str) -> str:
-        return os.path.join(self.repo_dir, "skills", skill_name, "SKILL.md")
+        """Resolve skills/<name>/SKILL.md, refusing any escape from the skills
+        dir (defense in depth — skill_name is agent-controlled)."""
+        base = os.path.realpath(os.path.join(self.repo_dir, "skills"))
+        path = os.path.realpath(os.path.join(base, skill_name, "SKILL.md"))
+        if not path.startswith(base + os.sep):
+            raise ValueError(
+                f"skill_name escapes the skills dir: {skill_name!r}")
+        return path
 
     def _render_new(self, p: dict) -> str:
         body = p.get("body") or ""
         body = re.sub(r"^---\s*\n(?:[^\n]*\n)*?---\s*\n", "", body)  # strip any
         # embedded frontmatter; we own the canonical one
+        # strip an embedded Provenance section too — the canonical block is
+        # appended below, exactly once
+        body = re.split(r"\n*## Provenance\b", body)[0].rstrip()
         return (_FRONTMATTER.format(name=p["skill_name"],
                                     description=p.get("description") or p["skill_name"])
                 + body.strip() + "\n\n" + _provenance_block(p.get("motivated_by") or []))
@@ -77,16 +87,36 @@ class SkillRepo:
                     "content": self._render_edit(p)}
         raise ValueError(f"SkillRepo handles new-skill/edit-skill only, got {kind!r}")
 
+    def _marker_applied(self, proposal_id: str) -> bool:
+        """Proposal already committed ANYWHERE in history (not just HEAD): a
+        failed push can leave the commit buried under later ones; re-approval
+        must not duplicate content, only deliver the pending commit."""
+        try:
+            msgs = self._git("log", "--format=%s")
+        except RuntimeError:
+            return False  # empty repo
+        return f"[fleet proposal {proposal_id}]" in msgs
+
     def apply(self, p: dict) -> dict:
         if self.dry_run:
             return {"dry_run": True, **self.plan(p)}
+        # Idempotency: a failed push previously left the commit in place;
+        # re-approval must not duplicate the change, but MUST still deliver
+        # the pending commit to the remote (see fleet re-review path). The
+        # marker is searched across history: later commits may sit on top.
+        if self._marker_applied(p['proposal_id']):
+            self._git("push", "origin", self.branch)
+            return {"dry_run": False, "action": "already-applied",
+                    "path": self.skill_path(p["skill_name"]),
+                    "commit": self._git("rev-parse", "HEAD").strip()}
         plan = self.plan(p)
         path = plan["path"]
         os.makedirs(os.path.dirname(path), exist_ok=True)
         with open(path, "w", encoding="utf-8") as f:
             f.write(plan["content"])
         self._git("add", "skills")
-        summary = (p.get("title") or p.get("description") or p["kind"])[:120]
+        summary = " ".join((p.get("title") or p.get("description")
+                            or p["kind"]).split())[:120]
         self._git("commit", "-m",
                   f"skill({p['kind']}): {summary} [fleet proposal {p['proposal_id']}]")
         self._git("push", "origin", self.branch)

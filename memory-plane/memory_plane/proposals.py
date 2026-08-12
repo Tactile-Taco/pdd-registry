@@ -15,6 +15,11 @@ JUDGEMENTS = {"concrete-fix", "naturally-hard"}
 
 _FRONTMATTER_RE = re.compile(r"^---\s*\n(?:[^\n]*\n)*?---\s*\n", re.MULTILINE)
 
+# Skill names become directory components in the canonical repo. Reject path
+# separators, traversal, and absolute paths (defense in depth: the model's
+# output is agent-controlled).
+SKILL_NAME_RE = re.compile(r"^[A-Za-z0-9._-]+$")
+
 
 def validate_proposal(p: dict) -> list[str]:
     """Return a list of violations (empty = valid)."""
@@ -30,8 +35,10 @@ def validate_proposal(p: dict) -> list[str]:
 
     motivated_by = p.get("motivated_by") or []
     if kind in ("new-skill", "edit-skill"):
-        if not p.get("skill_name"):
-            errs.append("new-skill/edit-skill requires skill_name")
+        sn = p.get("skill_name")
+        if not sn or not SKILL_NAME_RE.match(sn) or sn in (".", ".."):
+            errs.append(f"invalid skill_name {sn!r}: only [A-Za-z0-9._-] "
+                        "allowed, no path separators or traversal")
         if not motivated_by or not all(
                 m.get("artifact_id") and m.get("impact") for m in motivated_by):
             errs.append("new-skill/edit-skill requires motivated_by "
