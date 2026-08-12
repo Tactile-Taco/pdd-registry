@@ -15,6 +15,7 @@ import re
 import time
 
 from .agent_defs import AGENT_DEFS, agent_def, render_task
+from .memory import render_memories, render_process_skills, sync_memfs
 from .proposals import ARTIFACT_ID_RE, extract_proposals, validate_proposal
 from .push import SkillRepo
 from .review import run_review
@@ -75,13 +76,16 @@ def shape_errors(artifact: dict, agent: dict) -> list[str]:
 class FleetRunner:
     def __init__(self, store_dir: str, client, db_path: str = "fleet.db",
                  *, skills_repo: str | None = None, dry_run: bool = False,
-                 evaluator: TriggerEvaluator | None = None) -> None:
+                 evaluator: TriggerEvaluator | None = None,
+                 sync_memory: bool = False, memfs_host: str = "m6") -> None:
         self.store_dir = store_dir
         self.client = client
         self.store = ArtifactStore(db_path)
         self.evaluator = evaluator or TriggerEvaluator(store_dir, self.store)
         self.dry_run = dry_run
         self.skill_repo = SkillRepo(skills_repo, dry_run=dry_run) if skills_repo else None
+        self.sync_memory = sync_memory
+        self.memfs_host = memfs_host
         self.stats: dict = {}
 
     def close(self) -> None:
@@ -277,6 +281,24 @@ class FleetRunner:
                     author = AGENT_NAME_TO_ID.get(agent_name, agent_name)
                     stats["proposals"].extend(
                         self.handle_proposals(artifact, author))
+                elif artifact.get("type") == "system-memory" and self.sync_memory:
+                    # Default-way memory: write the meta-agent's system
+                    # memories + process skills into its Letta MemFS.
+                    files = {
+                        "memories.md": render_memories(
+                            artifact.get("memories") or [],
+                            (artifact.get("period") or {}).get("to")),
+                        "process-skills.md": render_process_skills(
+                            artifact.get("process_updates") or []),
+                    }
+                    try:
+                        written = sync_memfs(self.memfs_host,
+                                             AGENT_NAME_TO_ID[agent_name],
+                                             files, dry_run=self.dry_run)
+                        stats["memory_sync"] = written
+                    except Exception as e:  # noqa: BLE001 — record, keep going
+                        stats["errors"].append(
+                            f"memory sync failed: {str(e)[:300]}")
             except Exception as e:  # noqa: BLE001 — keep the loop going
                 stats["errors"].append(f"{agent_name}: {str(e)[:300]}")
 

@@ -129,6 +129,17 @@ python3 run_fleet.py --store ... --backend direct --dry-run   # offline sanity
 pair with the backlog runner's `--watch` mode; a systemd user unit can wrap
 it on the M6 or the laptop (see `runner/` in the repo root for the pattern).
 
+## Memory (default-way)
+
+Each Letta agent is experiential by default: a git-backed MemFS
+(`memory/system/persona.md`, `human.md`) that the App Server loads into
+context per conversation, with git as the audit trail. The fleet adds the
+reverse direction — `run_fleet.py --sync-memory` writes the meta-agent's
+**system memories** and **process skills** into its MemFS
+(`system/memories.md`, `system/process-skills.md`) so they persist and load
+on the next conversation. Process skills live in Letta memory by design and
+never enter the canonical skills repo.
+
 ## Skill push flow
 
 Approved proposals (unanimous peer review) are committed + pushed to the

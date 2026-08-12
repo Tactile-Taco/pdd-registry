@@ -35,11 +35,17 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--dry-run", action="store_true",
                     help="no model calls beyond triggers? (no: dry-run only "
                          "skips review+push; use --backend stub for offline)")
+    ap.add_argument("--sync-memory", action="store_true",
+                    help="write meta-agent system memories + process skills "
+                         "into its Letta MemFS on the M6 (default-way memory)")
+    ap.add_argument("--memfs-host", default="m6")
     args = ap.parse_args(argv)
 
     client = make_client(args.backend)
     runner = FleetRunner(args.store, client, db_path=args.db,
-                         skills_repo=args.skills_repo, dry_run=args.dry_run)
+                         skills_repo=args.skills_repo, dry_run=args.dry_run,
+                         sync_memory=args.sync_memory,
+                         memfs_host=args.memfs_host)
     try:
         if args.once:
             print(__import__("json").dumps(runner.run_once(), sort_keys=True,

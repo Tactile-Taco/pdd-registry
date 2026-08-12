@@ -15,13 +15,14 @@ from memory_plane.store import ArtifactStore
 from memory_plane.triggers import TriggerEvaluator
 
 
-def _runner(tmp_path, client, skills_repo=None, dry_run=False):
+def _runner(tmp_path, client, skills_repo=None, dry_run=False, sync_memory=False):
     db = str(tmp_path / "fleet.db")
     evaluator = TriggerEvaluator(str(tmp_path), ArtifactStore(db),
                                  cadence_mb=0.001, retro_mb=0.001)
     return FleetRunner(str(tmp_path), client, db_path=db,
                        skills_repo=str(skills_repo) if skills_repo else None,
-                       dry_run=dry_run, evaluator=evaluator)
+                       dry_run=dry_run, evaluator=evaluator,
+                       sync_memory=sync_memory)
 
 
 def _pad_packet(path: str) -> None:
@@ -189,4 +190,57 @@ def test_evaluator_crash_does_not_kill_run_once(tmp_path):
     stats = runner.run_once()
     assert stats["agents_run"] == {}
     assert any("trigger evaluation failed" in e for e in stats["errors"])
+    runner.close()
+
+
+def _meta_artifact() -> str:
+    return json.dumps({
+        "artifact_id": "meta-1", "type": "system-memory",
+        "period": {"from": "2026-08-01", "to": "2026-08-12"},
+        "memories": [{"key": "free first", "value": "Use free models first."}],
+        "process_updates": [{"proposal_id": "ps-1", "kind": "process-skill",
+                             "description": "Review checklist",
+                             "reasoning": "votes inconsistent",
+                             "body": "Verify grounding before voting."}],
+        "evidence_links": [{"type": "reflection", "ref": "ref-1"}]})
+
+
+def test_meta_memory_sync_writes_memfs_files(tmp_path):
+    """--sync-memory: the meta-agent's memories + process skills land in its
+    MemFS files (dry-run here; the live path mirrors bootstrap's transport)."""
+    make_packet(tmp_path, "reasonix", "s1.jsonl", cells=[[0.1]])
+    client = SequenceStub({"meta-agent": [_meta_artifact()]})
+    runner = _runner(tmp_path, client, dry_run=True, sync_memory=True)
+    # meta fires on proposal accumulation (or first cycle with proposals)
+    runner.store.add_artifact({"artifact_id": "ref-1", "type": "reflection",
+                               "agent": "agent-reflection", "evidence_links": []})
+    runner.store.add_proposal({"proposal_id": "p1", "kind": "no-proposal",
+                               "judgement": "naturally-hard",
+                               "reasoning": "inherently hard",
+                               "motivated_by": []}, "ref-1")
+    stats = runner.run_once()
+    assert "meta" in stats["agents_run"]
+    assert stats["memory_sync"] == ["memories.md (dry-run)",
+                                    "process-skills.md (dry-run)"]
+    # artifact stored with its provenance
+    art = runner.store.get_artifact("meta-1")
+    assert art["type"] == "system-memory"
+    runner.close()
+
+
+def test_meta_memory_sync_failure_recorded_not_fatal(tmp_path):
+    """A failing memory sync is recorded, and the loop keeps going."""
+    make_packet(tmp_path, "reasonix", "s1.jsonl", cells=[[0.1]])
+    client = SequenceStub({"meta-agent": [_meta_artifact()]})
+    runner = _runner(tmp_path, client, dry_run=True, sync_memory=True)
+    runner.store.add_artifact({"artifact_id": "ref-1", "type": "reflection",
+                               "agent": "agent-reflection", "evidence_links": []})
+    runner.store.add_proposal({"proposal_id": "p1", "kind": "no-proposal",
+                               "judgement": "naturally-hard",
+                               "reasoning": "inherently hard",
+                               "motivated_by": []}, "ref-1")
+    runner.memfs_host = "no-such-host.invalid"
+    runner.dry_run = False  # force the real (failing) ssh path
+    stats = runner.run_once()
+    assert any("memory sync failed" in e for e in stats["errors"])
     runner.close()
