@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import json
 
-from .agent_defs import agent_ids
+from .agent_defs import agent_def, agent_ids
 
 REVIEW_TEMPLATE = """\
 Peer review of a skill-improvement proposal from the {author} agent.
@@ -57,12 +57,15 @@ def parse_vote(raw: str) -> dict:
 
 def run_review(proposal: dict, client, store, voters: list[str] | None = None,
                author: str = "fleet") -> dict:
-    """Ask each voter agent for a vote, record them, and tally."""
+    """Ask each voter agent for a vote, record them, and tally.
+
+    Voters are identified by registry id; the client is called with the
+    agent's NAME (the model handle the Letta server exposes)."""
     voters = voters or [a for a in agent_ids() if a != author]
     prompt = REVIEW_TEMPLATE.format(
         author=author, proposal=json.dumps(proposal, ensure_ascii=False, indent=1))
     for voter in voters:
-        raw = client.chat(voter, prompt)
+        raw = client.chat(agent_def(voter)["name"], prompt)
         vote = parse_vote(raw)
         store.add_vote(proposal["proposal_id"], voter, vote["vote"], vote["reason"])
     result = tally_votes(store.votes(proposal["proposal_id"]))

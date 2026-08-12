@@ -167,7 +167,7 @@ class FleetRunner:
         agent = agent_def(agent_id)
         task = self.build_task(agent_name, reasons)
 
-        raw = self.client.chat(agent_id, task)
+        raw = self.client.chat(agent["name"], task, system=agent["system"])
         artifact = None
         retried = False
         for attempt in range(2):
@@ -178,18 +178,20 @@ class FleetRunner:
                     break
                 if attempt == 0:
                     raw = self.client.chat(
-                        agent_id,
+                        agent["name"],
                         task + "\n\nYour previous response failed validation: "
-                        + "; ".join(errs) + ". Respond with ONLY the JSON object.")
+                        + "; ".join(errs) + ". Respond with ONLY the JSON object.",
+                        system=agent["system"])
                     retried = True
                 else:
                     raise ValueError("; ".join(errs))
             except (ValueError, json.JSONDecodeError):
                 if attempt == 0:
                     raw = self.client.chat(
-                        agent_id,
+                        agent["name"],
                         task + "\n\nYour previous response was not valid JSON. "
-                        "Respond with ONLY the JSON object.")
+                        "Respond with ONLY the JSON object.",
+                        system=agent["system"])
                     retried = True
                 else:
                     raise

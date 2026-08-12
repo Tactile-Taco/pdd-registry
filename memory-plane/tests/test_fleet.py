@@ -36,7 +36,7 @@ def _pad_packet(path: str) -> None:
 def test_case_study_run_stores_artifact(tmp_path):
     make_packet(tmp_path, "reasonix", "s1.jsonl",
                 cells=[[0.1, 2.0, 2.1, 2.2, 0.1]])
-    client = SequenceStub({"agent-case-study-curator": [case_study_response("cs-1")]})
+    client = SequenceStub({"case-study-curator": [case_study_response("cs-1")]})
     runner = _runner(tmp_path, client, dry_run=True)
     stats = runner.run_once()
     assert "case-study" in stats["agents_run"]
@@ -52,13 +52,15 @@ def test_case_study_run_stores_artifact(tmp_path):
 def test_reflection_proposal_reviewed_and_pushed(tmp_path, skills_repo):
     _pad_packet(make_packet(tmp_path, "reasonix", "s1.jsonl", cells=[[0.1]]))
     client = SequenceStub({
-        "agent-reflection": [reflection_response(good_proposal())],
-        "agent-case-study-curator": [approval_vote("ok")],
-        "agent-retrospective": [approval_vote("ok")],
-        "agent-meta": [approval_vote("ok")],
+        "reflection": [reflection_response(good_proposal())],
+        "case-study-curator": [approval_vote("ok")],
+        "retrospective": [approval_vote("ok")],
+        "meta-agent": [approval_vote("ok")],
     })
     runner = _runner(tmp_path, client, skills_repo=skills_repo)
     stats = runner.run_once()
+    # agents are called by NAME (the Letta model handle), not registry id
+    assert client.calls[0][0] == "reflection"
     assert "reflection" in stats["agents_run"]
     # proposal made it through review + push
     proposal = runner.store.proposals("pushed")[0]
@@ -75,11 +77,11 @@ def test_reflection_proposal_reviewed_and_pushed(tmp_path, skills_repo):
 def test_review_hold_blocks_push(tmp_path):
     _pad_packet(make_packet(tmp_path, "reasonix", "s1.jsonl", cells=[[0.1]]))
     client = SequenceStub({
-        "agent-reflection": [reflection_response(good_proposal())],
-        "agent-case-study-curator": [approval_vote("ok")],
-        "agent-retrospective": [json.dumps({"vote": "reject",
-                                            "reason": "over-fits one session"})],
-        "agent-meta": [approval_vote("ok")],
+        "reflection": [reflection_response(good_proposal())],
+        "case-study-curator": [approval_vote("ok")],
+        "retrospective": [json.dumps({"vote": "reject",
+                                      "reason": "over-fits one session"})],
+        "meta-agent": [approval_vote("ok")],
     })
     runner = _runner(tmp_path, client, skills_repo=None, dry_run=False)
     stats = runner.run_once()
@@ -92,7 +94,7 @@ def test_malformed_agent_output_retries_then_records(tmp_path):
     make_packet(tmp_path, "reasonix", "s1.jsonl",
                 cells=[[0.1, 2.0, 2.1, 2.2, 0.1]])
     client = SequenceStub({
-        "agent-case-study-curator": [
+        "case-study-curator": [
             "not json at all",
             case_study_response("cs-9"),
         ],
@@ -110,7 +112,7 @@ def test_shape_validation_retry_with_feedback(tmp_path):
                 cells=[[0.1, 2.0, 2.1, 2.2, 0.1]])
     bad = json.dumps({"artifact_id": "cs-2", "type": "case-study"})  # missing fields
     client = SequenceStub({
-        "agent-case-study-curator": [bad, case_study_response("cs-2")],
+        "case-study-curator": [bad, case_study_response("cs-2")],
     })
     runner = _runner(tmp_path, client, dry_run=True)
     runner.run_once()
@@ -126,7 +128,7 @@ def test_invalid_proposal_is_recorded_not_pushed(tmp_path, skills_repo):
     _pad_packet(make_packet(tmp_path, "reasonix", "s1.jsonl", cells=[[0.1]]))
     p = good_proposal()
     p["motivated_by"] = []  # ungrounded -> invalid
-    client = SequenceStub({"agent-reflection": [reflection_response(p)]})
+    client = SequenceStub({"reflection": [reflection_response(p)]})
     runner = _runner(tmp_path, client, skills_repo=skills_repo)
     stats = runner.run_once()
     assert stats["proposals"][0]["status"] == "invalid"

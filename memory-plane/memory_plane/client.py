@@ -74,10 +74,13 @@ class LettaClient:
         self.token = token or os.environ.get("LETTA_APP_SERVER_TOKEN", "")
         self.timeout = timeout
 
-    def chat(self, agent_id: str, task: str) -> str:
+    def chat(self, agent_id: str, task: str, system: str | None = None) -> str:
         if not self.token:
             raise RuntimeError("LETTA_APP_SERVER_TOKEN is required for the "
                                "letta backend (set it from Infisical)")
+        # The Letta server exposes agents by NAME as the model handle; the
+        # standing process lives in the agent's system prompt (provisioned), so
+        # `system` is intentionally ignored here.
         resp = _post_json(
             f"{self.base_url}/v1/chat/completions",
             {"model": agent_id,
@@ -102,10 +105,10 @@ class DirectClient:
         self.model_chain = chain or DEFAULT_MODEL_CHAIN
         self.timeout = timeout
 
-    def chat(self, agent_id: str, task: str) -> str:
-        system = agent_id  # direct mode has no provisioned agent; the caller
-        # injects the standing process in the task (see fleet.build_task).
-        messages = [{"role": "system", "content": system},
+    def chat(self, agent_id: str, task: str, system: str | None = None) -> str:
+        # Direct mode has no provisioned agent: the standing process is the
+        # system message (fleet passes agent["system"]), agent_id is a label.
+        messages = [{"role": "system", "content": system or agent_id},
                     {"role": "user", "content": task}]
         last_err: Exception | None = None
         for model in self.model_chain:
@@ -134,7 +137,7 @@ class StubClient:
         self.default = default
         self.calls: list[tuple[str, str]] = []
 
-    def chat(self, agent_id: str, task: str) -> str:
+    def chat(self, agent_id: str, task: str, system: str | None = None) -> str:
         self.calls.append((agent_id, task))
         return self.script.get(agent_id, self.default)
 

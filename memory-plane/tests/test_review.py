@@ -57,7 +57,8 @@ def test_run_review_approves_with_unanimous_votes(store):
 def test_run_review_holds_on_any_reject(store):
     class V:
         def chat(self, agent_id, task):
-            return reject_vote("unproven") if agent_id == "agent-retrospective" \
+            # clients now receive the agent NAME (Letta model handle)
+            return reject_vote("unproven") if agent_id == "retrospective" \
                 else approval_vote("ok")
 
     proposal = {"proposal_id": "p2", "kind": "edit-skill", "skill_name": "y",

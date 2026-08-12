@@ -73,7 +73,7 @@ class SequenceStub:
         self.script = script
         self.calls: list[tuple[str, str]] = []
 
-    def chat(self, agent_id: str, task: str) -> str:
+    def chat(self, agent_id: str, task: str, system: str | None = None) -> str:
         self.calls.append((agent_id, task))
         responses = self.script.get(agent_id) or ["{}"]
         return responses[min(len(self.calls) - 1, len(responses) - 1)] \

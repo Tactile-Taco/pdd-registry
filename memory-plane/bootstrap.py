@@ -117,7 +117,8 @@ def verify(host: str = "m6", token: str | None = None) -> None:
     with urllib.request.urlopen(req, timeout=10) as resp:  # noqa: S310
         models = json.loads(resp.read().decode())["data"]
     ids = {m["id"] for m in models}
-    missing = [a["name"] for a in AGENT_DEFS if a["id"] not in ids]
+    # The server exposes agents by NAME as the model handle, not the registry id.
+    missing = [a["name"] for a in AGENT_DEFS if a["name"] not in ids]
     if missing:
         raise RuntimeError(f"agents missing from /v1/models: {missing}")
     print(f"OK: {len(ids)} agents on the server: "
