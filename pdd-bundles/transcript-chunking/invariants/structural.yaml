@@ -1,0 +1,20 @@
+structural_invariants:
+  - id: schema-conformance
+    statement: Requests and responses must conform to their referenced JSON Schemas.
+    severity: must
+    validation:
+      - json_schema_validation
+
+  - id: unique-chunk-ids
+    statement: Chunk ids in a chunk map must be unique and appear in transcript order (c0, c1, ...).
+    severity: must
+    validation:
+      - json_schema_validation
+      - contract_tests
+
+  - id: stable-chunk-map-shape
+    statement: Every chunk must declare turn_ids, char_offset, char_length, sha256, and est_tokens; char ranges must be contiguous across chunks and jointly cover the full render.
+    severity: must
+    validation:
+      - json_schema_validation
+      - contract_tests

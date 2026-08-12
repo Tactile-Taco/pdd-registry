@@ -1,0 +1,43 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ChunkingRequest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["source", "filename"],
+  "properties": {
+    "source": {
+      "type": "string",
+      "enum": ["reasonix", "omp", "claude", "codex", "kimi", "hermes"],
+      "description": "Harness source; determines the file format and the fidelity class."
+    },
+    "filename": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Archived file name as stored under <archive>/<source>/."
+    },
+    "harness": {
+      "type": "string",
+      "description": "Optional format disambiguator for sources with multiple layouts (e.g. kimi wire vs context)."
+    },
+    "chunk_params": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "target_chars": {
+          "type": "integer",
+          "minimum": 10000,
+          "maximum": 500000,
+          "default": 80000,
+          "description": "Target chunk size in characters of rendered text (~20-40k tokens)."
+        },
+        "boundary_overlap_turns": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 10,
+          "default": 1,
+          "description": "Turns carried over at chunk boundaries for span continuity; overlap is a review-layer concern, never a duplication in the chunk map."
+        }
+      }
+    }
+  }
+}

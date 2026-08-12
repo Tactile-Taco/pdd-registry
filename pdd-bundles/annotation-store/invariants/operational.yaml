@@ -1,0 +1,28 @@
+operational_invariants:
+  - id: capability-manifest-conformance
+    statement: Runtime authority and resource usage must conform to capability-manifest.yaml.
+    severity: must
+    infra_assumption: sandbox or runtime instrumentation (enforced by sandbox policy check)
+    validation:
+      - sandbox_policy_check
+      - runtime_instrumentation
+
+  - id: no-network
+    statement: The store must not initiate outbound network connections.
+    severity: must
+    validation:
+      - sandbox_network_denial
+
+  - id: bounded-batch
+    statement: A single append must carry at most 10,000 records (schema-enforced) and must complete atomically (all records or none).
+    severity: must
+    validation:
+      - json_schema_validation
+      - contract_tests
+
+  - id: disk-budget
+    statement: Store growth must stay under 512 MB for 10,000 annotated sessions (monitoring goal, not an admission gate).
+    severity: should
+    infra_assumption: benchmark harness; measured, recorded as observation
+    validation:
+      - benchmark

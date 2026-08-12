@@ -1,0 +1,35 @@
+validation_plan:
+  structural:
+    - id: schema-validation
+      validates:
+        - schema-conformance
+        - stable-chunk-map-shape
+      method: json_schema_validation
+    - id: contract-tests
+      validates:
+        - unique-chunk-ids
+        - hash-bound
+      method: contract_tests
+  behavioral:
+    - id: replay-tests
+      validates:
+        - deterministic-render
+      method: replay_test
+    - id: property-tests
+      validates:
+        - turn-integrity
+        - chunk-coverage
+      method: property_based_test
+  operational:
+    - id: capability-checks
+      validates:
+        - capability-manifest-conformance
+        - no-network
+        - no-model-calls
+        - archive-read-only
+      method: sandbox_policy_check
+    - id: resource-profiles
+      validates:
+        - memory-budget
+        - latency-budget
+      method: benchmark

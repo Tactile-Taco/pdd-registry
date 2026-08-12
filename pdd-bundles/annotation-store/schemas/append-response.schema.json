@@ -1,0 +1,20 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "AnnotationAppendResponse",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["accepted_count", "superseded_count", "store_sha256"],
+  "properties": {
+    "accepted_count": { "type": "integer", "minimum": 0 },
+    "superseded_count": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Records whose supersede key already had a visible record; the new records are stored but are only visible when their revision is higher."
+    },
+    "store_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "description": "Hash of the store state after the append (evidence-friendly)."
+    }
+  }
+}

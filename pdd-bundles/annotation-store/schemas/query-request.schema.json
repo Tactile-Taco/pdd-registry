@@ -1,0 +1,17 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "AnnotationQueryRequest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["source", "filename"],
+  "properties": {
+    "source": { "type": "string", "enum": ["reasonix", "omp", "claude", "codex", "kimi", "hermes"] },
+    "filename": { "type": "string", "minLength": 1 },
+    "chunk_id": { "type": "string", "pattern": "^c[0-9]+$" },
+    "pass_id": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+    "layer": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+    "kind": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+    "min_revision": { "type": "integer", "minimum": 1 }
+  },
+  "description": "Per-file query. Cross-file and cross-session queries are out of scope for this bundle (they belong to the topic-graph and reflection-packet bundles)."
+}

@@ -1,0 +1,10 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "RenderRequest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["render_id"],
+  "properties": {
+    "render_id": { "type": "string", "minLength": 1 }
+  }
+}

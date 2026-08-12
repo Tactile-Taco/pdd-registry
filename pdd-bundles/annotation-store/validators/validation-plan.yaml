@@ -1,0 +1,37 @@
+validation_plan:
+  structural:
+    - id: schema-validation
+      validates:
+        - schema-conformance
+        - bounded-batch
+      method: json_schema_validation
+    - id: contract-tests
+      validates:
+        - unique-annotation-ids
+        - address-integrity
+      method: contract_tests
+  behavioral:
+    - id: append-only-tests
+      validates:
+        - append-only
+        - deterministic-render
+      method: contract_tests
+    - id: property-tests
+      validates:
+        - supersede-visibility
+      method: property_based_test
+    - id: fs-trace
+      validates:
+        - archive-immutability
+      method: filesystem_trace
+  operational:
+    - id: capability-checks
+      validates:
+        - capability-manifest-conformance
+        - no-network
+        - archive-immutability
+      method: sandbox_policy_check
+    - id: resource-profiles
+      validates:
+        - disk-budget
+      method: benchmark

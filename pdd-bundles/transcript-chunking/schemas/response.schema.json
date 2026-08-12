@@ -1,0 +1,52 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ChunkingResponse",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["render_id", "source", "filename", "fidelity_class", "chunks", "render_sha256", "stats"],
+  "properties": {
+    "render_id": {
+      "type": "string",
+      "description": "Stable identifier of the canonical render (implementation materializes the render body in the chunk store; protocol-visible artifact is this map + hashes)."
+    },
+    "source": { "type": "string" },
+    "filename": { "type": "string" },
+    "fidelity_class": {
+      "type": "string",
+      "enum": ["full", "lossy"],
+      "description": "full = append-only transcript (reasonix, omp, hermes; kimi assumed full until verified); lossy = compaction rewrites history (claude, codex)."
+    },
+    "chunks": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["chunk_id", "turn_ids", "char_offset", "char_length", "sha256", "est_tokens"],
+        "properties": {
+          "chunk_id": { "type": "string", "pattern": "^c[0-9]+$" },
+          "turn_ids": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Event ids of the turns in this chunk, in transcript order."
+          },
+          "char_offset": { "type": "integer", "minimum": 0 },
+          "char_length": { "type": "integer", "minimum": 1 },
+          "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+          "est_tokens": { "type": "integer", "minimum": 0 }
+        }
+      }
+    },
+    "render_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "stats": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["turn_count", "chunk_count", "total_chars"],
+      "properties": {
+        "turn_count": { "type": "integer", "minimum": 0 },
+        "chunk_count": { "type": "integer", "minimum": 1 },
+        "total_chars": { "type": "integer", "minimum": 0 }
+      }
+    }
+  }
+}

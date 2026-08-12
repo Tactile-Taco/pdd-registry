@@ -1,0 +1,53 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "AnnotationAppendRequest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["pass_id", "pass_version", "records"],
+  "properties": {
+    "pass_id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]*$",
+      "description": "Stable pass identity, e.g. uncertainty-pass, topic-pass, transition-pass."
+    },
+    "pass_version": { "type": "string", "minLength": 1 },
+    "records": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 10000,
+      "items": { "$ref": "#/definitions/annotation" }
+    }
+  },
+  "definitions": {
+    "annotation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["annotation_id", "layer", "kind", "target", "revision", "payload", "created_at"],
+      "properties": {
+        "annotation_id": { "type": "string", "pattern": "^[a-z0-9-]{8,64}$" },
+        "layer": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+        "kind": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+        "target": { "$ref": "#/definitions/target" },
+        "revision": { "type": "integer", "minimum": 1 },
+        "payload": { "type": "object", "description": "Pass-defined content; the store is content-agnostic." },
+        "created_at": { "type": "string", "format": "date-time" }
+      }
+    },
+    "target": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source", "filename"],
+      "description": "Address of the annotated span. At least one of event_id or chunk_id must be present; chunk_id must resolve against the transcript's chunk map.",
+      "anyOf": [
+        { "required": ["event_id"] },
+        { "required": ["chunk_id"] }
+      ],
+      "properties": {
+        "source": { "type": "string", "enum": ["reasonix", "omp", "claude", "codex", "kimi", "hermes"] },
+        "filename": { "type": "string", "minLength": 1 },
+        "event_id": { "type": "string", "minLength": 1 },
+        "chunk_id": { "type": "string", "pattern": "^c[0-9]+$" }
+      }
+    }
+  }
+}

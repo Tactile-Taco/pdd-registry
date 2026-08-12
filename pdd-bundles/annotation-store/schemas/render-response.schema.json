@@ -1,0 +1,19 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "AnnotatedRenderResponse",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["render_sha256", "applied_record_count", "stitched_text"],
+  "properties": {
+    "render_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "description": "sha256 of stitched_text."
+    },
+    "applied_record_count": { "type": "integer", "minimum": 0 },
+    "stitched_text": {
+      "type": "string",
+      "description": "Canonical render with the selected annotation layers stitched in as inline markers. A derived artifact for human/reflection reading; never written back to the archive."
+    }
+  }
+}

@@ -1,0 +1,50 @@
+protocol:
+  name: transcript-chunking
+  version: 0.1.0
+  status: draft
+
+purpose: >
+  Convert an archived AI session transcript (any supported harness source) into a
+  canonical, deterministic, turn-structured rendering plus a chunk map. Chunks are
+  ordered, non-overlapping, turn-bounded, and jointly cover every turn of the
+  transcript; no turn is ever split across chunks. The pass is purely mechanical:
+  no model calls, no network, zero cost.
+
+boundary:
+  in_scope:
+    - Render archived transcript files (reasonix events.jsonl, omp jsonl, claude
+      jsonl, codex jsonl, kimi wire/context, hermes dump jsonl) into canonical turn
+      records with preserved event ids
+    - Produce the chunk map (chunk ids, turn ids, char offsets, sha256 hashes,
+      token estimates)
+    - Deterministic mapping from (source, filename, chunk_params) to (render ref,
+      chunk map)
+    - Retrieve a canonical render by render_id (turn records + plain text) so
+      annotation layers can be stitched at render time
+    - Tag each transcript with its fidelity class (full | lossy)
+  out_of_scope:
+    - Any content analysis, annotation, or summarization of the transcript
+    - Writing to or modifying the immutable transcript archive
+    - Model calls of any kind (LLM-free by invariant)
+    - Chunk-size policy beyond the protocol parameters (target_chars,
+      boundary_overlap_turns) with documented defaults
+
+handshakes:
+  request_schema: schemas/request.schema.json
+  response_schema: schemas/response.schema.json
+  render_request_schema: schemas/render-request.schema.json
+  render_response_schema: schemas/render-response.schema.json
+
+depends_on: []
+provides:
+  transcript-chunking.chunk-map: schemas/response.schema.json
+  transcript-chunking.render: schemas/render-response.schema.json
+
+invariants:
+  structural: invariants/structural.yaml
+  behavioral: invariants/behavioral.yaml
+  operational: invariants/operational.yaml
+
+capabilities: capability-manifest.yaml
+validators: validators/validation-plan.yaml
+evidence: evidence-requirements.yaml

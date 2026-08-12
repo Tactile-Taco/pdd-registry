@@ -1,0 +1,26 @@
+behavioral_invariants:
+  - id: append-only
+    statement: Existing annotation records must never be modified or deleted; corrections are new records with strictly higher revision for the same supersede key.
+    severity: must
+    validation:
+      - contract_tests
+      - replay_test
+
+  - id: supersede-visibility
+    statement: Queries must return only the highest revision record per supersede key (pass_id, layer, kind, source, filename, event_id, chunk_id); lower revisions remain stored but are never visible.
+    severity: must
+    validation:
+      - property_based_test
+
+  - id: archive-immutability
+    statement: The store must never write to the transcript archive path; all writes go to the annotation store path only.
+    severity: must
+    validation:
+      - filesystem_trace
+      - sandbox_policy_check
+
+  - id: deterministic-render
+    statement: The same store state and render params must produce byte-identical stitched output.
+    severity: must
+    validation:
+      - replay_test

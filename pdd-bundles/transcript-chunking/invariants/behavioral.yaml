@@ -1,0 +1,24 @@
+behavioral_invariants:
+  - id: deterministic-render
+    statement: The same input file and chunk_params must produce byte-identical canonical renders and identical chunk maps (replay-stable).
+    severity: must
+    validation:
+      - replay_test
+
+  - id: turn-integrity
+    statement: No turn may be split across chunks, and no turn may appear in more than one chunk.
+    severity: must
+    validation:
+      - property_based_test
+
+  - id: chunk-coverage
+    statement: Every turn of the transcript must appear in exactly one chunk; chunk char ranges must be contiguous and cover the full render exactly.
+    severity: must
+    validation:
+      - property_based_test
+
+  - id: hash-bound
+    statement: render_sha256 must equal the sha256 of the full canonical render; each chunk sha256 must equal the sha256 of that chunk's rendered text.
+    severity: must
+    validation:
+      - contract_tests

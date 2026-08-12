@@ -1,0 +1,33 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "RenderResponse",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["render_id", "render_sha256", "turns", "text"],
+  "properties": {
+    "render_id": { "type": "string", "minLength": 1 },
+    "render_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "turns": {
+      "type": "array",
+      "description": "Canonical turn records in transcript order, with event ids preserved so annotations can address spans precisely.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["event_id", "role", "text"],
+        "properties": {
+          "event_id": { "type": "string", "minLength": 1 },
+          "role": { "type": "string", "enum": ["user", "assistant", "tool", "system"] },
+          "text": { "type": "string" },
+          "reasoning_text": {
+            "type": "string",
+            "description": "Separate chain-of-thought field when the source archives it (reasonix reasoning_content, hermes reasoning/reasoning_content); empty when absent."
+          }
+        }
+      }
+    },
+    "text": {
+      "type": "string",
+      "description": "Full plain-text rendering (turn-bounded, deterministic); the string render_sha256 covers."
+    }
+  }
+}

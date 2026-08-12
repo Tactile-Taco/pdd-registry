@@ -1,0 +1,48 @@
+protocol:
+  name: annotation-store
+  version: 0.1.0
+  status: draft
+
+purpose: >
+  The sidecar annotation overlay for archived AI session transcripts. Span-grounded
+  annotations attach to (transcript file, event id, optional chunk id) — never to the
+  archived transcript itself, which is immutable by design. Records are append-only:
+  corrections supersede rather than rewrite. A render handshake stitches selected
+  annotation layers into a human-readable annotated transcript (stitching happens at
+  render time, never in the archive).
+
+boundary:
+  in_scope:
+    - Append annotation batches (pass-provenanced, content-agnostic envelopes)
+    - Query annotations by file, chunk, pass, layer, kind, or revision
+    - Supersede semantics (the visible record per supersede key is the highest revision)
+    - Render a stitched annotated transcript from selected layers
+  out_of_scope:
+    - The content and semantics of any annotation layer (passes define their own payload schemas)
+    - Writing to or modifying the immutable transcript archive
+    - Editing, deleting, or reordering existing annotation records
+    - Cross-session relationship computation (covered by the topic-graph bundle)
+
+handshakes:
+  append_request_schema: schemas/append-request.schema.json
+  append_response_schema: schemas/append-response.schema.json
+  query_request_schema: schemas/query-request.schema.json
+  query_response_schema: schemas/query-response.schema.json
+  render_request_schema: schemas/render-request.schema.json
+  render_response_schema: schemas/render-response.schema.json
+
+depends_on:
+  - transcript-chunking
+provides:
+  annotation-store.append: schemas/append-request.schema.json
+  annotation-store.query: schemas/query-request.schema.json
+  annotation-store.render: schemas/render-request.schema.json
+
+invariants:
+  structural: invariants/structural.yaml
+  behavioral: invariants/behavioral.yaml
+  operational: invariants/operational.yaml
+
+capabilities: capability-manifest.yaml
+validators: validators/validation-plan.yaml
+evidence: evidence-requirements.yaml

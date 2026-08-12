@@ -1,0 +1,30 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "AnnotationQueryResponse",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["records", "total_matches"],
+  "properties": {
+    "records": {
+      "type": "array",
+      "description": "Visible records only: the highest revision per supersede key (pass_id, layer, kind, source, filename, event_id, chunk_id), matching the query filters, in store order.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["pass_id", "pass_version", "annotation_id", "layer", "kind", "target", "revision", "payload", "created_at"],
+        "properties": {
+          "pass_id": { "type": "string" },
+          "pass_version": { "type": "string" },
+          "annotation_id": { "type": "string" },
+          "layer": { "type": "string" },
+          "kind": { "type": "string" },
+          "target": { "type": "object" },
+          "revision": { "type": "integer", "minimum": 1 },
+          "payload": { "type": "object" },
+          "created_at": { "type": "string" }
+        }
+      }
+    },
+    "total_matches": { "type": "integer", "minimum": 0 }
+  }
+}
