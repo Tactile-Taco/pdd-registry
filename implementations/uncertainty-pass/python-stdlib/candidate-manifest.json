@@ -10,9 +10,15 @@
     "lexicons/contention.json",
     "tests/test_uncertainty_pass.py"
   ],
-  "dependencies": {"runtime": ["stdlib only"], "dev": ["pytest", "jsonschema"]},
+  "dependencies": {"runtime": ["stdlib allowlist only"], "dev": ["pytest", "hashlib"]},
   "entry_module": "uncertainty_pass",
   "entry_function": "run",
+  "mutation_sanity": {
+    "invariant": "deterministic-output",
+    "pytest_filter": "density_math",
+    "find": "            if i + ml <= n and low[i:i + ml] == m:",
+    "replace": "            if m in low:  # MUTANT: substring match anywhere\n"
+  },
   "invariant_lineage": {
     "deterministic-output": ["test_deterministic_output_identical_runs"],
     "density-schema-conformance": ["test_density_math_known_text"],

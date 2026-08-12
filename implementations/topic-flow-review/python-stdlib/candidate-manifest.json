@@ -10,6 +10,12 @@
   "dependencies": {"runtime": ["stdlib only"], "dev": ["pytest", "jsonschema"]},
   "entry_module": "topic_flow_review",
   "entry_function": "run",
+  "mutation_sanity": {
+    "invariant": "relation-type-enum",
+    "pytest_filter": "relation_type_enum",
+    "find": "_TRANSITION_TO_RELATION.get(p.get(\"type\", \"\"), \"sequential\")",
+    "replace": "\"revival\"  # MUTANT"
+  },
   "invariant_lineage": {
     "flow-derived-only": ["test_flow_edges_derived_from_transitions"],
     "finding-grounded": ["test_findings_grounded_refs_exist"],

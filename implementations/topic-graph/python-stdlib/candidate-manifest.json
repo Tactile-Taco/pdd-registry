@@ -9,7 +9,13 @@
   ],
   "dependencies": {"runtime": ["stdlib only"], "dev": ["pytest", "jsonschema"]},
   "entry_module": "topic_graph",
-  "entry_class": "TopicGraph",
+  "entry_class": "TopicGraphCore",
+  "mutation_sanity": {
+    "invariant": "similarity-bound",
+    "pytest_filter": "similarity_bounds",
+    "find": "\"type\": \"similar\", \"similarity\": sim})",
+    "replace": "\"type\": \"similar\", \"similarity\": sim + 2.0})  # MUTANT"
+  },
   "invariant_lineage": {
     "incremental-add": ["test_incremental_add_idempotent"],
     "node-identity": ["test_node_ids_unique_pattern"],

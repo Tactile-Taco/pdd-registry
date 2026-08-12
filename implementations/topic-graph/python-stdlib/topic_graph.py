@@ -1,106 +1,79 @@
-"""topic-graph implementation (draft bundle candidate).
+"""topic-graph — attested candidate core (pure, self-contained).
 
-Cross-session topic graph, index-first and incremental: add_session() only
-touches the new session's topics (O(N) similarity scan against existing
-nodes), embeddings are local + deterministic (Jaccard over label tokens), no
-LLM reasoning anywhere. index_size is observable and a migration log fires
-past the configured threshold.
+Cross-session topic graph: incremental index-first adds, deterministic local
+embeddings (Jaccard over label tokens), typed edges, observable index_size,
+migration threshold observer. No I/O — the runner persists the snapshot.
 """
 
-from __future__ import annotations
-
 import json
-import os
 import re
-import tempfile
-from typing import Any, Optional
+from typing import Dict, List, Optional
 
-from common import (
-    bundle_schema_path,
-    session_key,
-    sha256_json,
-    validate_against_schema,
-)
+from _hash import sha256_json
+
+ERROR_KINDS = ("invalid_request", "conflict", "not_found", "internal")
 
 PASS_ID = "topic-graph"
 PASS_VERSION = "0.1.0-draft"
 
 MIGRATION_THRESHOLD = 100_000
+_EDGE_TYPES = ("similar", "revival", "overlap")
 
 
-def _tokens(label: str) -> set[str]:
+def _tokens(label: str) -> set:
     return set(re.findall(r"[a-z0-9]+", label.casefold()))
 
 
-def jaccard(a: set[str], b: set[str]) -> float:
+def jaccard(a: set, b: set) -> float:
     if not a and not b:
         return 0.0
-    inter = len(a & b)
     union = len(a | b)
-    return round(inter / union, 6) if union else 0.0
+    if not union:
+        return 0.0
+    return round(len(a & b) / union, 6)
 
 
-class TopicGraph:
-    def __init__(self, store_dir: str, edge_threshold: float = 0.7,
+def session_key(source: str, filename: str) -> str:
+    stem = re.sub(r"[^a-z0-9]+", "-", filename.rsplit(".", 1)[0].lower()).strip("-")
+    stem = re.sub(r"-{2,}", "-", stem) or "session"
+    return f"{source}-{stem}"
+
+
+class TopicGraphCore:
+    def __init__(self, edge_threshold: float = 0.7,
                  migration_threshold: int = MIGRATION_THRESHOLD) -> None:
-        self.store_dir = store_dir
-        os.makedirs(store_dir, exist_ok=True)
-        self.path = os.path.join(store_dir, "topic-graph.json")
-        self.log_path = os.path.join(store_dir, "topic-graph.log")
+        self.version = 1
+        self.nodes: Dict[str, dict] = {}
+        self.edges: List[dict] = []
+        self.sessions: List[str] = []
         self.edge_threshold = edge_threshold
         self.migration_threshold = migration_threshold
         self.migration_hits = 0
-        self._data: dict = {"version": 1, "nodes": {}, "edges": [], "sessions": []}
-        if os.path.exists(self.path):
-            with open(self.path, "r", encoding="utf-8") as f:
-                self._data = json.load(f)
-
-    # -- state helpers ----------------------------------------------------------
-
-    @property
-    def nodes(self) -> dict:
-        return self._data["nodes"]
-
-    @property
-    def edges(self) -> list[dict]:
-        return self._data["edges"]
+        self.migration_log: List[str] = []
 
     @property
     def index_size(self) -> int:
         return len(self.nodes) + len(self.edges)
 
-    def _save(self) -> None:
-        d = os.path.dirname(self.path)
-        fd, tmp = tempfile.mkstemp(dir=d, prefix=".graph-", suffix=".tmp")
-        try:
-            with os.fdopen(fd, "w", encoding="utf-8") as f:
-                json.dump(self._data, f, ensure_ascii=False, sort_keys=True, indent=1)
-            os.replace(tmp, self.path)
-        finally:
-            if os.path.exists(tmp):
-                os.unlink(tmp)
-
     def _check_migration(self) -> None:
         if self.index_size > self.migration_threshold:
             self.migration_hits += 1
-            with open(self.log_path, "a", encoding="utf-8") as f:
-                f.write(f"migration: index_size {self.index_size} > threshold "
-                        f"{self.migration_threshold} (version {self._data['version']})\n")
+            self.migration_log.append(
+                f"migration: index_size {self.index_size} > threshold "
+                f"{self.migration_threshold} (version {self.version})")
 
-    # -- add session ------------------------------------------------------------
-
-    def add_session(self, source: str, filename: str, topics: list[dict],
+    def add_session(self, source: str, filename: str, topics: List[dict],
                     edge_threshold: Optional[float] = None) -> dict:
         thr = self.edge_threshold if edge_threshold is None else edge_threshold
         key = session_key(source, filename)
         added_nodes = added_edges = 0
 
-        if key not in self._data["sessions"]:
+        if key not in self.sessions:
             token_cache = {nid: _tokens(n["label"]) for nid, n in self.nodes.items()}
             for t in topics:
                 nid = f"{key}::{t['topic_id']}"
                 if nid in self.nodes:
-                    continue  # node-identity: idempotent per node
+                    continue
                 label = str(t["label"])
                 label_tokens = _tokens(label)
                 self.nodes[nid] = {"label": label,
@@ -114,15 +87,14 @@ class TopicGraph:
                                            "type": "similar", "similarity": sim})
                         added_edges += 1
                 token_cache[nid] = label_tokens
-            self._data["sessions"].append(key)
+            self.sessions.append(key)
 
         if added_nodes or added_edges:
-            self._data["version"] += 1
-        self._save()
+            self.version += 1
         self._check_migration()
 
-        response = {
-            "graph_version": self._data["version"],
+        return {
+            "graph_version": self.version,
             "added_nodes": added_nodes,
             "added_edges": added_edges,
             "edges": list(self.edges),
@@ -133,15 +105,3 @@ class TopicGraph:
                                 for e in self.edges),
             }),
         }
-        errs = validate_against_schema(response, bundle_schema_path(PASS_ID, "response.schema.json"))
-        if errs:
-            raise RuntimeError(f"topic-graph response failed schema: {errs}")
-        return response
-
-
-def run(source: str, filename: str, topics: list[dict], store_dir: str,
-        edge_threshold: Optional[float] = None,
-        migration_threshold: int = MIGRATION_THRESHOLD) -> dict:
-    g = TopicGraph(store_dir, edge_threshold=edge_threshold or 0.7,
-                   migration_threshold=migration_threshold)
-    return g.add_session(source, filename, topics, edge_threshold=edge_threshold)

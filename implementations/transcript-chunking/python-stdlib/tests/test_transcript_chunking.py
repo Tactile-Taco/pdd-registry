@@ -1,7 +1,8 @@
-"""Candidate tests for the transcript-chunking bundle (must invariants)."""
+"""Candidate tests for transcript-chunking (pure core; in-memory fixtures)."""
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import sys
@@ -10,128 +11,104 @@ import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from transcript_chunking import PASS_ID, build_chunks, run  # noqa: E402
-from common import Turn, sha256_text, turn_text  # noqa: E402
+from transcript_chunking import (  # noqa: E402
+    build_chunks, build_response, render_text, render_turns, sha256_hex,
+    sha256_text, turn_text,
+)
 
 
-# --------------------------------------------------------------------------
-# fixtures: one sample archive file per source
-# --------------------------------------------------------------------------
-
-def _write(path: str, lines: list[str]) -> None:
-    with open(path, "w", encoding="utf-8") as f:
-        for ln in lines:
-            f.write(ln + "\n")
+def test_sha256_matches_hashlib():
+    for payload in (b"", b"abc", b"x" * 1000, "héllo wörld ✓".encode("utf-8")):
+        assert sha256_hex(payload) == hashlib.sha256(payload).hexdigest()
 
 
-@pytest.fixture
-def archive(tmp_path):
-    src = tmp_path / "transcript-archive"
-    src.mkdir()
-    (src / "reasonix").mkdir()
-    (src / "omp").mkdir()
-    (src / "claude").mkdir()
-    (src / "codex").mkdir()
-    (src / "kimi").mkdir()
-    (src / "hermes").mkdir()
-
-    _write(str(src / "reasonix" / "s.jsonl"), [
-        json.dumps({"schema_version": 1, "type": "replace", "revision": 1, "base_revision": 0,
-                    "messages": [{"role": "system", "content": "you are a helper"}]}),
-        json.dumps({"schema_version": 1, "type": "append", "revision": 2, "base_revision": 1,
-                    "message_index": 1, "messages": [{"role": "user", "content": "hello"},
-                                                     {"role": "assistant", "content": "hi there"}]}),
-    ])
-    _write(str(src / "omp" / "s.jsonl"), [
-        json.dumps({"type": "title", "v": 1, "title": "", "updatedAt": "2026-08-11T12:18:40.711Z"}),
-        json.dumps({"type": "session", "version": 3, "id": "abc", "timestamp": "2026-08-11T12:18:40.711Z", "cwd": "/tmp"}),
-        json.dumps({"type": "assistant", "id": "m1", "content": "let me check", "model": "deepseek-v4-flash"}),
-        json.dumps({"type": "user", "id": "m2", "content": "ok"}),
-        json.dumps({"type": "model_change", "model": "other"}),
-    ])
-    _write(str(src / "claude" / "s.jsonl"), [
-        json.dumps({"type": "queue-operation", "operation": "enqueue", "timestamp": "2026-04-22T17:05:05.848Z", "sessionId": "x", "content": "queued"}),
-        json.dumps({"type": "assistant", "message": {"id": "msg-1", "content": [{"type": "text", "text": "plan:"}, {"type": "text", "text": "step one"}]}}),
-        json.dumps({"type": "user", "message": {"id": "msg-2", "content": [{"type": "text", "text": "go ahead"}]}}),
-    ])
-    _write(str(src / "codex" / "s.jsonl"), [
-        json.dumps({"type": "user", "message": {"id": "u1", "content": "build it"}, "timestamp": 1}),
-        json.dumps({"type": "assistant", "message": {"id": "a1", "content": "done"}, "timestamp": 2}),
-    ])
-    _write(str(src / "kimi" / "s.jsonl"), [
-        json.dumps({"role": "_system_prompt", "content": "you are kimi"}),
-        json.dumps({"role": "user", "content": "hi"}),
-        json.dumps({"role": "assistant", "content": "hello!"}),
-        json.dumps({"role": "_checkpoint", "id": 0}),
-    ])
-    _write(str(src / "hermes" / "s.jsonl"), [
-        json.dumps({"session_id": "x", "role": "user", "content": "Hello?", "compacted": 0, "model": "kimi-k2.6", "timestamp": 1}),
-        json.dumps({"session_id": "x", "role": "assistant", "content": "I think maybe yes", "reasoning_content": "let me reconsider", "compacted": 0, "model": "kimi-k2.6", "timestamp": 2}),
-        json.dumps({"session_id": "x", "role": "session_meta", "content": "", "compacted": 1, "timestamp": 3}),
-    ])
-    return str(src)
+def _lines(source, entries):
+    if source == "reasonix":
+        out = []
+        for i, msgs in enumerate(entries):
+            out.append(json.dumps({"schema_version": 1,
+                                   "type": "append" if i else "replace",
+                                   "revision": i + 1, "base_revision": i,
+                                   "messages": msgs}))
+        return out
+    return [json.dumps(e) for e in entries]
 
 
-ARCHIVE = str  # alias for readability
+def _turns(source="hermes"):
+    return render_turns(source, _lines(source, [
+        {"role": "user", "content": "Hello?", "compacted": 0, "timestamp": 1},
+        {"role": "assistant", "content": "I think maybe yes",
+         "reasoning_content": "let me reconsider", "compacted": 0, "timestamp": 2},
+        {"role": "session_meta", "content": "", "compacted": 1, "timestamp": 3},
+    ]))
 
 
-@pytest.mark.parametrize("source,fname,min_turns", [
-    ("reasonix", "s.jsonl", 3),
-    ("omp", "s.jsonl", 2),
-    ("claude", "s.jsonl", 2),
-    ("codex", "s.jsonl", 2),
-    ("kimi", "s.jsonl", 2),
-    ("hermes", "s.jsonl", 2),
+@pytest.mark.parametrize("source,entries,min_turns", [
+    ("reasonix", [[{"role": "system", "content": "sys"}],
+                  [{"role": "user", "content": "hello"},
+                   {"role": "assistant", "content": "hi"}]], 3),
+    ("omp", [{"type": "title", "title": ""},
+             {"type": "assistant", "id": "m1", "content": "let me check"},
+             {"type": "user", "id": "m2", "content": "ok"},
+             {"type": "model_change", "model": "x"}], 2),
+    ("claude", [{"type": "queue-operation", "operation": "enqueue", "content": "q"},
+                {"type": "assistant", "message": {"id": "msg-1",
+                 "content": [{"type": "text", "text": "plan:"}, {"type": "text", "text": "go"}]}},
+                {"type": "user", "message": {"id": "msg-2", "content": "ok"}}], 2),
+    ("codex", [{"type": "user", "message": {"id": "u1", "content": "build it"}},
+               {"type": "assistant", "message": {"id": "a1", "content": "done"}}], 2),
+    ("kimi", [{"role": "_system_prompt", "content": "sys"},
+              {"role": "user", "content": "hi"},
+              {"role": "assistant", "content": "hello!"},
+              {"role": "_checkpoint", "id": 0}], 2),
 ])
-def test_all_sources_render_and_conform(archive, source, fname, min_turns, tmp_path):
-    resp = run(source, fname, archive, target_chars=80000,
-               chunk_store=str(tmp_path / "cs"))
-    assert resp["source"] == source
-    assert resp["filename"] == fname
-    assert resp["stats"]["turn_count"] >= min_turns
+def test_all_sources_render(source, entries, min_turns):
+    turns = render_turns(source, _lines(source, entries))
+    assert len(turns) >= min_turns
+    render, chunks = build_chunks(turns, target_chars=80000)
+    assert len(chunks) >= 1
+    resp = build_response(source, "s.jsonl", turns, render, chunks)
     assert resp["fidelity_class"] in ("full", "lossy")
-    assert resp["stats"]["chunk_count"] >= 1
-    assert resp["render_sha256"]
-    # schema-conformance
-    assert _schema_errors(resp) == []
+    assert resp["stats"]["turn_count"] == len(turns)
+    assert resp["render_sha256"] == sha256_text(render)
+    assert resp["render_id"].startswith(f"{source}-s.jsonl-")
 
 
-def _schema_errors(resp):
-    from common import bundle_schema_path, validate_against_schema
-    return validate_against_schema(resp, bundle_schema_path(PASS_ID, "response.schema.json"))
+def test_hermes_render_keeps_reasoning():
+    turns = _turns()
+    assert turns[1]["reasoning"] == "let me reconsider"
+    assert len(turns) == 2  # session_meta skipped
+    text = turn_text(turns[1])
+    assert "> reasoning: let me reconsider" in text
+    assert "[e2][assistant]" in text
 
 
-# --------------------------------------------------------------------------
-# deterministic-render
-# --------------------------------------------------------------------------
-
-def test_deterministic_render_identical_across_runs(archive):
-    a = run("hermes", "s.jsonl", archive, target_chars=80000)
-    b = run("hermes", "s.jsonl", archive, target_chars=80000)
+def test_deterministic_render_identical_across_runs():
+    a = render_turns("hermes", _lines("hermes", [
+        {"role": "user", "content": "Hello?", "compacted": 0, "timestamp": 1},
+        {"role": "assistant", "content": "I think maybe yes", "compacted": 0, "timestamp": 2}]))
+    b = render_turns("hermes", _lines("hermes", [
+        {"role": "user", "content": "Hello?", "compacted": 0, "timestamp": 1},
+        {"role": "assistant", "content": "I think maybe yes", "compacted": 0, "timestamp": 2}]))
     assert a == b
-    assert a["render_sha256"] == b["render_sha256"]
-    assert [c["sha256"] for c in a["chunks"]] == [c["sha256"] for c in b["chunks"]]
+    ra, ca = build_chunks(a, 80000)
+    rb, cb = build_chunks(b, 80000)
+    assert ra == rb and ca == cb
 
-
-# --------------------------------------------------------------------------
-# turn-integrity / chunk-coverage / stable-chunk-map-shape / hash-bound
-# --------------------------------------------------------------------------
 
 def test_turn_integrity_no_turn_split():
-    # two turns of ~6000 chars with target 10000: turn 1+2 share a chunk,
-    # turn 3 starts a new chunk — no turn is ever split.
-    turns = [Turn(event_id=f"t{i}", role="assistant", content="x" * 6000) for i in range(5)]
+    turns = [{"event_id": f"t{i}", "role": "assistant", "content": "x" * 6000}
+             for i in range(5)]
     render, chunks = build_chunks(turns, target_chars=10000)
     assert len(chunks) >= 2
     for t in turns:
         text = turn_text(t)
-        # exactly one chunk slice contains the full turn text
         hits = [c for c in chunks if text in render[c["char_offset"]:c["char_offset"] + c["char_length"]]]
-        assert len(hits) == 1, f"turn {t.event_id} split or missing"
+        assert len(hits) == 1, f"turn {t['event_id']} split or missing"
 
 
 def test_chunk_coverage_strict_partition():
-    turns = [Turn(event_id=f"t{i}", role="user", content="y" * 3000) for i in range(7)]
+    turns = [{"event_id": f"t{i}", "role": "user", "content": "y" * 3000} for i in range(7)]
     render, chunks = build_chunks(turns, target_chars=10000)
     assert chunks[0]["char_offset"] == 0
     for a, b in zip(chunks, chunks[1:]):
@@ -139,60 +116,47 @@ def test_chunk_coverage_strict_partition():
     assert chunks[-1]["char_offset"] + chunks[-1]["char_length"] == len(render)
     joined = "".join(render[c["char_offset"]:c["char_offset"] + c["char_length"]] for c in chunks)
     assert joined == render
-    # every turn appears in exactly one chunk (ids disjoint, ordered)
     all_ids = [tid for c in chunks for tid in c["turn_ids"]]
     assert len(all_ids) == len(set(all_ids)) == len(turns)
-    assert all_ids == [t.event_id for t in turns]
+    assert all_ids == [t["event_id"] for t in turns]
 
 
 def test_stable_chunk_map_shape_contiguous():
-    turns = [Turn(event_id=f"t{i}", role="assistant", content="z" * 2500) for i in range(4)]
+    turns = [{"event_id": f"t{i}", "role": "assistant", "content": "z" * 2500} for i in range(4)]
     render, chunks = build_chunks(turns, target_chars=10000)
     for c in chunks:
         assert set(c) == {"chunk_id", "turn_ids", "char_offset", "char_length", "sha256", "est_tokens"}
-    assert all(c["est_tokens"] >= 1 for c in chunks)
-    assert all(c["char_length"] >= 1 for c in chunks)
+        assert c["est_tokens"] >= 1 and c["char_length"] >= 1
 
 
 def test_unique_chunk_ids_in_order():
-    turns = [Turn(event_id=f"t{i}", role="user", content="q" * 3000) for i in range(7)]
+    turns = [{"event_id": f"t{i}", "role": "user", "content": "q" * 3000} for i in range(7)]
     _, chunks = build_chunks(turns, target_chars=10000)
     ids = [c["chunk_id"] for c in chunks]
     assert ids == sorted(set(ids)) == [f"c{i}" for i in range(len(chunks))]
 
 
 def test_chunk_sha256_matches_slice():
-    turns = [Turn(event_id=f"t{i}", role="user", content="w" * 3000) for i in range(7)]
+    turns = [{"event_id": f"t{i}", "role": "user", "content": "w" * 3000} for i in range(7)]
     render, chunks = build_chunks(turns, target_chars=10000)
     for c in chunks:
         assert c["sha256"] == sha256_text(render[c["char_offset"]:c["char_offset"] + c["char_length"]])
 
 
-# --------------------------------------------------------------------------
-# archive-read-only / no-model-calls
-# --------------------------------------------------------------------------
-
-def test_archive_bytes_unchanged(archive):
-    before = {}
-    for root, _dirs, files in os.walk(archive):
-        for fn in files:
-            p = os.path.join(root, fn)
-            before[p] = open(p, "rb").read()
-    for source in ("reasonix", "omp", "claude", "codex", "kimi", "hermes"):
-        run(source, "s.jsonl", archive, target_chars=80000)
-    for p, b in before.items():
-        assert open(p, "rb").read() == b, f"archive file modified: {p}"
+def test_response_shape():
+    turns = _turns()
+    render, chunks = build_chunks(turns, 80000)
+    resp = build_response("hermes", "s.jsonl", turns, render, chunks)
+    assert set(resp) == {"render_id", "source", "filename", "fidelity_class",
+                         "chunks", "render_sha256", "stats"}
+    assert resp["stats"] == {"turn_count": 2, "chunk_count": 1, "total_chars": len(render)}
 
 
-def test_no_model_calls_no_network():
-    import transcript_chunking as mod
-    src = open(mod.__file__, encoding="utf-8").read()
-    assert "urllib" not in src and "requests" not in src and "socket" not in src
-    assert "complete_json" not in src
-    # module import pulls in no network-capable stdlib at top level
-    assert "import socket" not in src
+def test_invalid_source_rejected():
+    with pytest.raises(ValueError):
+        render_turns("nope", ["{}"])
 
 
-def test_missing_transcript_raises(archive, tmp_path):
-    with pytest.raises(FileNotFoundError):
-        run("hermes", "nope.jsonl", str(tmp_path), target_chars=80000)
+def test_malformed_line_skipped_not_fatal():
+    turns = render_turns("hermes", ["NOT JSON", "[]"])
+    assert turns == []

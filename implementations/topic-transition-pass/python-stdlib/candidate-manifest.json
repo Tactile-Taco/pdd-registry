@@ -10,6 +10,12 @@
   "dependencies": {"runtime": ["stdlib only"], "dev": ["pytest", "jsonschema"]},
   "entry_module": "topic_transition_pass",
   "entry_function": "run",
+  "mutation_sanity": {
+    "invariant": "transition-type-enum",
+    "pytest_filter": "transition_connectivity",
+    "find": "\"type\": str(tr.get(\"type\", \"contiguous\")),",
+    "replace": "\"type\": \"quantum\",  # MUTANT"
+  },
   "invariant_lineage": {
     "schema-conformance": ["test_response_schema_conformance"],
     "topic-id-unique": ["test_topic_ids_unique_and_ordered"],

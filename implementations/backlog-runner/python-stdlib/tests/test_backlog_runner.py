@@ -34,7 +34,11 @@ def _setup(tmp_path, n_files=2, poison=False):
             f.write('{"session_id":"x","role":"user","content":"Hello?","compacted":0,"timestamp":1}\n')
             f.write('{"session_id":"x","role":"assistant","content":"I think maybe yes.","compacted":0,"timestamp":2}\n')
             if poison and i == 1:
-                f.write('NOT JSON\n')
+                f.write('\ufffd\ufffd')  # replaced chars are fine
+        if poison and i == 1:
+            # invalid UTF-8 bytes → decoder failure → journaled as failed
+            with open(archive / SRC / name, "ab") as f:
+                f.write(b"\xff\xfe\x00\x01")
     store = tmp_path / "store"
     store.mkdir()
     journal = CheckpointJournal(str(store / "journal.json"))

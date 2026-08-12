@@ -10,6 +10,12 @@
   "dependencies": {"runtime": ["stdlib only"], "dev": ["pytest", "jsonschema"]},
   "entry_module": "reflection_packet",
   "entry_function": "build",
+  "mutation_sanity": {
+    "invariant": "fidelity-flagged",
+    "pytest_filter": "lossy_fidelity",
+    "find": "        cells.append([None if (lossy or v is None) else round(v, 4) for v in values])",
+    "replace": "        cells.append([round(v, 4) if v is not None else None for v in values])  # MUTANT"
+  },
   "invariant_lineage": {
     "derived-only": ["test_derived_only_no_model_calls"],
     "no-raw-transcript": ["test_no_raw_transcript_content"],
