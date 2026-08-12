@@ -93,7 +93,9 @@ is cross-session; topic-graph depends on topic annotations only, so both can bui
    the reflection packet is the only interface to the memory plane (anti-pollution
    boundary). Model selection per pass (free-failover vs deepseek) is implementation
    configuration, not protocol — protocols constrain *capability* (network to the
-   router only, call budgets), not which model.
+   router only, call budgets), not which model. (Decision: model choices stay out of
+   the protocol; they live in pass runtime config so the cheapest-platform math can
+   change without a protocol version bump.)
 3. **Index-first topic graph.** Relationships are computed at topic-completion time,
    O(N) per new session; batch recompute (O(N²) per run) rejected. Index size is
    logged as an observable (the sqlite-vec migration trigger is a documented
@@ -127,6 +129,11 @@ is cross-session; topic-graph depends on topic annotations only, so both can bui
 | This iteration | 1 `transcript-chunking`, 2 `annotation-store` | draft, linted |
 | Next | 3 `uncertainty-pass`, 4 `topic-transition-pass` | planned |
 | After boundary review | 5 `topic-flow-review`, 6 `topic-graph`, 7 `reflection-packet` | planned |
+
+Sealing policy: bundles are authored as **drafts and validated against the real pass
+implementations** when those are built. No throwaway reference implementations — the
+real pipeline code is the implementation that proves the protocol. Sealing (full
+validator loop + evidence) happens only when a bundle is actually being built against.
 
 ## Open questions (feed ambiguity logs)
 
