@@ -1,0 +1,37 @@
+{
+  "artifact_id": "topic-transition-pass-python-stdlib",
+  "protocol": {"name": "topic-transition-pass", "version": "0.1.0", "status": "draft"},
+  "language": "python",
+  "runtime": "python-3.14",
+  "files": [
+    "topic_transition_pass.py",
+    "tests/test_topic_transition_pass.py"
+  ],
+  "dependencies": {"runtime": ["stdlib only"], "dev": ["pytest", "jsonschema"]},
+  "entry_module": "topic_transition_pass",
+  "entry_function": "run",
+  "invariant_lineage": {
+    "schema-conformance": ["test_response_schema_conformance"],
+    "topic-id-unique": ["test_topic_ids_unique_and_ordered"],
+    "transition-type-enum": ["test_invalid_transition_type_rejected"],
+    "transition-connectivity": ["test_transition_connectivity"],
+    "topics-cover-assigned-chunks": ["test_topics_cover_assigned_chunks"],
+    "label-stability": ["test_label_stability_existing_labels_reused"],
+    "span-in-bounds": ["test_span_in_bounds"],
+    "record-conformance": ["test_records_append_to_store"],
+    "network-router-only": ["test_network_router_only"],
+    "model-calls-bounded": ["test_router_calls_bounded_per_chunk"],
+    "cost-budget": ["test_tokens_reported"],
+    "archive-read-only": ["test_archive_untouched"],
+    "memory-budget": [],
+    "latency-budget": [],
+    "capability-manifest-conformance": []
+  },
+  "known_limitations": [
+    "supporting_quotes are mapped by substring search against the chunk turns; unmatched quotes are dropped",
+    "transitions referencing labels the model did not emit for the chunk are dropped (connectivity is enforced)",
+    "Per-chunk prompt truncates at 100k chars (cost budget); larger chunks are annotated from the truncated prefix",
+    "Performance budgets are advisory should-tier; not admission-gating"
+  ],
+  "self_check": "non-authoritative: run locally, still a candidate until the Validation Engine admits"
+}

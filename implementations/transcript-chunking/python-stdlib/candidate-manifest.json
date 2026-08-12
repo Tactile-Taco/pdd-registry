@@ -1,0 +1,40 @@
+{
+  "artifact_id": "transcript-chunking-python-stdlib",
+  "protocol": {"name": "transcript-chunking", "version": "0.1.0", "status": "draft"},
+  "language": "python",
+  "runtime": "python-3.14",
+  "files": [
+    "transcript_chunking.py",
+    "tests/test_transcript_chunking.py"
+  ],
+  "dependencies": {"runtime": ["stdlib only"], "dev": ["pytest", "jsonschema"]},
+  "entry_module": "transcript_chunking",
+  "entry_class": null,
+  "entry_function": "run",
+  "smoke": {
+    "method": "run",
+    "args": {"source": "hermes", "filename": "smoke.jsonl", "archive_base": "<tmp>", "target_chars": 80000},
+    "assert_expr": "r['stats']['chunk_count'] >= 1"
+  },
+  "invariant_lineage": {
+    "deterministic-render": ["test_deterministic_render_identical_across_runs"],
+    "turn-integrity": ["test_turn_integrity_no_turn_split"],
+    "chunk-coverage": ["test_chunk_coverage_strict_partition"],
+    "hash-bound": ["test_chunk_sha256_matches_slice"],
+    "unique-chunk-ids": ["test_unique_chunk_ids_in_order"],
+    "stable-chunk-map-shape": ["test_stable_chunk_map_shape_contiguous"],
+    "schema-conformance": ["test_response_conforms_to_schema"],
+    "archive-read-only": ["test_archive_bytes_unchanged"],
+    "no-model-calls": ["test_no_model_calls_no_network"],
+    "no-network": ["test_no_model_calls_no_network"],
+    "memory-budget": [],
+    "latency-budget": [],
+    "capability-manifest-conformance": []
+  },
+  "known_limitations": [
+    "Renderers cover the observed archive formats; kimi wire-vs-context disambiguation is via the optional harness arg",
+    "system/tool turns are kept in the render (fidelity), the uncertainty pass classifies reasoning vs dialogue by line prefix",
+    "Performance budgets are advisory should-tier; not admission-gating"
+  ],
+  "self_check": "non-authoritative: run locally, still a candidate until the Validation Engine admits"
+}
