@@ -68,7 +68,13 @@ def _decode(raw: bytes):
 
 def test_index_catalog_shape():
     catalog = registry_index.load_catalog(ROOT / "pdd-bundles")
-    assert sorted(b["name"] for b in catalog) == ["pdd-registry", "user-registry"]
+    # The registry now carries the 9 sealed bundles (7 transcript-annotation
+    # bundles were added on top of pdd-registry + user-registry).
+    assert sorted(b["name"] for b in catalog) == [
+        "annotation-store", "pdd-registry", "reflection-packet",
+        "topic-flow-review", "topic-graph", "topic-transition-pass",
+        "transcript-chunking", "uncertainty-pass", "user-registry",
+    ]
     b = next(b for b in catalog if b["name"] == "user-registry")
     assert b["status"] == "sealed"
     assert b["version"] == "1.0.0"
@@ -108,8 +114,11 @@ def test_invariants_view_severity_filter():
     view = registry_index.invariants_view(catalog[0], severity="must")
     assert all(it["severity"] == "must"
                for layer in view.values() for it in layer)
-    # operational has one `should` (O-005) — must-filter drops it
-    assert len(view["operational"]) == 4
+    # operational has one `should` (O-005) — must-filter drops it. Derived
+    # from the bundle itself so the test stays valid as the registry grows.
+    op = catalog[0]["invariants"]["operational"]
+    assert len(view["operational"]) == sum(1 for it in op if it["severity"] == "must")
+    assert len(view["operational"]) < len(op)
 
 
 def test_load_bundle_tolerates_null_sections(tmp_path):
@@ -152,7 +161,11 @@ def test_get_healthz(client):
 def test_get_bundles_filtered(client):
     status, body = client("/bundles?status=sealed")
     assert status == 200
-    assert sorted(b["name"] for b in body["bundles"]) == ["pdd-registry", "user-registry"]
+    assert sorted(b["name"] for b in body["bundles"]) == [
+        "annotation-store", "pdd-registry", "reflection-packet",
+        "topic-flow-review", "topic-graph", "topic-transition-pass",
+        "transcript-chunking", "uncertainty-pass", "user-registry",
+    ]
     status, body = client("/bundles?status=draft")
     assert status == 200
     assert body["bundles"] == []
