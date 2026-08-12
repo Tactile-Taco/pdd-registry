@@ -33,8 +33,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--watch", action="store_true")
     ap.add_argument("--watch-seconds", type=int, default=3600)
     ap.add_argument("--dry-run", action="store_true",
-                    help="no model calls beyond triggers? (no: dry-run only "
-                         "skips review+push; use --backend stub for offline)")
+                    help="no writes: skips review+push, and with --sync-memory "
+                         "renders the MemFS files as (dry-run) markers")
     ap.add_argument("--sync-memory", action="store_true",
                     help="write meta-agent system memories + process skills "
                          "into its Letta MemFS on the M6 (default-way memory)")

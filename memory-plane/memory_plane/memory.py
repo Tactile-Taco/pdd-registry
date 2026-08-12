@@ -78,10 +78,10 @@ def sync_memfs(host: str, agent_id: str, files: dict[str, str],
     """Write `files` (name -> content) into the agent's MemFS system dir on
     the remote and commit. Returns the written file names. Reversible via git
     history; never touches anything outside the agent's memory dir."""
-    if not SAFE_ID_RE.match(agent_id):
+    if not re.fullmatch(r"[a-z0-9-]+", agent_id):
         raise ValueError(f"unsafe agent id: {agent_id!r}")
     for name in files:
-        if not re.fullmatch(r"[A-Za-z0-9._-]+", name):
+        if not re.fullmatch(r"[A-Za-z0-9._-]+", name) or name in (".", ".."):
             raise ValueError(f"unsafe memory file name: {name!r}")
     written = []
     mem_path = f"~/.letta/lc-local-backend/memfs/{agent_id}/memory"
