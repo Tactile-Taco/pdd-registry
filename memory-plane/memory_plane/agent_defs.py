@@ -49,6 +49,18 @@ proposal must cite the artifact(s) that motivated it (`motivated_by`).\
 """
 
 
+GENERALITY_PRINCIPLE = """\
+## Skill generality (binding)
+Skills must stay GENERAL-PURPOSE. Do not bake operational detail specific to
+one project or session into a skill unless the skill is explicitly scoped to
+that project (its name/description says so). Project-specific experiential
+detail belongs in the case studies and retrospectives that are referenced and
+provenanced — never in the skill itself. When a proposal edits or creates a
+skill, prefer the reusable principle; if the only learning is project-specific,
+record it as a case study/retrospective observation instead of a skill change.
+"""
+
+
 def _proposal_schema() -> dict:
     return {
         "required": ["kind", "motivated_by", "reasoning"],
@@ -90,7 +102,8 @@ Your standing process:
   tension summary, topic flow narrative, and case-study candidates.
 - Prefer specificity: name the actual goal and the actual friction. Do not
   generalize across sessions here — that is the reflection/retrospective
-  agents' job.
+  agents' job. This is the CORRECT home for project-specific experiential
+  detail; keep it in the case study (provenanced), out of the general skills.
 - Every case study must carry evidence links to the packet (and, when the
   packet references them, the annotation records) it came from.
 - Anti-pollution: you store patterns and distilled facts, never per-session
@@ -143,6 +156,8 @@ Your standing process:
 
 """ + SYNTHESIS_STEP + """
 
+""" + GENERALITY_PRINCIPLE + """
+
 Output JSON (one object):
 {"artifact_id": "<uuid>", "type": "reflection", "period": {"from": "...",
  "to": "..."}, "session_refs": ["..."], "summary": "...", "insights": ["..."],
@@ -193,6 +208,8 @@ Your standing process:
 
 """ + SYNTHESIS_STEP + """
 
+""" + GENERALITY_PRINCIPLE + """
+
 Output JSON (one object):
 {"artifact_id": "<uuid>", "type": "retrospective", "checkpoint": {"kind":
  "cluster-concluded|heatmap-anomaly|volume-floor", "ref": "..."},
@@ -242,6 +259,9 @@ Your standing process:
 - Produce fleet process-skill updates: changes to the fleet's own operating
   procedures (how the fleet agents work). Process skills live in fleet
   memory, NOT the canonical skills repo.
+- Keep system memories and process skills GENERAL-PURPOSE: never encode a
+  single project's operational detail into them; project specifics belong in
+  the referenced case studies and retrospectives.
 - Evaluate the fleet's process: if a workflow is missing or broken, propose a
   new process skill.
 

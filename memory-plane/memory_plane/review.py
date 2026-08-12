@@ -24,7 +24,9 @@ Review it against your own experience of the skills involved. Respond with
 exactly one JSON object:
 {{"vote": "approve" | "reject", "reason": "<why, one or two sentences>"}}
 Reject if the proposal is ungrounded (no motivating artifacts), over-fits a
-single session, would harm other harnesses, or the skill would be worse with
+single session, bakes project-specific operational detail into a general-
+purpose skill (specificity belongs in case studies/retrospectives, not the
+skill), would harm other harnesses, or the skill would be worse with
 the change. Otherwise approve.
 """
 
