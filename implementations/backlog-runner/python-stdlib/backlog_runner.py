@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import subprocess
 import sys
 import tempfile
 import time
@@ -220,6 +221,25 @@ def run_once(sources: list[str], archive_base: str, store_dir: str,
     return stats
 
 
+def _resolve_bifrost_key() -> str:
+    """BIFROST_KEY from env, else the Infisical credential used by the
+    skill-sync system (BIFROST_AGENT_VIRTUAL_KEY). Never hardcoded."""
+    key = os.environ.get("BIFROST_KEY", "")
+    if key:
+        return key
+    try:
+        out = subprocess.run(
+            ["infisical", "secrets", "get", "BIFROST_AGENT_VIRTUAL_KEY",
+             "--projectId", "5598630f-4109-47d9-bbfb-91bac16ac92c",
+             "--env", "prod", "--plain", "--silent"],
+            capture_output=True, text=True, timeout=15)
+        if out.returncode == 0 and out.stdout.strip():
+            return out.stdout.strip()
+    except Exception:  # noqa: BLE001 — no key is a valid degraded state
+        pass
+    return ""
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(prog="backlog-runner")
     ap.add_argument("--sources", default="all")
@@ -234,6 +254,9 @@ def main(argv=None) -> int:
     ap.add_argument("--limit", type=int, default=None)
     ap.add_argument("--stub", action="store_true")
     args = ap.parse_args(argv)
+
+    if not args.stub:
+        os.environ.setdefault("BIFROST_KEY", _resolve_bifrost_key())
 
     sources = SOURCES if args.sources == "all" else [s.strip() for s in args.sources.split(",")]
     store = args.store_dir
