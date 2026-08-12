@@ -89,6 +89,12 @@ python3 bootstrap.py               # provision on m6 + restart service + verify
 `letta-app-server.service`, and verifies `/v1/models` lists every agent.
 Reversible: delete the registry JSONs + memfs dirs, restart the service.
 
+M6 platform note: the App Server unit must listen on `127.0.0.1:4500`
+(`--listen ws://127.0.0.1:4500`) while Tailscale Serve proxies
+`https://<M6 DNS>:4500` → `127.0.0.1:4500`. A serve rule plus a `0.0.0.0`
+bind collide (EADDRINUSE on restart), and the HTTPS surface disappears if the
+serve rule is off — keep both in sync.
+
 ## Running the fleet
 
 ```bash

@@ -82,12 +82,16 @@ def provision(host: str = "m6", dry_run: bool = False) -> None:
             print(f"[dry-run] write {mem_path}/system/persona.md")
             print(f"[dry-run] write {mem_path}/system/human.md")
             continue
-        reg = json.dumps(registry_entry(a), ensure_ascii=False, indent=1)
+        # base64 transport: the contents contain quotes/newlines that would
+        # mangle shell quoting otherwise.
+        reg_b64 = base64.b64encode(json.dumps(registry_entry(a)).encode()).decode()
+        persona_b64 = base64.b64encode(persona.encode()).decode()
+        human_b64 = base64.b64encode(HUMAN_MD.encode()).decode()
         _run(["ssh", host,
               f"mkdir -p {mem_path}/system && "
-              f"printf %s {json.dumps(reg)} > {reg_path} && "
-              f"printf %s {json.dumps(persona)} > {mem_path}/system/persona.md && "
-              f"printf %s {json.dumps(HUMAN_MD)} > {mem_path}/system/human.md && "
+              f"echo {reg_b64} | base64 -d > {reg_path} && "
+              f"echo {persona_b64} | base64 -d > {mem_path}/system/persona.md && "
+              f"echo {human_b64} | base64 -d > {mem_path}/system/human.md && "
               f"cd {mem_path} && git init -q 2>/dev/null; "
               f"git add -A && git -c user.name=memory-plane -c user.email=fleet@local "
               f"commit -q -m 'provision {a['name']}' 2>/dev/null; true"])
