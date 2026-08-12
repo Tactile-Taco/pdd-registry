@@ -1,0 +1,27 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "TopicTransitionPassRequest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["source", "filename", "render_id"],
+  "properties": {
+    "source": { "type": "string", "enum": ["reasonix", "omp", "claude", "codex", "kimi", "hermes"] },
+    "filename": { "type": "string", "minLength": 1 },
+    "render_id": { "type": "string", "minLength": 1 },
+    "chunk_ids": {
+      "type": "array",
+      "description": "Optional subset of chunks to process; defaults to all chunks of the render.",
+      "items": { "type": "string", "pattern": "^c[0-9]+$" }
+    },
+    "existing_labels": {
+      "type": "array",
+      "description": "Topic labels already present in this session's topic layer, so the pass reuses them instead of coining near-duplicates (intra-session label consistency). Empty for a fresh session.",
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "emit_layers": {
+      "type": "array",
+      "items": { "type": "string", "enum": ["topic", "transition"] },
+      "default": ["topic", "transition"]
+    }
+  }
+}

@@ -1,0 +1,32 @@
+structural_invariants:
+  - id: schema-conformance
+    statement: Requests and responses must conform to their referenced JSON Schemas.
+    severity: must
+    validation:
+      - json_schema_validation
+
+  - id: topic-id-unique
+    statement: topic_id must be unique within a session's topic index and monotonic (t0, t1, ...).
+    severity: must
+    validation:
+      - json_schema_validation
+      - contract_tests
+
+  - id: transition-type-enum
+    statement: Every transition.type must be one of contiguous, revival, overlap, or nested.
+    severity: must
+    validation:
+      - json_schema_validation
+
+  - id: record-conformance
+    statement: Every produced annotation record must conform to the annotation-store append envelope schema (via depends_on annotation-store).
+    severity: must
+    validation:
+      - contract_tests
+
+  - id: label-stability
+    statement: When existing_labels are provided, topics must reuse an existing label where one is a near-equivalent, instead of coining a near-duplicate (intra-session consistency).
+    severity: must
+    validation:
+      - contract_tests
+      - label_consistency_check

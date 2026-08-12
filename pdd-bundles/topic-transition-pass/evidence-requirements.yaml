@@ -1,0 +1,22 @@
+evidence_requirements:
+  required:
+    - protocol_version
+    - implementation_artifact_hash
+    - validator_versions
+    - validation_results
+    - dependency_manifest
+    - discovery_log
+  attestations:
+    signed: false
+    signer: null
+  replay:
+    deterministic_replay_required: false
+    note: LLM pass — outputs are not deterministic; evidence relies on annotation-store
+          supersede semantics for re-runs rather than byte-for-byte replay.
+    required_environment_metadata:
+      - runtime
+      - operating_system
+      - dependency_lockfile
+      - chunk_map_sha256
+      - model_chain_version
+      - cost_ledger_ref

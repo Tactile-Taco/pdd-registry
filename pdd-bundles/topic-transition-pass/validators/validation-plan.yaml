@@ -1,0 +1,48 @@
+validation_plan:
+  structural:
+    - id: schema-validation
+      validates:
+        - schema-conformance
+        - topic-id-unique
+        - transition-type-enum
+      method: json_schema_validation
+    - id: contract-tests
+      validates:
+        - topic-id-unique
+        - record-conformance
+      method: contract_tests
+    - id: label-consistency
+      validates:
+        - label-stability
+      method: label_consistency_check
+  behavioral:
+    - id: contract-tests
+      validates:
+        - span-in-bounds
+        - transition-connectivity
+      method: contract_tests
+    - id: property-tests
+      validates:
+        - topics-cover-assigned-chunks
+      method: property_based_test
+  operational:
+    - id: capability-checks
+      validates:
+        - capability-manifest-conformance
+        - network-router-only
+        - archive-read-only
+      method: sandbox_policy_check
+    - id: network-allowlist
+      validates:
+        - network-router-only
+      method: network_allowlist_check
+    - id: cost-ledger
+      validates:
+        - model-calls-bounded
+        - cost-budget
+      method: cost_ledger_check
+    - id: resource-profiles
+      validates:
+        - memory-budget
+        - latency-budget
+      method: benchmark

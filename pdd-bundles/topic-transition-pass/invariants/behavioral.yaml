@@ -1,0 +1,18 @@
+behavioral_invariants:
+  - id: span-in-bounds
+    statement: Every topic span and supporting quote must reference chunks and turns that exist in the transcript's render/chunk map.
+    severity: must
+    validation:
+      - contract_tests
+
+  - id: topics-cover-assigned-chunks
+    statement: Every processed chunk must be assigned to at least one topic or explicitly marked as untopic; overlapping/multi-topic chunks are permitted (a chunk may belong to more than one topic).
+    severity: must
+    validation:
+      - property_based_test
+
+  - id: transition-connectivity
+    statement: Every transition's from_topic_id and to_topic_id must exist in the same session's topic index, and position must reference a real chunk or event.
+    severity: must
+    validation:
+      - contract_tests

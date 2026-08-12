@@ -1,0 +1,18 @@
+behavioral_invariants:
+  - id: deterministic-output
+    statement: The same input (source, filename, render_id, lexicon_version) must produce byte-identical records and density statistics (replay-stable, LLM-free).
+    severity: must
+    validation:
+      - replay_test
+
+  - id: span-bounds
+    statement: Every span-grounded record's target (event_id and/or chunk_id) must resolve to an existing turn or chunk in the transcript's render/chunk map.
+    severity: must
+    validation:
+      - contract_tests
+
+  - id: source-segregation
+    statement: Density statistics must record their source (reasoning vs dialogue); reasoning-sourced markers may only be produced for transcripts whose source archives reasoning text.
+    severity: must
+    validation:
+      - contract_tests

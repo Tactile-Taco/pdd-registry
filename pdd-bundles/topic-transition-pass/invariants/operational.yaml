@@ -1,0 +1,49 @@
+operational_invariants:
+  - id: capability-manifest-conformance
+    statement: Runtime authority and resource usage must conform to capability-manifest.yaml.
+    severity: must
+    infra_assumption: sandbox or runtime instrumentation (enforced by sandbox policy check)
+    validation:
+      - sandbox_policy_check
+      - runtime_instrumentation
+
+  - id: network-router-only
+    statement: Outbound network is permitted only to the model router (Bifrost) — no other destinations.
+    severity: must
+    validation:
+      - sandbox_network_denial
+      - network_allowlist_check
+
+  - id: model-calls-bounded
+    statement: The pass must issue at most 2 model calls per chunk (including retries/failover), so worst-case paid spend on an oversized session stays bounded.
+    severity: should
+    infra_assumption: cost ledger + call counter; measured, recorded as observation
+    validation:
+      - runtime_instrumentation
+
+  - id: cost-budget
+    statement: Average LLM spend across runs must stay within the program budget of <= $1/day (excluding free tiers), tracked via the cost ledger.
+    severity: should
+    infra_assumption: cost ledger (tokens_in/out recorded per run); measured, recorded as observation
+    validation:
+      - cost_ledger_check
+
+  - id: archive-read-only
+    statement: The pass may read the archive and chunk store but must not write to the archive, the chunk store, or the annotation store (it returns records; the runner appends).
+    severity: must
+    validation:
+      - filesystem_trace
+
+  - id: memory-budget
+    statement: Peak memory must stay under 1 GB while processing the largest archived files.
+    severity: should
+    infra_assumption: benchmark harness; measured, recorded as observation
+    validation:
+      - memory_profile
+
+  - id: latency-budget
+    statement: p95 pass latency must remain under 5 minutes per file on the reference workstation.
+    severity: should
+    infra_assumption: benchmark harness; measured, recorded as observation
+    validation:
+      - benchmark

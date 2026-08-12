@@ -1,0 +1,71 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "TopicTransitionPassResponse",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["pass_id", "pass_version", "topics", "transitions", "records", "tokens_in", "tokens_out", "records_sha256"],
+  "properties": {
+    "pass_id": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+    "pass_version": { "type": "string", "minLength": 1 },
+    "topics": {
+      "type": "array",
+      "description": "Intra-session topic index.",
+      "items": { "$ref": "#/definitions/topic" }
+    },
+    "transitions": {
+      "type": "array",
+      "description": "Transition events between topics, in transcript order.",
+      "items": { "$ref": "#/definitions/transition" }
+    },
+    "records": {
+      "type": "array",
+      "description": "Annotation records in the annotation-store append envelope (layers topic, transition), ready for the runner to append.",
+      "items": { "type": "object" }
+    },
+    "tokens_in": { "type": "integer", "minimum": 0, "description": "Total input tokens consumed (cost ledger input)." },
+    "tokens_out": { "type": "integer", "minimum": 0, "description": "Total output tokens produced (cost ledger input)." },
+    "records_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+  },
+  "definitions": {
+    "topic": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["topic_id", "label", "chunks", "turn_ids", "supporting_quotes", "intensity", "span_start", "span_end"],
+      "properties": {
+        "topic_id": { "type": "string", "pattern": "^t[0-9]+$", "description": "Session-scoped topic id (t0, t1, ...)." },
+        "label": { "type": "string", "minLength": 1 },
+        "chunks": { "type": "array", "items": { "type": "string", "pattern": "^c[0-9]+$" } },
+        "turn_ids": { "type": "array", "items": { "type": "string" } },
+        "supporting_quotes": {
+          "type": "array",
+          "description": "Quote groundings, TopicGPT-style.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["chunk_id", "event_id", "text"],
+            "properties": {
+              "chunk_id": { "type": "string", "pattern": "^c[0-9]+$" },
+              "event_id": { "type": "string", "minLength": 1 },
+              "text": { "type": "string", "minLength": 1 }
+            }
+          }
+        },
+        "intensity": { "type": "number", "minimum": 0, "description": "Relative intensity of the topic across the session (feeds the topic-intensity heatmap row)." },
+        "span_start": { "type": "integer", "minimum": 0, "description": "Index of the first turn in this topic's span." },
+        "span_end": { "type": "integer", "minimum": 0, "description": "Index of the last turn in this topic's span (>= span_start)." }
+      }
+    },
+    "transition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["from_topic_id", "to_topic_id", "position", "type"],
+      "properties": {
+        "from_topic_id": { "type": "string", "pattern": "^t[0-9]+$" },
+        "to_topic_id": { "type": "string", "pattern": "^t[0-9]+$" },
+        "position": { "type": "string", "description": "Chunk or event id at which the transition occurs." },
+        "type": { "type": "string", "enum": ["contiguous", "revival", "overlap", "nested"] },
+        "signal_text": { "type": "string", "description": "Optional textual transition signal (discourse marker / cue) when present." }
+      }
+    }
+  }
+}

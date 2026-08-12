@@ -1,0 +1,22 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "UncertaintyPassRequest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["source", "filename", "render_id", "lexicon_version"],
+  "properties": {
+    "source": { "type": "string", "enum": ["reasonix", "omp", "claude", "codex", "kimi", "hermes"] },
+    "filename": { "type": "string", "minLength": 1 },
+    "render_id": { "type": "string", "minLength": 1 },
+    "lexicon_version": {
+      "type": "string",
+      "description": "Pinned version of the marker lexicon (e.g. the bundled Kyoto + BioScope + MPQA + Loughran-McDonald cue lists). Results must cite exactly this version."
+    },
+    "emit_layers": {
+      "type": "array",
+      "items": { "type": "string", "enum": ["uncertainty", "uncertainty-density", "contention"] },
+      "default": ["uncertainty", "uncertainty-density", "contention"],
+      "description": "Which annotation layers to produce. Defaults to all three."
+    }
+  }
+}

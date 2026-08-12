@@ -1,0 +1,25 @@
+structural_invariants:
+  - id: schema-conformance
+    statement: Requests and responses must conform to their referenced JSON Schemas.
+    severity: must
+    validation:
+      - json_schema_validation
+
+  - id: lexicon-pinned
+    statement: Every run declares a lexicon_version, and every produced record and density statistic must cite exactly that lexicon_version.
+    severity: must
+    validation:
+      - contract_tests
+
+  - id: record-conformance
+    statement: Every produced annotation record must conform to the annotation-store append envelope schema (via depends_on annotation-store).
+    severity: must
+    validation:
+      - contract_tests
+
+  - id: density-schema-conformance
+    statement: Every density entry must carry all required fields (count, density_per_1k, diversity, positional_median_pct, variance, source) computed from the chunk text.
+    severity: must
+    validation:
+      - json_schema_validation
+      - contract_tests

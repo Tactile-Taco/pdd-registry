@@ -1,0 +1,47 @@
+protocol:
+  name: topic-transition-pass
+  version: 0.1.0
+  status: draft
+
+purpose: >
+  LLM-based topic and transition annotation of a chunked transcript. The pass
+  assigns topic labels to chunks and turns (with supporting quotes for grounding),
+  maintains intra-session label consistency, emits transition events between topics,
+  and produces an intra-session topic index with per-topic intensity. Its outputs
+  feed the reflection packet's topic-intensity and topic-flow heatmap rows and the
+  cross-session topic-graph bundle. Model choice (free-failover chain) is
+  implementation configuration, not protocol; spend is bounded by the program's
+  <= $1/day average budget.
+
+boundary:
+  in_scope:
+    - Assign topic labels to chunks/turns with supporting quote references
+    - Maintain intra-session label consistency (reuse existing labels from the session's topic layer)
+    - Emit transition events between topics (typed: contiguous, revival, overlap, nested)
+    - Produce an intra-session topic index (label, span, supporting quotes, intensity)
+    - Emit records in the annotation-store envelope for layers "topic" and "transition"
+  out_of_scope:
+    - Cross-session topic relationships (topic-graph bundle)
+    - Topic flow review (topic-flow-review bundle)
+    - Uncertainty / contention analysis (uncertainty-pass bundle)
+    - Model choice and provider (implementation configuration, per program decision)
+    - Writing to the transcript archive or the annotation store (pass returns records; runner appends)
+
+handshakes:
+  request_schema: schemas/request.schema.json
+  response_schema: schemas/response.schema.json
+
+depends_on:
+  - transcript-chunking
+  - annotation-store
+provides:
+  topic-transition-pass.run: schemas/request.schema.json
+
+invariants:
+  structural: invariants/structural.yaml
+  behavioral: invariants/behavioral.yaml
+  operational: invariants/operational.yaml
+
+capabilities: capability-manifest.yaml
+validators: validators/validation-plan.yaml
+evidence: evidence-requirements.yaml

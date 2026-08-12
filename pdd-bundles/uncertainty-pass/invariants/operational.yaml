@@ -1,0 +1,41 @@
+operational_invariants:
+  - id: capability-manifest-conformance
+    statement: Runtime authority and resource usage must conform to capability-manifest.yaml.
+    severity: must
+    infra_assumption: sandbox or runtime instrumentation (enforced by sandbox policy check)
+    validation:
+      - sandbox_policy_check
+      - runtime_instrumentation
+
+  - id: no-network
+    statement: The pass must not initiate outbound network connections.
+    severity: must
+    validation:
+      - sandbox_network_denial
+
+  - id: no-model-calls
+    statement: The pass must not call any language model — it is a zero-cost deterministic pass by design.
+    severity: must
+    validation:
+      - sandbox_network_denial
+      - runtime_instrumentation
+
+  - id: archive-read-only
+    statement: The pass may read the archive and chunk store but must not write to the archive, the chunk store, or the annotation store (it is read-only compute; the runner appends its records).
+    severity: must
+    validation:
+      - filesystem_trace
+
+  - id: memory-budget
+    statement: Peak memory must stay under 512 MB while processing the largest archived files.
+    severity: should
+    infra_assumption: benchmark harness; measured, recorded as observation
+    validation:
+      - memory_profile
+
+  - id: latency-budget
+    statement: p95 pass latency must remain under 30 s per file on the reference workstation.
+    severity: should
+    infra_assumption: benchmark harness; measured, recorded as observation
+    validation:
+      - benchmark

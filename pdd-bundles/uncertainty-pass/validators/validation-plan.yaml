@@ -1,0 +1,39 @@
+validation_plan:
+  structural:
+    - id: schema-validation
+      validates:
+        - schema-conformance
+        - density-schema-conformance
+      method: json_schema_validation
+    - id: contract-tests
+      validates:
+        - lexicon-pinned
+        - record-conformance
+        - density-schema-conformance
+      method: contract_tests
+  behavioral:
+    - id: replay-tests
+      validates:
+        - deterministic-output
+      method: replay_test
+    - id: contract-tests
+      validates:
+        - span-bounds
+        - source-segregation
+      method: contract_tests
+  operational:
+    - id: capability-checks
+      validates:
+        - capability-manifest-conformance
+        - no-network
+        - no-model-calls
+      method: sandbox_policy_check
+    - id: fs-trace
+      validates:
+        - archive-read-only
+      method: filesystem_trace
+    - id: resource-profiles
+      validates:
+        - memory-budget
+        - latency-budget
+      method: benchmark

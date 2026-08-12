@@ -1,0 +1,45 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "UncertaintyPassResponse",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["pass_id", "pass_version", "lexicon_version", "chunks_processed", "records", "density", "records_sha256"],
+  "properties": {
+    "pass_id": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+    "pass_version": { "type": "string", "minLength": 1 },
+    "lexicon_version": { "type": "string", "minLength": 1 },
+    "chunks_processed": { "type": "integer", "minimum": 0 },
+    "records": {
+      "type": "array",
+      "description": "Annotation records in the annotation-store append envelope (layers uncertainty, uncertainty-density, contention), ready for the runner to append.",
+      "items": { "type": "object" }
+    },
+    "density": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/density" }
+    },
+    "records_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+  },
+  "definitions": {
+    "density": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["chunk_id", "char_count", "marker_count", "density_per_1k", "markers", "diversity", "positional_median_pct", "variance", "source"],
+      "properties": {
+        "chunk_id": { "type": "string", "pattern": "^c[0-9]+$" },
+        "char_count": { "type": "integer", "minimum": 1 },
+        "marker_count": { "type": "integer", "minimum": 0 },
+        "density_per_1k": { "type": "number", "minimum": 0 },
+        "markers": {
+          "type": "object",
+          "description": "Marker kind -> count in this chunk.",
+          "additionalProperties": { "type": "integer", "minimum": 0 }
+        },
+        "diversity": { "type": "integer", "minimum": 0, "description": "Distinct marker kinds present (Gravity7: diversity correlates with epistemic trouble)." },
+        "positional_median_pct": { "type": "number", "minimum": 0, "maximum": 100, "description": "Median marker position as percent through the chunk (positional grammar)." },
+        "variance": { "type": "number", "minimum": 0, "description": "Variance of marker positions within the chunk (Cognaptus: failed traces show higher exploratory variance)." },
+        "source": { "type": "string", "enum": ["reasoning", "dialogue", "both"] }
+      }
+    }
+  }
+}

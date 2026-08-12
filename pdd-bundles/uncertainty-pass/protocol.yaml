@@ -1,0 +1,44 @@
+protocol:
+  name: uncertainty-pass
+  version: 0.1.0
+  status: draft
+
+purpose: >
+  LLM-free grammatical and contention analysis of a chunked transcript. The pass
+  runs a pinned, versioned marker lexicon over the canonical render, producing
+  span-grounded uncertainty markers, per-chunk density statistics (with positional
+  grammar, diversity, and variance), and dialogue-level contention/tension events.
+  Fully deterministic and zero-cost by invariant: no model calls, no network. Its
+  outputs feed the reflection packet's uncertainty and contention heatmap rows.
+
+boundary:
+  in_scope:
+    - Run a pinned lexicon_version of hesitation/doubt markers and contention signals over chunked transcript turns
+    - Produce span-grounded uncertainty annotations (marker kind, span) for annotation-store layer "uncertainty"
+    - Produce per-chunk density statistics (markers per 1K chars, positional grammar, diversity, variance) for layer "uncertainty-density"
+    - Produce dialogue-level contention/tension events (user pushback, reverts, repeated corrections, negation in user turns) for layer "contention"
+    - Emit records in the annotation-store envelope for the runner to append
+  out_of_scope:
+    - Any LLM or network call (LLM-free by invariant)
+    - Interpreting density against per-model baselines (baselines live in the meta layer, not this pass)
+    - Semantic topic labeling (topic-transition-pass)
+    - Writing to the transcript archive or the annotation store (pass is read-only compute; the runner appends)
+
+handshakes:
+  request_schema: schemas/request.schema.json
+  response_schema: schemas/response.schema.json
+
+depends_on:
+  - transcript-chunking
+  - annotation-store
+provides:
+  uncertainty-pass.run: schemas/request.schema.json
+
+invariants:
+  structural: invariants/structural.yaml
+  behavioral: invariants/behavioral.yaml
+  operational: invariants/operational.yaml
+
+capabilities: capability-manifest.yaml
+validators: validators/validation-plan.yaml
+evidence: evidence-requirements.yaml
