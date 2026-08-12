@@ -14,7 +14,10 @@ __pycache__/
 sandbox-workdir/
 
 # Transcript pipeline runtime state (created by local runs/tests)
-annotation-store/
+# Anchored to the repo root: the runtime store dir is ./annotation-store.
+# Do NOT ignore implementations/annotation-store or evidence/annotation-store —
+# they are the candidate implementation and its signed Evidence Chain.
+/annotation-store/
 *.packet.json
 
 # Keep evidence/ and pdd-bundles/ tracked: they are the durable artifacts.

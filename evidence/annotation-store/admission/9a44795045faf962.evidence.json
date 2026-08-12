@@ -1,0 +1,110 @@
+{
+  "protocol": {
+    "name": "annotation-store",
+    "version": "0.1.0",
+    "bundle_digest": "sha256:c81b441a3409dad9bb4286475bb0086e28148ced326ef7a6f77c493814bbaa97"
+  },
+  "implementation": {
+    "artifact_digest": "sha256:9a44795045faf9628ddb174ef511858394ae44fd44a8451e9dc887849407c1f8"
+  },
+  "validators": [
+    {
+      "id": "schema-validator",
+      "version": "1.0.0",
+      "layer": "structural"
+    },
+    {
+      "id": "contract-runner",
+      "version": "1.0.0",
+      "layer": "structural"
+    },
+    {
+      "id": "property-runner",
+      "version": "1.0.0",
+      "layer": "behavioral"
+    },
+    {
+      "id": "mutation-sanity",
+      "version": "1.0.0",
+      "layer": "behavioral"
+    },
+    {
+      "id": "import-scanner",
+      "version": "1.0.0",
+      "layer": "operational"
+    },
+    {
+      "id": "capability-monitor",
+      "version": "1.0.0",
+      "layer": "operational"
+    },
+    {
+      "id": "benchmark-runner",
+      "version": "1.0.0",
+      "layer": "operational"
+    }
+  ],
+  "results": [
+    {
+      "invariant_id": "S-001",
+      "layer": "structural",
+      "outcome": "pass",
+      "evidence": "compile ok for 2 module(s)"
+    },
+    {
+      "invariant_id": "S-002",
+      "layer": "structural",
+      "outcome": "pass",
+      "evidence": "enumerated error kinds referenced in candidate source"
+    },
+    {
+      "invariant_id": "S-003",
+      "layer": "structural",
+      "outcome": "pass",
+      "evidence": "no schema history yet; v1.0.0 baseline (schema-diff n/a)"
+    },
+    {
+      "invariant_id": "O-003",
+      "layer": "operational",
+      "outcome": "pass",
+      "evidence": "imports=['_hash', 'json', 're', 'typing']; unapproved=[]"
+    },
+    {
+      "invariant_id": "O-001,O-002,O-004",
+      "layer": "operational",
+      "outcome": "pass",
+      "evidence": "forbidden signals=[]"
+    },
+    {
+      "invariant_id": "append-only,supersede-visibility,archive-immutability,deterministic-render",
+      "layer": "behavioral",
+      "outcome": "pass",
+      "evidence": "pytest: 8 passed in 0.04s"
+    },
+    {
+      "invariant_id": "supersede-visibility",
+      "layer": "behavioral",
+      "outcome": "pass",
+      "evidence": "mutant rejected by supersede (exit 1, assertion failure) \u2014 property is not vacuous"
+    },
+    {
+      "invariant_id": "O-001,O-002",
+      "layer": "operational",
+      "outcome": "skip",
+      "evidence": "sandbox not requested or docker not found; static scan only"
+    },
+    {
+      "invariant_id": "O-005",
+      "layer": "operational",
+      "outcome": "skip",
+      "evidence": "benchmark must be a dict in candidate-manifest.json"
+    }
+  ],
+  "provenance": {
+    "time": "2026-08-12T19:44:01Z",
+    "manifest": "annotation-store-python-stdlib",
+    "discovery_digest": "sha256:5330165e5d40f6684f20ab66500c34a02b8ae2dab9a770696b12275fa9739548"
+  },
+  "digest": "sha256:c7335303b706127f636f959688bf0dc3d30903c7c53a1f59f60cc459ec230ac8",
+  "signature": "hmac-sha256:15c2ae9eebb3ebb93dc115a623ba419d33d13b2cb924699db59b02dc7941f5b9"
+}
