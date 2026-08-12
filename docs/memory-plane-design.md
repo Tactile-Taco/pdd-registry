@@ -106,6 +106,46 @@ typed directed edges) + a text/HTML render to the packet, as a sibling of the he
 - Pipeline passes carry the ≤ $1/day cap (per program decision). Agent spend draws
   from the Bifrost budget as a separate line.
 
+## Skill-improvement synthesis (mandatory final step of reflections/retrospectives)
+
+After completing a reflection or retrospective, the agent must critically
+analyze how the DESIGN of the associated skills influenced the task:
+
+1. Which parts of the skills helped, which misled, and which were missing —
+   where the skill's instructions or artifacts shaped the outcome for better
+   or worse.
+2. Examine the available case studies (linked in the task context) for
+   emergent patterns across sessions.
+3. Decide what principles, instructions, or other skill artifacts would
+   improve the effectiveness and success outcomes of the skills.
+4. If the pain points are naturally challenging and a too-concrete solution
+   would likely be counterproductive (over-fitting a skill to one session,
+   premature specificity), make a disciplined, well-formed judgment call to
+   NOT propose a change — and say so explicitly with reasoning.
+
+Either way the step ends in a `skill_proposals` array: concrete proposals
+(kind `new-skill` / `edit-skill` / `process-skill`) or an explicit
+`no-proposal` verdict (judgement `naturally-hard`, reasoning required).
+Every proposal must cite the artifact(s) that motivated it (`motivated_by`
+— the grounding rule). Case-study agents do NOT synthesize; they produce the
+raw material the synthesis step mines.
+
+## PDD boundary (fleet = client system)
+
+The fleet is implemented as a client OUTSIDE the PDD Validator Loop. Agents
+are stochastic; attempting to attest them through the invariant/evidence
+machinery would be both unachievable and useless. The contract instead:
+- deterministic parts (triggers, artifact store, proposal validation, review
+  tally, git push mechanics) are unit-tested;
+- agent outputs are schema-shaped (required keys + type) and validated with
+  one retry with error feedback;
+- proposals pass peer review by the other fleet agents (unanimous approval
+  to auto-push, fail-closed vote parsing).
+
+The pipeline bundles remain fully attested; the fleet is their consumer.
+Implementation lives in `memory-plane/` (see its README for v1 trigger
+signals, backends, and deployment).
+
 ## Implementation flags for the pipeline fork (both docs reference these)
 
 1. **skill-usage annotation layer** — new signal; needs the canonical skill list as
