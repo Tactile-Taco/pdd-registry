@@ -1,0 +1,22 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ReflectionPacketBuildRequest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["source", "filename", "render_id"],
+  "properties": {
+    "source": { "type": "string", "enum": ["reasonix", "omp", "claude", "codex", "kimi", "hermes"] },
+    "filename": { "type": "string", "minLength": 1 },
+    "render_id": { "type": "string", "minLength": 1 },
+    "layers": {
+      "type": "array",
+      "items": { "type": "string", "enum": ["uncertainty", "uncertainty-density", "contention", "topic", "transition", "topic-flow"] },
+      "description": "Annotation layers to aggregate. Defaults to all that exist for this session."
+    },
+    "include_heatmap": { "type": "boolean", "default": true },
+    "baselines_ref": {
+      "type": "string",
+      "description": "Reference to the per-model baseline snapshot used for deviation-from-baseline normalization in the heatmap. Required when include_heatmap is true and reasoning-source densities are present."
+    }
+  }
+}

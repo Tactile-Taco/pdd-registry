@@ -1,0 +1,49 @@
+protocol:
+  name: topic-flow-review
+  version: 0.1.0
+  status: draft
+
+purpose: >
+  LLM review of a session's topic and transition annotations to understand the
+  session's topic flow: how topics relate, overlap, revive, and how the session
+  moved through them. Produces a topic flow report, identifies workflow tensions,
+  and surfaces skill-improvement and case-study candidates. Consumes the topic and
+  transition layers (and optionally the contention layer) from the annotation store;
+  model choice is implementation configuration; spend is bounded by the program's
+  <= $1/day average budget.
+
+boundary:
+  in_scope:
+    - Review a session's topic index and transitions (annotation-store layers "topic" and "transition")
+    - Analyze overlapping/multi-topic structure, topic flow over time, and topic revival patterns
+    - Produce a topic flow report (narrative of how the session moved through topics, and how topics relate)
+    - Identify workflow tensions and surface skill-improvement / case-study candidates
+    - Optionally consume the contention layer as additional input context
+    - Emit records in annotation-store layer "topic-flow"
+  out_of_scope:
+    - Cross-session topic relationships (topic-graph bundle)
+    - Aggregation into the distilled reflection packet (reflection-packet bundle)
+    - Computing uncertainty/contention density itself (uncertainty-pass bundle)
+    - Model choice and provider (implementation configuration, per program decision)
+    - Writing to the transcript archive or the annotation store (pass returns records; runner appends)
+
+handshakes:
+  request_schema: schemas/request.schema.json
+  response_schema: schemas/response.schema.json
+
+depends_on:
+  - transcript-chunking
+  - annotation-store
+  - topic-transition-pass
+  - uncertainty-pass
+provides:
+  topic-flow-review.run: schemas/request.schema.json
+
+invariants:
+  structural: invariants/structural.yaml
+  behavioral: invariants/behavioral.yaml
+  operational: invariants/operational.yaml
+
+capabilities: capability-manifest.yaml
+validators: validators/validation-plan.yaml
+evidence: evidence-requirements.yaml

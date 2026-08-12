@@ -1,0 +1,26 @@
+behavioral_invariants:
+  - id: derived-only
+    statement: The packet must introduce no facts not present in the consumed annotation layers or baselines — it is an aggregation, not a new analysis.
+    severity: must
+    validation:
+      - contract_tests
+
+  - id: no-raw-transcript
+    statement: Packet text fields may contain only short supporting quotes from annotations, never bulk raw transcript text (anti-pollution boundary).
+    severity: must
+    validation:
+      - contract_tests
+      - length_bound_check
+
+  - id: fidelity-flagged
+    statement: The packet must carry the session's fidelity_class and the heatmap must flag lossy segments (null cells), so lossy data is never compared as equal to full-fidelity data.
+    severity: must
+    validation:
+      - contract_tests
+      - json_schema_validation
+
+  - id: deterministic-build
+    statement: The same annotation layers + baseline snapshot must produce a byte-identical packet (assembly is mechanical and replay-stable).
+    severity: must
+    validation:
+      - replay_test

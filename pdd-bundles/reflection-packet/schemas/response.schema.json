@@ -1,0 +1,104 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ReflectionPacketBuildResponse",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["packet_id", "packet", "packet_sha256"],
+  "properties": {
+    "packet_id": { "type": "string", "minLength": 1 },
+    "packet": { "$ref": "#/definitions/packet" },
+    "packet_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+  },
+  "definitions": {
+    "packet": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["session", "provenance", "overview", "tension_summary", "topic_flow", "case_study_candidates", "baseline_refs", "stats"],
+      "properties": {
+        "session": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["source", "filename", "render_id", "fidelity_class"],
+          "properties": {
+            "source": { "type": "string" },
+            "filename": { "type": "string" },
+            "render_id": { "type": "string" },
+            "fidelity_class": { "type": "string", "enum": ["full", "lossy"] }
+          }
+        },
+        "provenance": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["passes", "baselines_ref"],
+          "properties": {
+            "passes": {
+              "type": "array",
+              "description": "pass_id + pass_version + layer for every annotation record aggregated into this packet.",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["pass_id", "pass_version", "layer"],
+                "properties": {
+                  "pass_id": { "type": "string" },
+                  "pass_version": { "type": "string" },
+                  "layer": { "type": "string" }
+                }
+              }
+            },
+            "baselines_ref": { "type": "string" }
+          }
+        },
+        "overview": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["turn_count", "chunk_count", "fidelity_note"],
+          "properties": {
+            "turn_count": { "type": "integer", "minimum": 0 },
+            "chunk_count": { "type": "integer", "minimum": 0 },
+            "fidelity_note": { "type": "string" }
+          }
+        },
+        "tension_summary": {
+          "type": "array",
+          "description": "Aggregated tension/contention findings from the contention + topic-flow layers.",
+          "items": { "type": "string" }
+        },
+        "topic_flow": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["narrative"],
+          "properties": {
+            "narrative": { "type": "string", "description": "From the topic-flow-review pass." },
+            "edges": { "type": "array", "description": "Intra-session topic edges (from topic-flow-review).", "items": { "type": "object" } }
+          }
+        },
+        "case_study_candidates": {
+          "type": "array",
+          "description": "From the topic-flow-review findings (kind case-study-candidate / skill-improvement-candidate), with supporting refs preserved.",
+          "items": { "type": "object" }
+        },
+        "baseline_refs": { "type": "array", "description": "Per-model baseline versions used.", "items": { "type": "string" } },
+        "stats": { "type": "object", "description": "Aggregate density/intensity statistics per layer." },
+        "heatmap": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["matrix", "render"],
+          "properties": {
+            "matrix": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["rows", "columns", "cells", "normalization"],
+              "properties": {
+                "rows": { "type": "array", "items": { "type": "string" }, "description": "Layer names." },
+                "columns": { "type": "array", "items": { "type": "string" }, "description": "Chunk ids (chunk-bucketed x-axis)." },
+                "cells": { "type": "array", "items": { "type": "array", "items": { "type": ["number", "null"] } }, "description": "rows x columns of numeric deviation-from-baseline values; null = no data (e.g. lossy segment)." },
+                "normalization": { "type": "string", "enum": ["baseline-deviation", "raw"], "description": "Deviation-from-baseline (preferred) or raw density." }
+              }
+            },
+            "render": { "type": "string", "description": "Text/HTML block heatmap for humans." }
+          }
+        }
+      }
+    }
+  }
+}

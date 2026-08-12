@@ -1,0 +1,50 @@
+validation_plan:
+  structural:
+    - id: schema-validation
+      validates:
+        - schema-conformance
+        - edge-typing
+      method: json_schema_validation
+    - id: contract-tests
+      validates:
+        - node-id-unique
+        - edge-target-valid
+      method: contract_tests
+  behavioral:
+    - id: property-tests
+      validates:
+        - incremental-add
+        - node-identity
+        - similarity-bound
+      method: property_based_test
+    - id: work-budget
+      validates:
+        - incremental-add
+      method: work_budget_test
+    - id: contract-tests
+      validates:
+        - node-identity
+        - index-size-logged
+        - similarity-bound
+      method: contract_tests
+  operational:
+    - id: capability-checks
+      validates:
+        - capability-manifest-conformance
+        - no-llm-reasoning
+        - embedding-local
+      method: sandbox_policy_check
+    - id: network-allowlist
+      validates:
+        - embedding-local
+      method: network_allowlist_check
+    - id: resource-profiles
+      validates:
+        - memory-budget
+        - latency-budget
+      method: benchmark
+    - id: migration-observer
+      validates:
+        - migration-threshold-observed
+        - index-size-logged
+      method: runtime_instrumentation

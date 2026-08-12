@@ -1,0 +1,32 @@
+capabilities:
+  network:
+    outbound_allowed: true
+    allowed_destinations:
+      - "<bifrost-router>"   # the only permitted destination (model router)
+  filesystem:
+    read_allowed: true
+    write_allowed: false
+    allowed_paths:
+      - /home/tacticaltaco/transcript-archive/**   # READ-ONLY source
+      - <chunk-store>/**                             # READ-ONLY render + chunk map
+      - <annotation-store>/**                        # READ-ONLY consumed layers
+  database:
+    allowed: false
+    max_reads_per_request: 0
+    max_writes_per_request: 0
+  secrets:
+    allowed_environment_variables: []
+    note: Model router keys are handled by the router, not this pass.
+  resources:
+    max_latency_ms: 300000
+    max_memory_mb: 1024
+    max_cpu_ms: null
+    max_concurrency: 1
+  background_work:
+    allowed: false
+  telemetry:
+    required_fields:
+      - correlation_id
+      - protocol_version
+      - tokens_in
+      - tokens_out

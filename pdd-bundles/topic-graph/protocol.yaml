@@ -1,0 +1,46 @@
+protocol:
+  name: topic-graph
+  version: 0.1.0
+  status: draft
+
+purpose: >
+  Cross-session incremental topic relationship graph. Adds a session's topic index
+  to a persistent graph whose nodes are topics (globally identified by a
+  session + topic composite) and whose edges are typed cross-session relationships
+  (similarity, revival, overlap). The add is index-first and O(N) in the existing
+  graph size — a single comparison pass, never a full-corpus recompute. Embeddings
+  are local (no generative LLM reasoning); the graph add is non-LLM. The running
+  index size is logged as an observable so the vector-store migration trigger is a
+  checked threshold, not an estimate.
+
+boundary:
+  in_scope:
+    - Add a session's topic index (from topic-transition-pass) to the graph
+    - Compute cross-session relationship edges against existing topics (index-first, O(N) per add)
+    - Emit typed edges (cross-session similarity, revival, overlap)
+    - Maintain the graph index (nodes, typed edges, per-node embeddings) and its hash
+    - Log the running index size after every add (migration trigger observable)
+  out_of_scope:
+    - Intra-session flow review (topic-flow-review bundle)
+    - Aggregation into the distilled reflection packet (reflection-packet bundle)
+    - The embedding model choice (implementation configuration; local embeddings only)
+    - The vector-store migration decision itself (this bundle only logs the threshold observable)
+
+handshakes:
+  request_schema: schemas/request.schema.json
+  response_schema: schemas/response.schema.json
+
+depends_on:
+  - topic-transition-pass
+  - annotation-store
+provides:
+  topic-graph.add-session: schemas/request.schema.json
+
+invariants:
+  structural: invariants/structural.yaml
+  behavioral: invariants/behavioral.yaml
+  operational: invariants/operational.yaml
+
+capabilities: capability-manifest.yaml
+validators: validators/validation-plan.yaml
+evidence: evidence-requirements.yaml

@@ -1,0 +1,39 @@
+validation_plan:
+  structural:
+    - id: schema-validation
+      validates:
+        - schema-conformance
+        - relation-type-enum
+      method: json_schema_validation
+    - id: contract-tests
+      validates:
+        - record-conformance
+        - finding-reference-valid
+      method: contract_tests
+  behavioral:
+    - id: grounding-check
+      validates:
+        - flow-derived-only
+        - finding-grounded
+      method: finding_grounding_check
+  operational:
+    - id: capability-checks
+      validates:
+        - capability-manifest-conformance
+        - network-router-only
+        - archive-read-only
+      method: sandbox_policy_check
+    - id: network-allowlist
+      validates:
+        - network-router-only
+      method: network_allowlist_check
+    - id: cost-ledger
+      validates:
+        - model-calls-bounded
+        - cost-budget
+      method: cost_ledger_check
+    - id: resource-profiles
+      validates:
+        - memory-budget
+        - latency-budget
+      method: benchmark

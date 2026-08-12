@@ -1,0 +1,42 @@
+operational_invariants:
+  - id: capability-manifest-conformance
+    statement: Runtime authority and resource usage must conform to capability-manifest.yaml.
+    severity: must
+    infra_assumption: sandbox or runtime instrumentation (enforced by sandbox policy check)
+    validation:
+      - sandbox_policy_check
+      - runtime_instrumentation
+
+  - id: no-llm-reasoning
+    statement: The graph add must not perform generative LLM reasoning; only local embedding computation is permitted.
+    severity: must
+    validation:
+      - sandbox_network_denial
+      - runtime_instrumentation
+
+  - id: embedding-local
+    statement: Embeddings must be computed by the local embedding service; outbound network is permitted only to that local service, not to arbitrary destinations.
+    severity: must
+    validation:
+      - network_allowlist_check
+
+  - id: memory-budget
+    statement: Peak memory must stay under 4 GB while holding hundreds of thousands of topic vectors in memory (numpy brute-force range).
+    severity: should
+    infra_assumption: benchmark harness; measured, recorded as observation
+    validation:
+      - memory_profile
+
+  - id: latency-budget
+    statement: p95 per-add latency must remain under 30 s on the reference workstation.
+    severity: should
+    infra_assumption: benchmark harness; measured, recorded as observation
+    validation:
+      - benchmark
+
+  - id: migration-threshold-observed
+    statement: When index_size exceeds 100,000 nodes, the implementation must log a migration trigger observation (vector-store/ANN evaluation), per the growth analysis.
+    severity: should
+    infra_assumption: runtime instrumentation; logged as observation
+    validation:
+      - runtime_instrumentation

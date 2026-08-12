@@ -1,0 +1,26 @@
+behavioral_invariants:
+  - id: incremental-add
+    statement: Adding a session must compare each new topic against the existing index once (O(N) work) and must not recompute or re-derive existing edges or a full-corpus pass.
+    severity: must
+    validation:
+      - property_based_test
+      - work_budget_test
+
+  - id: node-identity
+    statement: Node identity is the (session-key, topic_id) composite; the same session-topic pair must always map to the same node.
+    severity: must
+    validation:
+      - contract_tests
+
+  - id: index-size-logged
+    statement: Every add must record the running index_size in the response and in telemetry, so the vector-store migration threshold is observable.
+    severity: must
+    validation:
+      - runtime_instrumentation
+      - contract_tests
+
+  - id: similarity-bound
+    statement: Edges above edge_threshold are emitted; edges at or below the threshold are not (deterministic given fixed embeddings and threshold).
+    severity: must
+    validation:
+      - contract_tests

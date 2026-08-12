@@ -1,0 +1,24 @@
+structural_invariants:
+  - id: schema-conformance
+    statement: Requests and responses must conform to their referenced JSON Schemas.
+    severity: must
+    validation:
+      - json_schema_validation
+
+  - id: node-id-unique
+    statement: Global node ids (session-key + topic_id) must be unique in the graph; a topic added twice must resolve to the same node, not duplicate it.
+    severity: must
+    validation:
+      - contract_tests
+
+  - id: edge-typing
+    statement: Every edge.type must be one of similar, revival, or overlap.
+    severity: must
+    validation:
+      - json_schema_validation
+
+  - id: edge-target-valid
+    statement: Every edge must reference node ids that exist in the graph after the add.
+    severity: must
+    validation:
+      - contract_tests

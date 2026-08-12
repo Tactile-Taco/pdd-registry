@@ -1,0 +1,36 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "TopicGraphAddSessionResponse",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["graph_version", "added_nodes", "added_edges", "edges", "index_size", "index_sha256"],
+  "properties": {
+    "graph_version": { "type": "integer", "minimum": 1 },
+    "added_nodes": { "type": "integer", "minimum": 0 },
+    "added_edges": { "type": "integer", "minimum": 0 },
+    "edges": {
+      "type": "array",
+      "description": "New edges created by this add.",
+      "items": { "$ref": "#/definitions/edge" }
+    },
+    "index_size": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Running node count after this add — the migration-trigger observable (see threshold invariant)."
+    },
+    "index_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+  },
+  "definitions": {
+    "edge": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["from_node_id", "to_node_id", "type", "similarity"],
+      "properties": {
+        "from_node_id": { "type": "string", "pattern": "^[a-z0-9-]+::t[0-9]+$", "description": "Global node id: <session-key>::<topic_id>." },
+        "to_node_id": { "type": "string", "pattern": "^[a-z0-9-]+::t[0-9]+$" },
+        "type": { "type": "string", "enum": ["similar", "revival", "overlap"] },
+        "similarity": { "type": "number", "minimum": 0, "maximum": 1 }
+      }
+    }
+  }
+}

@@ -1,0 +1,40 @@
+validation_plan:
+  structural:
+    - id: schema-validation
+      validates:
+        - schema-conformance
+        - heatmap-matrix-shape
+        - fidelity-flagged
+      method: json_schema_validation
+    - id: contract-tests
+      validates:
+        - packet-provenance-complete
+        - derived-only
+        - no-raw-transcript
+        - fidelity-flagged
+      method: contract_tests
+  behavioral:
+    - id: replay-tests
+      validates:
+        - deterministic-build
+      method: replay_test
+    - id: length-bounds
+      validates:
+        - no-raw-transcript
+      method: length_bound_check
+  operational:
+    - id: capability-checks
+      validates:
+        - capability-manifest-conformance
+        - no-network
+        - no-model-calls
+      method: sandbox_policy_check
+    - id: fs-trace
+      validates:
+        - packet-output-only
+      method: filesystem_trace
+    - id: resource-profiles
+      validates:
+        - memory-budget
+        - latency-budget
+      method: benchmark

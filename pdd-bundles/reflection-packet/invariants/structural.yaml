@@ -1,0 +1,18 @@
+structural_invariants:
+  - id: schema-conformance
+    statement: Requests and responses must conform to their referenced JSON Schemas.
+    severity: must
+    validation:
+      - json_schema_validation
+
+  - id: packet-provenance-complete
+    statement: Every packet section that draws on an annotation layer must reference the pass_id + pass_version that produced it, and baseline_refs must list the baseline versions used.
+    severity: must
+    validation:
+      - contract_tests
+
+  - id: heatmap-matrix-shape
+    statement: The heatmap matrix must have rows = layers, columns = chunk ids, numeric (or null) cells, and a declared normalization.
+    severity: must
+    validation:
+      - json_schema_validation

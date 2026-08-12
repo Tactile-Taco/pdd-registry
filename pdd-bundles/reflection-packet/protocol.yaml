@@ -1,0 +1,50 @@
+protocol:
+  name: reflection-packet
+  version: 0.1.0
+  status: draft
+
+purpose: >
+  Aggregate a session's annotation layers and statistics into the distilled
+  meta-analysis packet consumed by the reflection / retrospective / case-study /
+  skill-review system (the memory plane). The packet is derived-only: it introduces
+  no facts beyond what the annotation layers and per-model baselines contain, and it
+  never carries bulk raw transcript text (anti-pollution boundary). It includes the
+  heatmap matrix (chunk-bucketed x layers, deviation-from-baseline normalized,
+  fidelity-flagged) and a text/HTML render. Assembly is fully mechanical and
+  LLM-free by invariant; narrative content comes from the topic-flow-review pass.
+
+boundary:
+  in_scope:
+    - Aggregate a session's annotation layers (uncertainty, uncertainty-density, contention, topic, transition, topic-flow), fidelity class, and per-model baselines
+    - Build the heatmap matrix (chunk-bucketed rows x layers, deviation-from-baseline normalized, fidelity-flagged) and its text/HTML render
+    - Produce the distilled packet: overview, tension summary, topic flow narrative, case-study candidates, per-model baseline references, fidelity, provenance
+    - Guarantee derived-only content with complete provenance (every field traces to a pass output)
+    - Write the packet as a derived artifact (never to the archive)
+  out_of_scope:
+    - Generating new annotations (passes do that)
+    - Including raw transcript text beyond short supporting quotes (anti-pollution invariant)
+    - Cross-session relationship computation (topic-graph bundle)
+    - The consuming reflection/retrospective/case-study/skill-review agents themselves (the packet is the interface)
+
+handshakes:
+  request_schema: schemas/request.schema.json
+  response_schema: schemas/response.schema.json
+
+depends_on:
+  - transcript-chunking
+  - annotation-store
+  - uncertainty-pass
+  - topic-transition-pass
+  - topic-flow-review
+  - topic-graph
+provides:
+  reflection-packet.build: schemas/request.schema.json
+
+invariants:
+  structural: invariants/structural.yaml
+  behavioral: invariants/behavioral.yaml
+  operational: invariants/operational.yaml
+
+capabilities: capability-manifest.yaml
+validators: validators/validation-plan.yaml
+evidence: evidence-requirements.yaml

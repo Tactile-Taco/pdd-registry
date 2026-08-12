@@ -1,0 +1,24 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "TopicFlowReviewRequest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["source", "filename", "render_id"],
+  "properties": {
+    "source": { "type": "string", "enum": ["reasonix", "omp", "claude", "codex", "kimi", "hermes"] },
+    "filename": { "type": "string", "minLength": 1 },
+    "render_id": { "type": "string", "minLength": 1 },
+    "input_layers": {
+      "type": "array",
+      "items": { "type": "string", "enum": ["topic", "transition", "contention"] },
+      "default": ["topic", "transition"],
+      "description": "Annotation layers to consume as input. topic + transition are required for a flow review; contention may be added for tension identification."
+    },
+    "report_depth": {
+      "type": "string",
+      "enum": ["brief", "full"],
+      "default": "full",
+      "description": "brief returns findings only; full includes the narrative report."
+    }
+  }
+}

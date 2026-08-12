@@ -1,0 +1,13 @@
+behavioral_invariants:
+  - id: flow-derived-only
+    statement: The report, edges, and findings must be derived only from the session's consumed annotation layers — the review introduces no new ungrounded facts.
+    severity: must
+    validation:
+      - contract_tests
+      - finding_grounding_check
+
+  - id: finding-grounded
+    statement: Every tension / skill-improvement / case-study finding must cite at least one supporting annotation record.
+    severity: must
+    validation:
+      - finding_grounding_check

@@ -1,0 +1,71 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "TopicFlowReviewResponse",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["pass_id", "pass_version", "flow", "findings", "records", "tokens_in", "tokens_out", "records_sha256"],
+  "properties": {
+    "pass_id": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+    "pass_version": { "type": "string", "minLength": 1 },
+    "flow": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["narrative", "intra_session_edges"],
+      "properties": {
+        "narrative": { "type": "string", "description": "How the session moved through its topics, and how they relate (empty when report_depth=brief)." },
+        "intra_session_edges": {
+          "type": "array",
+          "description": "Intra-session topic relationship edges (revival, overlap, nested) derived from the transition layer.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["from_topic_id", "to_topic_id", "relation"],
+            "properties": {
+              "from_topic_id": { "type": "string", "pattern": "^t[0-9]+$" },
+              "to_topic_id": { "type": "string", "pattern": "^t[0-9]+$" },
+              "relation": { "type": "string", "enum": ["revival", "overlap", "nested", "sequential"] }
+            }
+          }
+        }
+      }
+    },
+    "findings": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/finding" }
+    },
+    "records": {
+      "type": "array",
+      "description": "Annotation records in the annotation-store append envelope (layer topic-flow), ready for the runner to append.",
+      "items": { "type": "object" }
+    },
+    "tokens_in": { "type": "integer", "minimum": 0 },
+    "tokens_out": { "type": "integer", "minimum": 0 },
+    "records_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+  },
+  "definitions": {
+    "finding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["finding_id", "kind", "title", "rationale", "supporting_refs"],
+      "properties": {
+        "finding_id": { "type": "string", "pattern": "^[a-z0-9-]{8,64}$" },
+        "kind": { "type": "string", "enum": ["tension", "skill-improvement-candidate", "case-study-candidate", "observation"] },
+        "title": { "type": "string", "minLength": 1 },
+        "rationale": { "type": "string", "description": "Why this finding; derived only from the consumed annotation layers." },
+        "supporting_refs": {
+          "type": "array",
+          "description": "At least one supporting annotation ref (topic/transition/contention record target), so findings are grounded.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["layer", "annotation_id"],
+            "properties": {
+              "layer": { "type": "string" },
+              "annotation_id": { "type": "string" }
+            }
+          }
+        }
+      }
+    }
+  }
+}

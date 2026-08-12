@@ -1,0 +1,35 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "TopicGraphAddSessionRequest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["source", "filename", "topics"],
+  "properties": {
+    "source": { "type": "string", "enum": ["reasonix", "omp", "claude", "codex", "kimi", "hermes"] },
+    "filename": { "type": "string", "minLength": 1 },
+    "topics": {
+      "type": "array",
+      "description": "The session's topic index to add (labels + intensity), as produced by topic-transition-pass.",
+      "items": { "$ref": "#/definitions/topic_in" }
+    },
+    "edge_threshold": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1,
+      "default": 0.7,
+      "description": "Similarity threshold above which a cross-session edge is emitted."
+    }
+  },
+  "definitions": {
+    "topic_in": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["topic_id", "label"],
+      "properties": {
+        "topic_id": { "type": "string", "pattern": "^t[0-9]+$", "description": "Session-scoped topic id (t0, t1, ...)." },
+        "label": { "type": "string", "minLength": 1 },
+        "intensity": { "type": "number", "minimum": 0 }
+      }
+    }
+  }
+}
