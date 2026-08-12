@@ -152,13 +152,16 @@ class ArtifactStore:
 
     # -- proposals + peer review --------------------------------------------
     def add_proposal(self, proposal: dict, artifact_id: str) -> None:
+        # The model's output is agent-controlled: never trust a supplied
+        # status; the fleet sets status explicitly after review. Re-recording
+        # the same id intentionally wipes prior votes (re-review semantics).
         self._db.execute(
             "INSERT OR REPLACE INTO proposals "
             "(id, artifact_id, kind, skill_name, judgement, reasoning, status, created_at) "
             "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
             (proposal["proposal_id"], artifact_id, proposal["kind"],
              proposal.get("skill_name"), proposal.get("judgement"),
-             proposal["reasoning"], proposal.get("status", "proposed"),
+             proposal["reasoning"], "proposed",
              proposal.get("created_at", time.time())))
         self._db.commit()
 

@@ -19,7 +19,7 @@ import subprocess
 _FRONTMATTER = "---\nname: {name}\ndescription: {description}\n---\n\n"
 
 # A credential embedded in a remote URL must never surface in errors/stats.
-_URL_CRED_RE = re.compile(r"(https?://)[^/@\s]+@", re.IGNORECASE)
+_URL_CRED_RE = re.compile(r"((?:https?|ssh|git)://)[^/@\s]+@", re.IGNORECASE)
 
 
 def _redact(text: str) -> str:

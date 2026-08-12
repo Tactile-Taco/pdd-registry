@@ -40,9 +40,9 @@ memory-plane/
   the repo is treated as a trust boundary — do not point the skills repo at
   anything that consumes its contents as untrusted instructions.
 - Model-controlled ids (`artifact_id`, `proposal_id`, `skill_name`) are
-  strict-regex validated (`[A-Za-z0-9._-]+`, no `.`/`..`) before any store
-  write, git commit, or file path is derived from them; `SkillRepo` adds a
-  realpath containment check as defense in depth.
+  strict-regex validated (`[A-Za-z0-9._-]+`; skill names additionally reject
+  `.`/`..`) before any store write, git commit, or file path is derived from
+  them; `SkillRepo` adds a realpath containment check as defense in depth.
 - Credentials (Bifrost key, Letta token) come only from env/Infisical and
   travel only in HTTPS headers; git errors are redacted before surfacing in
   stats/logs.

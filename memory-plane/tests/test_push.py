@@ -7,7 +7,18 @@ import subprocess
 
 from conftest import good_proposal
 
-from memory_plane.push import SkillRepo
+from memory_plane.push import SkillRepo, _redact
+
+
+def test_redact_credentials_in_git_errors():
+    for url in ("https://user:secret@github.com/r.git",
+                "ssh://git@host:22/r.git",
+                "http://token@example.com/x",
+                "git://u:p@host/r"):
+        assert "secret" not in _redact(f"remote: {url} refused")
+        assert "token" not in _redact(f"remote: {url} refused")
+        assert "p@" not in _redact(f"remote: {url} refused")
+    assert _redact("plain error without url") == "plain error without url"
 
 
 def _remote_head(skills_repo) -> str | None:
