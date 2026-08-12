@@ -28,7 +28,33 @@ authored after boundary review. Nothing here is sealed.
 | 2 | Topic + transition annotation | LLM (free-failover chain → deepseek backup) | per model-selection rule |
 | 3 | Topic flow review | LLM review of overlapping topics | per model-selection rule |
 | 4 | Cross-session topic graph | incremental, index-first, O(N) per session | embeddings local |
-| 5 | Reflection packet | mechanical aggregation; anti-pollution interface | none (invariant) |
+| 5 | Reflection packet | mechanical aggregation incl. heatmap matrix + render; anti-pollution interface | none (invariant) |
+
+## Heatmap construction (non-LLM-first)
+
+A heatmap is a rendered matrix: **chunk-bucketed x-axis × ~6 annotation layers (rows)**,
+colored by **deviation from per-model baseline** (σ or percentile units, not raw
+counts) so spikes pop where a session departs from that model's norm. Fidelity class
+shades lossy segments so they are never compared as equal. Bucketing is by chunk /
+content-width, not turn index, so column width tracks actual content.
+
+The matrix is fully mechanical (table → grid). Cell sources are **non-LLM by
+default**; LLM is used only for semantic labeling, optionally layered on:
+
+| Row | Non-LLM cell source | LLM option |
+|---|---|---|
+| Uncertainty density | regex + ready-made lexicons (Kyoto, BioScope, MPQA, Loughran-McDonald); positional grammar | — (LLM-free by invariant) |
+| Contention / tension | argument-mining / stance classifiers; user pushback + revert counters | LLM stance, tension explanation |
+| Topic intensity | LDA / dynamic topic models, TextTiling lexical cohesion, lexical chains | TopicGPT labeling |
+| Topic drift / flow | BOCPD changepoint; embedding cosine between chunks (local embeddings only) | LLM transition labeling |
+| Salience | TextRank / LexRank graph centrality | — |
+| Revision / volume | mechanical counts (revision rate, token volume, reasoning length) | — |
+
+Rendering is dependency-free: a numeric matrix (consumable by the reflection LLM as a
+small table) plus a Unicode block or HTML-table view for humans. An image renderer
+(matplotlib etc.) is an optional later upgrade. Because the view is derived, a
+statistical-intensity heatmap is always available from non-LLM cells; LLM labels
+augment it where a topic-pass has run.
 
 ## Bundle DAG (authoring order = topological order)
 
@@ -75,10 +101,22 @@ is cross-session; topic-graph depends on topic annotations only, so both can bui
 4. **Cheap-first discipline.** Passes 0, 1, 5 are LLM-free by invariant (zero-cost);
    only topic/transition and flow review call models, under the free-failover rule
    with the paid backup as last resort.
-5. **Per-model baselines are calibration, not annotation.** The uncertainty pass
+5. **Cost budget.** LLM spend is best-effort cheap (free tiers first, paid
+   failover last). Hard user-set cap: **average spend ≤ $1/day** (excluding free
+   tiers). Cost is a `should` operational invariant, enforced in harness mode via a
+   per-pass cost ledger (tokens logged in telemetry/evidence), not an admission
+   gate. A single oversized session (e.g. a 22 MB file) must not blow the day's
+   budget — chunking and pass batching must bound worst-case paid spend.
+6. **Per-model baselines are calibration, not annotation.** The uncertainty pass
    emits raw densities; baselines (per model, per version, per session type) live in
    the meta layer, and deviation-from-baseline is what gets annotated.
-6. **Fidelity tagging.** Every transcript is tagged `full`/`lossy` at chunking;
+7. **Heatmaps are derived views, not annotations.** A heatmap is a matrix
+   rendering of span-level annotations already in the store — it adds no new ground
+   truth and is regenerable from the sidecar. It belongs to the reflection packet,
+   not the store. Construction is fully mechanical (table → grid); the ONLY
+   LLM-dependent piece is semantic labeling, which is optional and layered on where
+   a topic-pass has run.
+8. **Fidelity tagging.** Every transcript is tagged `full`/`lossy` at chunking;
    density statistics must never mix fidelity classes without the tag (the
    LCB-vs-SWE artifact trap).
 
