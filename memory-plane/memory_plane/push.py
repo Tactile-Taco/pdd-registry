@@ -18,6 +18,13 @@ import subprocess
 
 _FRONTMATTER = "---\nname: {name}\ndescription: {description}\n---\n\n"
 
+# A credential embedded in a remote URL must never surface in errors/stats.
+_URL_CRED_RE = re.compile(r"(https?://)[^/@\s]+@", re.IGNORECASE)
+
+
+def _redact(text: str) -> str:
+    return _URL_CRED_RE.sub(r"\1***@", text)
+
 
 def _provenance_block(motivated_by: list[dict]) -> str:
     lines = ["## Provenance", ""]
@@ -38,7 +45,7 @@ class SkillRepo:
             ["git", "-C", self.repo_dir, *args],
             capture_output=True, text=True, timeout=60)
         if out.returncode != 0:
-            raise RuntimeError(f"git {' '.join(args)} failed: {out.stderr[:400]}")
+            raise RuntimeError(f"git {' '.join(args)} failed: {_redact(out.stderr[:400])}")
         return out.stdout
 
     def skill_path(self, skill_name: str) -> str:

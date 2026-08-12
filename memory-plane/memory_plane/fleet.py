@@ -15,7 +15,7 @@ import re
 import time
 
 from .agent_defs import AGENT_DEFS, agent_def, render_task
-from .proposals import extract_proposals, validate_proposal
+from .proposals import ARTIFACT_ID_RE, extract_proposals, validate_proposal
 from .push import SkillRepo
 from .review import run_review
 from .store import ArtifactStore
@@ -66,6 +66,9 @@ def shape_errors(artifact: dict, agent: dict) -> list[str]:
             errs.append(f"missing required field: {key}")
     if "type" in schema and artifact.get("type") != schema["type"]:
         errs.append(f"type must be {schema['type']!r}, got {artifact.get('type')!r}")
+    aid = artifact.get("artifact_id")
+    if aid and not ARTIFACT_ID_RE.match(aid):
+        errs.append(f"invalid artifact_id {aid!r}: only [A-Za-z0-9._-] allowed")
     return errs
 
 
@@ -257,7 +260,11 @@ class FleetRunner:
 
     # -- main loop ----------------------------------------------------------------
     def run_once(self) -> dict:
-        fired = self.evaluator.evaluate()
+        try:
+            fired = self.evaluator.evaluate()
+        except Exception as e:  # noqa: BLE001 — corrupt state must not kill the loop
+            return {"triggers": {}, "agents_run": {}, "proposals": [],
+                    "errors": [f"trigger evaluation failed: {str(e)[:300]}"]}
         stats: dict = {"triggers": fired, "agents_run": {}, "proposals": [],
                        "errors": []}
         for agent_name, reasons in fired.items():

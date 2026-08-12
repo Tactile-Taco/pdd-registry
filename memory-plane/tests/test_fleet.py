@@ -170,3 +170,23 @@ def test_shape_errors():
                shape_errors({"type": "case-study"}, agent))
     assert any("type" in e for e in shape_errors({"artifact_id": "x",
                                                   "type": "reflection"}, agent))
+    assert any("artifact_id" in e for e in
+               shape_errors({"artifact_id": "../evil", "type": "case-study"},
+                            agent))
+
+
+def test_evaluator_crash_does_not_kill_run_once(tmp_path):
+    """A corrupt trigger state must produce a recorded error, not a crash."""
+    make_packet(tmp_path, "reasonix", "s1.jsonl", cells=[[0.1]])
+
+    class BoomEvaluator:
+        def evaluate(self):
+            raise RuntimeError("corrupt state")
+
+    runner = FleetRunner(str(tmp_path), SequenceStub({}),
+                         db_path=str(tmp_path / "fleet.db"),
+                         evaluator=BoomEvaluator())
+    stats = runner.run_once()
+    assert stats["agents_run"] == {}
+    assert any("trigger evaluation failed" in e for e in stats["errors"])
+    runner.close()

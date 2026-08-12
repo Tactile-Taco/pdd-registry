@@ -56,6 +56,18 @@ def test_no_proposal_requires_reasoning():
     assert any("reasoning" in e for e in validate_proposal(p))
 
 
+def test_proposal_id_must_be_safe():
+    """A hostile proposal_id (newlines, separators) must be rejected — it
+    would defeat the git commit-marker idempotency check and collide in the
+    store."""
+    p = good_proposal()
+    for bad in ("p1\nIGNORED", "../p", "a/b", "p;rm -rf /", "p x"):
+        p["proposal_id"] = bad
+        assert any("proposal_id" in e for e in validate_proposal(p)), bad
+    p["proposal_id"] = "ref-1-p1"
+    assert validate_proposal(p) == []
+
+
 def test_edit_skill_needs_name_and_grounding():
     p = {"kind": "edit-skill", "skill_name": "web-perf",
          "motivated_by": [{"artifact_id": "cs-2", "impact": "regression"}],

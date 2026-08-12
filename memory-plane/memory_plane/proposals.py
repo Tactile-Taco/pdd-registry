@@ -20,6 +20,11 @@ _FRONTMATTER_RE = re.compile(r"^---\s*\n(?:[^\n]*\n)*?---\s*\n", re.MULTILINE)
 # output is agent-controlled).
 SKILL_NAME_RE = re.compile(r"^[A-Za-z0-9._-]+$")
 
+# Ids become sqlite primary keys and appear in git commit messages; keep them
+# strict so a hostile id cannot collide/replace rows or inject newlines that
+# defeat the commit-marker idempotency check.
+ARTIFACT_ID_RE = re.compile(r"^[A-Za-z0-9._-]+$")
+
 
 def validate_proposal(p: dict) -> list[str]:
     """Return a list of violations (empty = valid)."""
@@ -28,6 +33,10 @@ def validate_proposal(p: dict) -> list[str]:
     kind = p.get("kind")
     if kind not in KINDS:
         errs.append(f"kind must be one of {sorted(KINDS)}, got {kind!r}")
+
+    pid = p.get("proposal_id")
+    if pid and not ARTIFACT_ID_RE.match(pid):
+        errs.append(f"invalid proposal_id {pid!r}: only [A-Za-z0-9._-] allowed")
 
     reasoning = p.get("reasoning")
     if not reasoning or not reasoning.strip():

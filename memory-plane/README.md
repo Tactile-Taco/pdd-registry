@@ -31,6 +31,24 @@ memory-plane/
   tests/            — 47 tests; all model calls stubbed, no network
 ```
 
+## Security notes
+
+- **Trust boundary**: the canonical skills repo is the fleet's own workspace.
+  Unanimous fleet approval auto-pushes a proposal there without a human gate
+  (design decision). Peer reviewers are instructed to reject ungrounded or
+  over-fitting proposals, but packet text ultimately flows into prompts and
+  the repo is treated as a trust boundary — do not point the skills repo at
+  anything that consumes its contents as untrusted instructions.
+- Model-controlled ids (`artifact_id`, `proposal_id`, `skill_name`) are
+  strict-regex validated (`[A-Za-z0-9._-]+`, no `.`/`..`) before any store
+  write, git commit, or file path is derived from them; `SkillRepo` adds a
+  realpath containment check as defense in depth.
+- Credentials (Bifrost key, Letta token) come only from env/Infisical and
+  travel only in HTTPS headers; git errors are redacted before surfacing in
+  stats/logs.
+- `bootstrap.py` validates every agent id/name (`^[a-z0-9-]+$`) before
+  interpolating into the remote ssh command; file contents travel base64.
+
 ## PDD boundary (read this first)
 
 The fleet is a **client system outside the PDD Validator Loop**. Agents are
