@@ -55,7 +55,7 @@ class ModelRouter:
         api_key: Optional[str] = None,
         fallbacks: Optional[list[str]] = None,
         ledger: Optional[Any] = None,
-        timeout: float = 60.0,
+        timeout: float = 180.0,
     ) -> None:
         self.model = model or DEFAULT_MODEL
         self.base_url = (base_url or os.environ.get("BIFROST_URL", DEFAULT_BASE_URL)).rstrip("/")
@@ -114,9 +114,12 @@ class ModelRouter:
             method="POST",
         )
         # Pace calls so free-tier rate limits (429) are not tripped by bursts;
-        # on 429, back off and retry the SAME model before failing over.
+        # on 429, back off briefly and retry the SAME model before failing over.
+        # Cap backoff low: when the free tier is DOWN (persistent 429), we want
+        # fast failover to the paid backup, not a long futile wait.
         _pacing = float(os.environ.get("MODEL_PACING_SECONDS", "0.3"))
-        _retries = int(os.environ.get("MODEL_RETRY_429", "5"))
+        _retries = int(os.environ.get("MODEL_RETRY_429", "3"))
+        _max_backoff = float(os.environ.get("MODEL_BACKOFF_MAX", "8"))
         if _pacing > 0:
             time.sleep(_pacing)
         attempt = 0
@@ -128,7 +131,7 @@ class ModelRouter:
             except urllib.error.HTTPError as e:  # noqa: S110
                 if e.code == 429 and attempt < _retries:
                     attempt += 1
-                    time.sleep(min(2 ** attempt, 30))  # 2,4,8,16,30…
+                    time.sleep(min(2 ** attempt, _max_backoff))  # 2,4,8 (capped)
                     continue
                 raise
         choice = data["choices"][0]
