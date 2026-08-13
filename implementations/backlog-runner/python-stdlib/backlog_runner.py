@@ -29,6 +29,7 @@ from common import list_transcripts  # noqa: E402
 from journal import CheckpointJournal  # noqa: E402
 from ledger import CostLedger  # noqa: E402
 from router import ModelRouter, StubRouter  # noqa: E402
+from baselines import BaselineStore, detect_model  # noqa: E402
 
 import transcript_chunking as tc  # noqa: E402
 import uncertainty_pass as uc  # noqa: E402
@@ -145,9 +146,17 @@ class GraphIO:
 # --------------------------------------------------------------------------
 
 def process_file(source: str, filename: str, archive_base: str, store_dir: str,
-                 router, graph: GraphIO, target_chars: int = 80000) -> None:
+                 router, graph: GraphIO, target_chars: int = 80000,
+                 baseline_store: BaselineStore | None = None) -> None:
     with open(os.path.join(archive_base, source, filename), "r", encoding="utf-8") as f:
         lines = f.read().splitlines()
+
+    # per-model baseline for deviation-based normalization (leave-one-out: read
+    # the baseline BEFORE adding this transcript's samples)
+    model = detect_model(source, filename, lines) if baseline_store is not None else None
+    baseline_stats = None
+    if baseline_store is not None:
+        baseline_stats = baseline_store.stats(model, "uncertainty_density")
 
     io = StoreIO(store_dir)
     turns = tc.render_turns(source, lines)
@@ -160,6 +169,10 @@ def process_file(source: str, filename: str, archive_base: str, store_dir: str,
     # uncertainty (LLM-free)
     uc_resp = uc.run(source, filename, chunk_map, turns)
     io.append_records(source, filename, uc.PASS_ID, uc.PASS_VERSION, uc_resp["records"])
+    if baseline_store is not None and model is not None:
+        for chunk in uc_resp["density"]:
+            baseline_store.add_sample(model, "uncertainty_density",
+                                      chunk["density_per_1k"])
 
     # topic + transitions (LLM)
     tt_resp = tt.run(source, filename, chunk_map, turns, router=router)
@@ -185,7 +198,9 @@ def process_file(source: str, filename: str, archive_base: str, store_dir: str,
     records_by_layer = {layer: core.query(source, filename, layer=layer)["records"]
                         for layer in ("uncertainty", "contention", "topic",
                                       "transition", "topic-flow")}
-    packet = pkt.build(source, filename, rid, chunk_map, turns, records_by_layer)
+    packet = pkt.build(source, filename, rid, chunk_map, turns, records_by_layer,
+                       baselines_ref=f"baselines:{model}" if model else None,
+                       baseline_stats=baseline_stats)
     packets_dir = os.path.join(store_dir, "packets")
     os.makedirs(packets_dir, exist_ok=True)
     _atomic_write(os.path.join(packets_dir, f"{source}-{filename}.packet.json"),
@@ -197,6 +212,7 @@ def run_once(sources: list[str], archive_base: str, store_dir: str,
              router, max_attempts: int = 3, limit: int | None = None,
              required_versions: dict | None = None) -> dict:
     graph = GraphIO(store_dir)
+    baseline_store = BaselineStore(os.path.join(store_dir, "baselines.json"))
     required = required_versions if required_versions is not None else required_pass_versions()
 
     stats = {"processed": 0, "skipped": 0, "failed": 0, "exhausted": 0}
@@ -212,7 +228,8 @@ def run_once(sources: list[str], archive_base: str, store_dir: str,
                 stats["exhausted"] += 1
                 continue
             try:
-                process_file(source, filename, archive_base, store_dir, router, graph)
+                process_file(source, filename, archive_base, store_dir, router, graph,
+                             baseline_store=baseline_store)
                 journal.mark_done(source, filename, required)
                 stats["processed"] += 1
             except Exception as e:  # noqa: BLE001 — journal the failure, keep going
