@@ -101,3 +101,16 @@ ssh_guest "sudo k3s kubectl rollout restart deployment/${PROJECT} && \
   sudo k3s kubectl rollout status deployment/${PROJECT} --timeout=120s"
 
 echo "==> Live at https://${PROJECT}.${STAGING_TAILSCALE_DNS}"
+
+# Legacy cleanup (2026-08-13 rename): remove the pre-rename pdd-repository
+# Deployment/Service/Ingress once the new objects are live. Idempotent
+# (--ignore-not-found) and best-effort (a cleanup failure must not fail a
+# healthy deploy). Guarded: never run when THIS deploy targets the legacy
+# name, or a rollback push (PROJECT=pdd-repository) would delete itself.
+if [ "${PROJECT}" != "pdd-repository" ]; then
+  LEGACY="pdd-repository"
+  echo "==> Removing legacy ${LEGACY} objects (renamed to ${PROJECT})"
+  ssh_guest "sudo k3s kubectl delete deploy/${LEGACY} svc/${LEGACY} ingress/${LEGACY} \
+    --ignore-not-found --timeout=60s" \
+    || echo "!! legacy cleanup failed (non-fatal): old ${LEGACY} objects may remain" >&2
+fi

@@ -39,7 +39,16 @@ jobs:
           STAGING_TAILSCALE_DNS: ${{ secrets.STAGING_TAILSCALE_DNS }}
         run: |
           # Tailnet DNS does not resolve on the runner shell: pin the address.
-          curl -sfk --resolve "pdd-registry.$STAGING_TAILSCALE_DNS:443:$STAGING_TAILSCALE_IP" \
-            "https://pdd-registry.$STAGING_TAILSCALE_DNS/healthz"
-          curl -sfk --resolve "pdd-registry.$STAGING_TAILSCALE_DNS:443:$STAGING_TAILSCALE_IP" \
-            "https://pdd-registry.$STAGING_TAILSCALE_DNS/evidence/verify" | grep -q '"ok": true'
+          # --noproxy '*': a runner-level proxy (WARP egress workarounds exist
+          # on M6) would hijack the tailnet-only request. Diagnostic output:
+          # HTTP code + connected IP per probe; body dumped on failure.
+          for path in healthz evidence/verify; do
+            fn="/tmp/pdd-verify-${path//\//_}.body"
+            out="$(curl -sk --noproxy '*' --max-time 20 -o "$fn" \
+              -w '%{http_code} %{remote_ip}' \
+              --resolve "pdd-registry.$STAGING_TAILSCALE_DNS:443:$STAGING_TAILSCALE_IP" \
+              "https://pdd-registry.$STAGING_TAILSCALE_DNS/${path}")"
+            echo "${path}: ${out}"
+            [ "${out%% *}" = "200" ] || { echo "--- body ---"; cat "$fn"; exit 22; }
+          done
+          grep -q '"ok": true' /tmp/pdd-verify-evidence_verify.body
