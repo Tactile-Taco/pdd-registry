@@ -96,6 +96,39 @@ def test_deterministic_render_identical_across_runs():
     assert ra == rb and ca == cb
 
 
+def test_reasonix_dedup_repeated_append_blocks():
+    # reasonix is an append-only archive: later events re-emit the cumulative
+    # message list, so the same turns appear multiple times. They must collapse
+    # to a single copy (no double-counting for downstream passes).
+    entries = [
+        [{"role": "system", "content": "sys"},
+         {"role": "user", "content": "install the skill"},
+         {"role": "assistant", "content": "let me check the script"}],
+        # append: re-emits the same list + one new turn
+        [{"role": "system", "content": "sys"},
+         {"role": "user", "content": "install the skill"},
+         {"role": "assistant", "content": "let me check the script"},
+         {"role": "assistant", "content": "it failed on a read-only mount"}],
+    ]
+    turns = render_turns("reasonix", _lines("reasonix", entries))
+    contents = [t["content"] for t in turns]
+    assert len(turns) == 4, contents          # sys, user, 'let me check', 'it failed'
+    assert contents.count("let me check the script") == 1
+    assert contents.count("install the skill") == 1
+    assert "it failed on a read-only mount" in contents
+
+
+def test_reasonix_distinct_repeated_messages_kept():
+    # genuine repeats of DIFFERENT content are not collapsed (dedup is exact)
+    entries = [
+        [{"role": "user", "content": "retry it"}],
+        [{"role": "user", "content": "retry it"}, {"role": "assistant", "content": "done"}],
+    ]
+    turns = render_turns("reasonix", _lines("reasonix", entries))
+    # 'retry it' appears in both cumulative lists -> collapses; 'done' added
+    assert [t["content"] for t in turns] == ["retry it", "done"]
+
+
 def test_turn_integrity_no_turn_split():
     turns = [{"event_id": f"t{i}", "role": "assistant", "content": "x" * 6000}
              for i in range(5)]

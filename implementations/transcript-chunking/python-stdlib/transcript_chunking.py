@@ -16,7 +16,7 @@ from typing import Dict, List, Optional, Tuple
 ERROR_KINDS = ("invalid_request", "conflict", "not_found", "internal")
 
 PASS_ID = "transcript-chunking"
-PASS_VERSION = "0.1.0-draft"
+PASS_VERSION = "0.2.0"
 
 FIDELITY: Dict[str, str] = {
     "reasonix": "full", "omp": "full", "claude": "lossy", "codex": "lossy",
@@ -187,7 +187,28 @@ def render_turns(source: str, lines: List[str], harness: Optional[str] = None) -
                           "reasoning": _normalize_content(ev.get("reasoning_content")),
                           "model": str(ev.get("model") or ""),
                           "compacted": bool(ev.get("compacted"))})
+
+    # reasonix archives are append-only full-fidelity logs: each event may
+    # re-emit the cumulative message list, so the same turn can appear multiple
+    # times. Collapse exact duplicates (same role + same normalized content),
+    # keeping the FIRST occurrence in order, so downstream passes (uncertainty
+    # density, topic/transition) don't double-count one turn.
+    if source == "reasonix":
+        turns = _dedup_duplicate_turns(turns)
     return turns
+
+
+def _dedup_duplicate_turns(turns: List[dict]) -> List[dict]:
+    """Collapse exact duplicates by (role, content), keeping first occurrence."""
+    seen = set()
+    out: List[dict] = []
+    for t in turns:
+        key = (t.get("role"), t.get("content"))
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(t)
+    return out
 
 
 # --------------------------------------------------------------------------

@@ -1,6 +1,6 @@
 {
   "artifact_id": "uncertainty-pass-python-stdlib",
-  "protocol": {"name": "uncertainty-pass", "version": "0.1.0", "status": "draft"},
+  "protocol": {"name": "uncertainty-pass", "version": "0.2.0", "status": "draft"},
   "language": "python",
   "runtime": "python-3.14",
   "files": [
@@ -16,8 +16,8 @@
   "mutation_sanity": {
     "invariant": "deterministic-output",
     "pytest_filter": "density_math",
-    "find": "            if i + ml <= n and low[i:i + ml] == m:",
-    "replace": "            if m in low:  # MUTANT: substring match anywhere\n"
+    "find": "            if i + ml <= n and low[i:i + ml] == m and boundaries(m, i):",
+    "replace": "            if i + ml <= n and low[i:i + ml] == m and False:  # MUTANT: drop boundary check\n"
   },
   "invariant_lineage": {
     "deterministic-output": ["test_deterministic_output_identical_runs"],

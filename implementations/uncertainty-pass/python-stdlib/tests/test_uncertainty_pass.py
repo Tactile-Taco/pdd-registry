@@ -65,6 +65,34 @@ def test_density_math_known_text():
     assert all(0 <= p < len(text) for _m, p in scan(text))
 
 
+def test_word_boundary_no_substring_false_positives():
+    # 'plan' must not match inside 'executing-plans' / 'plans'; 'but' not in 'about'.
+    text = ("the executing-plans skill has plans; about but plan but"
+            " failed error: but wait failed")
+    counts = {}
+    for m, _p in scan(text):
+        counts[m] = counts.get(m, 0) + 1
+    # whole-word 'plan' (1) and 'but' (2) match; 'plans'/'executing-plans'/'about' do NOT
+    assert counts["plan"] == 1, counts
+    assert counts["but"] == 2, counts
+    assert "error:" in counts and counts["error:"] == 1
+    assert "failed" in counts and counts["failed"] == 2
+    assert counts["but wait"] == 1
+
+
+def test_word_boundary_no_cross_word_matches():
+    # boundary must not let a marker start or end mid-word
+    assert [m for m, _p in scan("replan the plan")].count("plan") == 1
+    assert [m for m, _p in scan("explanation")].count("plan") == 0
+    assert [m for m, _p in scan("let me and letme")].count("let me") == 1
+
+
+def test_contention_word_boundary():
+    # 'failed' in 'unfailed' must not count; standalone 'failed' does
+    got = [m for m, _p in scan("unfailed and failed", CONTENTION_MARKERS)]
+    assert got == ["failed"], got
+
+
 def test_source_segregation_reasoning_vs_dialogue():
     chunk_map, turns = _fixture()
     resp = run(SRC, FN, chunk_map, turns)

@@ -14,7 +14,7 @@ from _hash import sha256_json
 ERROR_KINDS = ("invalid_request", "conflict", "not_found", "internal")
 
 PASS_ID = "uncertainty-pass"
-PASS_VERSION = "0.1.0-draft"
+PASS_VERSION = "0.2.0"
 LEXICON_VERSION = "uncertainty@1.0.0+planning@1.0.0+contention@1.0.0"
 
 # Pinned lexicons (v1.0.0). Files keep stable order; longest-first is applied
@@ -50,17 +50,40 @@ ALL_MARKERS = sorted(
 
 def scan(text: str, markers: Optional[List[str]] = None) -> List[tuple]:
     """[(marker, char_index)] in left-to-right order, longest-match-first,
-    no overlapping matches."""
+    no overlapping matches.
+
+    Matching is WORD-BOUNDARY aware (not bare substring): a marker only matches
+    when it forms a whole word/phrase — the char before its first word and after
+    its last word are non-alphanumeric (or text edges). This prevents false
+    positives like 'plan' inside 'executing-plans'/'plans' or 'but' inside
+    'about'/'button'. Markers ending in punctuation (',', ':', etc.) drop the
+    trailing boundary check.
+    """
     ms = markers if markers is not None else ALL_MARKERS
     ms = sorted(ms, key=lambda m: (-len(m), m))
     out: List[tuple] = []
     low = text.casefold()
     i, n = 0, len(low)
+
+    def is_word(c: str) -> bool:
+        return c.isalnum()
+
+    def boundaries(m: str, start: int) -> bool:
+        # left edge: char before the marker's first word must be non-word
+        if start > 0 and is_word(low[start - 1]):
+            return False
+        # right edge: only enforced when the marker ends in a word char
+        if m and is_word(m[-1]):
+            end = start + len(m)
+            if end < n and is_word(low[end]):
+                return False
+        return True
+
     while i < n:
         matched = None
         for m in ms:
             ml = len(m)
-            if i + ml <= n and low[i:i + ml] == m:
+            if i + ml <= n and low[i:i + ml] == m and boundaries(m, i):
                 matched = m
                 break
         if matched is not None:
