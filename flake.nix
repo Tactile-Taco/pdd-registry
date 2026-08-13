@@ -1,5 +1,5 @@
 {
-  description = "pdd-repository — Nix-native Protocol-Driven Development registry, deployable to the staging k3s host";
+  description = "pdd-registry — Nix-native Protocol-Driven Development registry, deployable to the staging k3s host";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-25.05";
@@ -15,7 +15,7 @@
       pkgs = nixpkgs.legacyPackages.${system};
       nix2containerPkgs = nix2container.packages.${system};
 
-      imageName = "ghcr.io/tactile-taco/pdd-repository";
+      imageName = "ghcr.io/tactile-taco/pdd-registry";
       # The port the service listens on inside the container.
       # Must match containerPort/Service/Ingress in deploy/k8s.yaml.
       port = 8080;
@@ -29,7 +29,7 @@
       ]);
 
       # Assemble the repo content (tracked files) into /opt/pdd inside the image.
-      repo = pkgs.runCommand "pdd-repository-content" { } ''
+      repo = pkgs.runCommand "pdd-registry-content" { } ''
         mkdir -p $out/opt/pdd
         cp -r ${./src}/.           $out/opt/pdd/src/
         cp -r ${./scripts}/.       $out/opt/pdd/scripts/

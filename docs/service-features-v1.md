@@ -8,7 +8,7 @@ checked against.
 
 ## The service in one sentence
 
-A network-reachable face of the pdd-repository toolchain: it serves the
+A network-reachable face of the pdd-registry toolchain: it serves the
 registry's evidence state over HTTP and exposes the pdd CLI for interactive
 use, so developers and agents can verify what the registry attests without
 cloning the repo.
@@ -37,7 +37,7 @@ auth becomes a v2 concern with the registry server.
 
 ### Exec (in-pod CLI)
 
-- `kubectl exec deploy/pdd-repository -- python3 scripts/pdd.py bundle lint`
+- `kubectl exec deploy/pdd-registry -- python3 scripts/pdd.py bundle lint`
 - `... -- python3 scripts/pdd.py evidence verify <name>`
 - `... -- make test` (full candidate suite runs in-container, env-scrubbed)
 

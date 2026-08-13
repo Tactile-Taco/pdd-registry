@@ -1,9 +1,36 @@
 ---
 name: repo-workflow
-description: Manage pdd-repository development — branch model (feature to PR to dev to main), staging deploy via CI to k3s, commit and evidence discipline.
+description: Manage pdd-registry development — branch model (feature to PR to dev to main), staging deploy via CI to k3s, commit and evidence discipline.
 ---
 
-# pdd-repository Development Workflow
+# pdd-registry Development Workflow
+
+## Naming — instance vs repository (do not conflate)
+
+"M6 pdd-registry"         = the RUNNING instance: deployed service on the M6's
+                            staging guest (k3s microvm), tailnet-only, HTTP/MCP
+                            endpoint. https://pdd-registry.<STAGING_TAILSCALE_DNS>
+"pdd-registry repository" = the GIT repo Tactile-Taco/pdd-registry: protocols,
+  / "pdd-registry github"   implementations, evidence, CLI, server, CI.
+  / "pdd-registry git repo"
+
+Rule: "repository" / "github" / "git repo" / "checkout" / "worktree" → the repo.
+"instance" / "service" / "deployed" / "endpoint" / "host" → ALWAYS "M6 pdd-registry".
+Bare "pdd-registry" only when unambiguous (protocol bundle name, skill name).
+
+## Carry-forward — protocol naming decision (2026-08-13)
+
+The pdd-repository → pdd-registry rename (repo, deployed instance, GHCR image)
+was a skills-only decision: the sealed pdd-registry v1.0.0 protocol bundle was
+NOT amended (zero old-name strings in bundles/evidence/implementations; evidence
+binds to content digests, not names). The NEXT SUBSTANTIVE protocol update MUST
+record this repo/instance/protocol naming decision in
+pdd-bundles/pdd-registry/ambiguity-log.md (Resolved, v1.1.0+) and re-ground
+.reasonix/skills/pdd-protocol-author/references/ambiguity-taxonomy.md:90 (it cites
+order-handler, absent from this repo since the annotation-app extraction). Full
+loop: seal → three-layer validate → evidence build → commit/push (CI
+validator-loop) → publish via PDD_PUBLISH_TOKEN (Infisical misc-secrets, prod
+env; 401 without it).
 
 ## Branch model
 

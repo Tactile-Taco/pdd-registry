@@ -5,7 +5,7 @@ Status: **implemented 2026-08-06** (runner `m6-pdd` on the M6,
 
 ## Why
 
-- pdd-repository is public; staging is tailnet-only. GitHub-hosted runners
+- pdd-registry is public; staging is tailnet-only. GitHub-hosted runners
   cannot reach it without importing a tailnet credential into CI.
 - A repo-scoped, label-restricted self-hosted runner on the M6 deploys
   in-network, reuses docker + sops secrets already there.
@@ -20,7 +20,7 @@ users.users.github-runner = { isSystemUser = true; group = "github-runner";
                               extraGroups = [ "docker" ]; };
 services.github-runners.pdd = {
   enable = true;
-  url = "https://github.com/Tactile-Taco/pdd-repository";
+  url = "https://github.com/Tactile-Taco/pdd-registry";
   name = "m6-pdd";
   tokenFile = config.sops.secrets.github_runner_pdd_token.path;
   extraLabels = [ "staging-deploy" ];
@@ -36,7 +36,7 @@ services.github-runners.pdd = {
 ```
 
 - Registration token: minted via the GitHub API
-  (`POST /repos/Tactile-Taco/pdd-repository/actions/runners/registration-token`,
+  (`POST /repos/Tactile-Taco/pdd-registry/actions/runners/registration-token`,
   valid 1h) and stored sops-encrypted in `nixos-infra` `secrets/secrets.yaml`.
   Note: re-registration (config/token change) needs a fresh token; a durable
   fine-grained PAT (`Administration: read` on the repo) can replace it later.

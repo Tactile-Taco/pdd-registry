@@ -87,7 +87,7 @@ Ask a blocking question only when no conservative default is safe. Otherwise, ma
 
 ## Reference case (CA-001): "current item" undo ambiguity
 
-Recorded in the first sealed protocol of the pdd-repository (order-handler v1.0.0 → v1.1.0);
+Recorded in the first sealed protocol of the pdd-registry repository (order-handler v1.0.0 → v1.1.0);
 included here in full so this skill is self-contained. The original field case was a
 typing-test engine ("current word" backspace); it is generalized here to any
 component with per-item commit/undo semantics.

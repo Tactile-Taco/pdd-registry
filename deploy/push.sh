@@ -22,7 +22,7 @@ set -euo pipefail
 : "${STAGING_TAILSCALE_DNS:?Set STAGING_TAILSCALE_DNS (Infisical misc-secrets)}"
 : "${PDD_EVIDENCE_KEY:?Set PDD_EVIDENCE_KEY (must match the key the evidence was signed with)}"
 
-PROJECT="pdd-repository"
+PROJECT="pdd-registry"
 IMAGE="ghcr.io/tactile-taco/${PROJECT}:latest"
 STAGING_USER="${STAGING_SSH_USER:-tacticaltaco}"
 STAGING_TARGET="${STAGING_USER}@${STAGING_TAILSCALE_IP}"

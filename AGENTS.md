@@ -1,4 +1,4 @@
-# Agent Instructions — pdd-repository
+# Agent Instructions — pdd-registry
 
 Protocol-Driven Development registry: sealed protocol bundles (pdd-bundles/),
 candidate implementations (implementations/), three-layer Validator Loop
@@ -56,7 +56,7 @@ eval "$(infisical export --projectId <misc-secrets-id> --env prod --format=doten
 GITHUB_TOKEN=<pat with write:packages> ./deploy/push.sh
 ```
 
-Service: `https://pdd-repository.<STAGING_DNS>` (tailnet only). CI path:
+Service: `https://pdd-registry.<STAGING_DNS>` (tailnet only). CI path:
 push to `dev` → pdd-staging-deploy workflow (see ci-templates/ and
 .reasonix/skills/repo-workflow).
 
@@ -65,7 +65,7 @@ push to `dev` → pdd-staging-deploy workflow (see ci-templates/ and
 - Port in `flake.nix` (PORT / ExposedPorts) must match containerPort, Service
   targetPort, and Ingress backend port in `deploy/k8s.yaml`.
 - Ingress `ingressClassName` must stay `traefik`.
-- `metadata.name` / `app` label = `pdd-repository` (routing identity, unique
+- `metadata.name` / `app` label = `pdd-registry` (routing identity, unique
   on the cluster).
 - `imagePullPolicy: Always` is load-bearing with the `latest` tag + rollout
   restart; prefer digest-pinned image refs when evidence integrity matters.

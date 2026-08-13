@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""PDD Validation Engine for pdd-repository — three mandatory layers.
+"""PDD Validation Engine for pdd-registry — three mandatory layers.
 
 Layer 1 Structural (S):   JSON Schema conformance + contract tests
 Layer 2 Behavioral (B):   pytest + hypothesis property suite with invariant lineage;

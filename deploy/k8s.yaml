@@ -4,22 +4,22 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: pdd-repository
+  name: pdd-registry
   labels:
-    app: pdd-repository
+    app: pdd-registry
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: pdd-repository
+      app: pdd-registry
   template:
     metadata:
       labels:
-        app: pdd-repository
+        app: pdd-registry
     spec:
       containers:
-        - name: pdd-repository
-          image: ghcr.io/tactile-taco/pdd-repository@sha256:c92ae4d042f55e4ee5260ae812dbfaf7a1fb9903c0ffba294b36560f3bbd9803
+        - name: pdd-registry
+          image: ghcr.io/tactile-taco/pdd-registry@sha256:c92ae4d042f55e4ee5260ae812dbfaf7a1fb9903c0ffba294b36560f3bbd9803
           imagePullPolicy: Always
           ports:
             - containerPort: 8080
@@ -36,10 +36,10 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: pdd-repository
+  name: pdd-registry
 spec:
   selector:
-    app: pdd-repository
+    app: pdd-registry
   ports:
     - port: 8080
       targetPort: 8080
@@ -47,7 +47,7 @@ spec:
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: pdd-repository
+  name: pdd-registry
 spec:
   ingressClassName: traefik
   rules:
@@ -58,6 +58,6 @@ spec:
             pathType: Prefix
             backend:
               service:
-                name: pdd-repository
+                name: pdd-registry
                 port:
                   number: 8080

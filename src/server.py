@@ -1,4 +1,4 @@
-"""pdd service — stdlib HTTP service exposing the pdd-repository registry state.
+"""pdd service — stdlib HTTP service exposing the pdd-registry registry state.
 
 Client surface (see docs/service-features-v1.md and -v2.md):
   GET /healthz                    liveness

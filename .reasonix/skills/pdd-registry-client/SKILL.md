@@ -5,7 +5,20 @@ description: "Add, search, pull and query the pdd protocol registry (pdd-bundles
 
 # pdd-registry-client
 
-Operate the **pdd protocol registry** of `Tactile-Taco/pdd-repository`: admit
+## Naming — instance vs repository (do not conflate)
+
+"M6 pdd-registry"         = the RUNNING instance: deployed service on the M6's
+                            staging guest (k3s microvm), tailnet-only, HTTP/MCP
+                            endpoint. https://pdd-registry.<STAGING_TAILSCALE_DNS>
+"pdd-registry repository" = the GIT repo Tactile-Taco/pdd-registry: protocols,
+  / "pdd-registry github"   implementations, evidence, CLI, server, CI.
+  / "pdd-registry git repo"
+
+Rule: "repository" / "github" / "git repo" / "checkout" / "worktree" → the repo.
+"instance" / "service" / "deployed" / "endpoint" / "host" → ALWAYS "M6 pdd-registry".
+Bare "pdd-registry" only when unambiguous (protocol bundle name, skill name).
+
+Operate the **pdd protocol registry** of `Tactile-Taco/pdd-registry`: admit
 new protocol bundles, search the catalog (CLI and HTTP), and pull/inspect
 bundles, invariants, capabilities, and evidence ledgers. The registry is
 read-only over HTTP; **git is the distribution layer** (no push/pull over
@@ -123,7 +136,7 @@ bundle; validate a bundle before its `depends_on` leaves admit.
 ## ADD — admit a new protocol bundle
 
 ```bash
-cd <repo>  # pdd-repository worktree
+cd <repo>  # pdd-registry worktree
 mkdir pdd-bundles/my-protocol
 cp -r .reasonix/skills/pdd-protocol-author/assets/templates/* pdd-bundles/my-protocol/
 # Author: protocol.yaml (name/version/status + purpose, boundary, depends_on,
@@ -164,12 +177,12 @@ python3 scripts/pdd.py search <query>       # ranked matches {bundle, layer, id,
                                             # text, score}; exit 0 if ≥1 match
 ```
 
-HTTP (service at https://pdd-repository.<STAGING_TAILSCALE_DNS>; tailnet DNS
+HTTP (service at https://pdd-registry.<STAGING_TAILSCALE_DNS>; tailnet DNS
 does not resolve from shells — always pin the address):
 
 ```bash
-curl -sk --resolve pdd-repository.$STAGING_TAILSCALE_DNS:443:$STAGING_TAILSCALE_IP \
-  "https://pdd-repository.$STAGING_TAILSCALE_DNS/search?q=idempotent"
+curl -sk --resolve pdd-registry.$STAGING_TAILSCALE_DNS:443:$STAGING_TAILSCALE_IP \
+  "https://pdd-registry.$STAGING_TAILSCALE_DNS/search?q=idempotent"
 ```
 
 Search semantics (docs/service-features-v2.md): tokens are ANDed **per entry**

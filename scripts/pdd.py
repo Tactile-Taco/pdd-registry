@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""pdd — the PDD registry CLI (docker-like interface for pdd-repository).
+"""pdd — the PDD registry CLI (docker-like interface for pdd-registry).
 
 Mental model:
   pdd-bundles/            = the image registry (versioned, sealed, digestable)

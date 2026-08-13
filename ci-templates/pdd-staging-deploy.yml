@@ -39,7 +39,7 @@ jobs:
           STAGING_TAILSCALE_DNS: ${{ secrets.STAGING_TAILSCALE_DNS }}
         run: |
           # Tailnet DNS does not resolve on the runner shell: pin the address.
-          curl -sfk --resolve "pdd-repository.$STAGING_TAILSCALE_DNS:443:$STAGING_TAILSCALE_IP" \
-            "https://pdd-repository.$STAGING_TAILSCALE_DNS/healthz"
-          curl -sfk --resolve "pdd-repository.$STAGING_TAILSCALE_DNS:443:$STAGING_TAILSCALE_IP" \
-            "https://pdd-repository.$STAGING_TAILSCALE_DNS/evidence/verify" | grep -q '"ok": true'
+          curl -sfk --resolve "pdd-registry.$STAGING_TAILSCALE_DNS:443:$STAGING_TAILSCALE_IP" \
+            "https://pdd-registry.$STAGING_TAILSCALE_DNS/healthz"
+          curl -sfk --resolve "pdd-registry.$STAGING_TAILSCALE_DNS:443:$STAGING_TAILSCALE_IP" \
+            "https://pdd-registry.$STAGING_TAILSCALE_DNS/evidence/verify" | grep -q '"ok": true'

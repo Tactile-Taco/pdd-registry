@@ -1,6 +1,6 @@
-# pdd-repository — Handoff
+# pdd-registry — Handoff
 
-**Date:** 2026-08-06 · **Branch:** `pdd-work` — pushed and folded into `main` at `8ab8463` (all commits on origin; `main` == `origin/main` == `origin/pdd-work` == `8ab8463`) · **Worktree:** `/home/TacticalTaco/.reasonix/global-workspace/pdd-repository-wt` · **Main checkout:** `/home/TacticalTaco/.reasonix/global-workspace/pdd-repository` (on `main`, synced)
+**Date:** 2026-08-06 · **Branch:** `pdd-work` — pushed and folded into `main` at `8ab8463` (all commits on origin; `main` == `origin/main` == `origin/pdd-work` == `8ab8463`) · **Worktree:** `/home/TacticalTaco/.reasonix/global-workspace/pdd-registry-wt` · **Main checkout:** `/home/TacticalTaco/.reasonix/global-workspace/pdd-registry` (on `main`, synced)
 
 > ⚠️ This repo is public: real addresses never appear here. Machine addresses
 > (M6 tailscale IP, staging tailscale IP/DNS, ports) live in Infisical
@@ -22,12 +22,12 @@ Validator Loop, an HMAC-signed Evidence Chain + ledger, and a small HTTP service
   nixos-infra project `7a2f10fc-2d47-4008-a817-3f5493dc7476`, env `prod`).
   Admission digest `3136cfa4…` == ledger `evidence_digest` (byte-coupling proven
   by sha256sum). Artifact digest `5614cd8f…`.
-- **Staging deploy live** at `https://pdd-repository.<STAGING_TAILSCALE_DNS>`
+- **Staging deploy live** at `https://pdd-registry.<STAGING_TAILSCALE_DNS>`
   (k3s guest on the M6): `/healthz` ok, `/evidence/admission` → `verified: true`,
   `/evidence/verify` → `ok: true` (1 block). Image pinned in `deploy/k8s.yaml`
-  at `ghcr.io/tactile-taco/pdd-repository@sha256:c92ae4d0…` (manifest-list digest
+  at `ghcr.io/tactile-taco/pdd-registry@sha256:c92ae4d0…` (manifest-list digest
   from `docker push`; amd64 manifest `fe4a1d83` = M6 build).
-- **GitHub secrets** (Tactile-Taco/pdd-repository): `GHCR_PAT`,
+- **GitHub secrets** (Tactile-Taco/pdd-registry): `GHCR_PAT`,
   `PDD_EVIDENCE_KEY`, `STAGING_TAILSCALE_IP`, `STAGING_TAILSCALE_DNS`,
   `STAGING_SSH_KEY` (plus the default `GITHUB_TOKEN` used by the `gh` steps
   in nightly/release-gate).
@@ -82,9 +82,9 @@ make all         # commit gate (lint+test+validate+evidence; needs the key)
 
 ## 4. Deploy pipeline (the path that actually works)
 
-1. rsync worktree → M6: `rsync -az -e "ssh -F /dev/null -o ConnectTimeout=6 -o BatchMode=yes" <wt>/ tacticaltaco@<M6_TAILSCALE_IP>:/home/tacticaltaco/pdd-repository/`
-2. Build on M6 (has docker): `docker build -t pdd-repository:latest . && docker save | gzip -1 > /tmp/pdd-image.tgz`
-3. `scp` to laptop, `docker load`, `docker login ghcr.io -u tactile-taco --password-stdin` (PAT via stdin), `docker push ghcr.io/tactile-taco/pdd-repository:latest`
+1. rsync worktree → M6: `rsync -az -e "ssh -F /dev/null -o ConnectTimeout=6 -o BatchMode=yes" <wt>/ tacticaltaco@<M6_TAILSCALE_IP>:/home/tacticaltaco/pdd-registry/`
+2. Build on M6 (has docker): `docker build -t pdd-registry:latest . && docker save | gzip -1 > /tmp/pdd-image.tgz`
+3. `scp` to laptop, `docker load`, `docker login ghcr.io -u tactile-taco --password-stdin` (PAT via stdin), `docker push ghcr.io/tactile-taco/pdd-registry:latest`
 4. Update the digest pin in `deploy/k8s.yaml` to the pushed digest.
 5. Apply via jump: `ssh -F /dev/null -J tacticaltaco@<M6_TAILSCALE_IP> -p 2222 tacticaltaco@localhost 'sudo -n k3s kubectl apply -f -'` (Secret first: `create secret generic pdd-evidence-key --from-env-file=/dev/stdin`), then `rollout restart` + `rollout status`.
 
@@ -114,7 +114,7 @@ make all         # commit gate (lint+test+validate+evidence; needs the key)
   `git checkout -- evidence/…` (the committed version is the attested one).
 - **Tailnet DNS doesn't resolve from laptop/M6 shells** for
   `*.<STAGING_TAILSCALE_DNS>` — verify with
-  `curl -sk --resolve pdd-repository.<STAGING_TAILSCALE_DNS>:443:<STAGING_TAILSCALE_IP> …`
+  `curl -sk --resolve pdd-registry.<STAGING_TAILSCALE_DNS>:443:<STAGING_TAILSCALE_IP> …`
 - **Evidence is single-key (HMAC-SHA256):** rotation = re-sign + redeploy.
   Re-sign on the M6 with `--sandbox` (docker), rsync evidence back, commit.
 - **Never put PDD_EVIDENCE_KEY in argv/echo** — pipe via stdin
@@ -156,7 +156,7 @@ make all         # commit gate (lint+test+validate+evidence; needs the key)
   group `docker`). Registration token is a 1h sops secret
   (`github_runner_pdd_token` in nixos-infra secrets.yaml): do NOT change
   url/name/labels/token without minting a fresh token
-  (`gh api -X POST repos/Tactile-Taco/pdd-repository/actions/runners/registration-token`)
+  (`gh api -X POST repos/Tactile-Taco/pdd-registry/actions/runners/registration-token`)
   and rebuilding — or replace it with a fine-grained PAT (`Administration`
   read on the repo) for durability.
 - **GitHub Actions outage at 15:22Z 2026-08-06** (major, partial outage;

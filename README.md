@@ -1,4 +1,4 @@
-# pdd-repository
+# pdd-registry
 
 > **Code is transient; protocol is sovereign.**
 
@@ -7,7 +7,7 @@ bundles as the durable artifacts — with candidate implementations, a three-lay
 Validator Loop, and a verifiable Evidence Chain + Dynamic Evidence Ledger living
 next to them. Think of it as *Docker for protocols*:
 
-| Docker concept      | pdd-repository concept                                       |
+| Docker concept      | pdd-registry concept                                       |
 |---------------------|--------------------------------------------------------------|
 | Dockerfile / image  | `pdd-bundles/<name>/` — versioned, sealed, digestable bundle |
 | Container           | `implementations/<name>/<variant>/` — candidate realization  |

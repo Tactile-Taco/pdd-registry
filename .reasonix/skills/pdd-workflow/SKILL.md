@@ -3,7 +3,20 @@ name: pdd-workflow
 description: "Run the PDD loop end-to-end in this repo: lint bundle, validate candidate, build evidence chain, seal, wire CI gates."
 ---
 
-# PDD Workflow (single-agent loop for pdd-repository)
+# PDD Workflow (single-agent loop for pdd-registry)
+
+## Naming — instance vs repository (do not conflate)
+
+"M6 pdd-registry"         = the RUNNING instance: deployed service on the M6's
+                            staging guest (k3s microvm), tailnet-only, HTTP/MCP
+                            endpoint. https://pdd-registry.<STAGING_TAILSCALE_DNS>
+"pdd-registry repository" = the GIT repo Tactile-Taco/pdd-registry: protocols,
+  / "pdd-registry github"   implementations, evidence, CLI, server, CI.
+  / "pdd-registry git repo"
+
+Rule: "repository" / "github" / "git repo" / "checkout" / "worktree" → the repo.
+"instance" / "service" / "deployed" / "endpoint" / "host" → ALWAYS "M6 pdd-registry".
+Bare "pdd-registry" only when unambiguous (protocol bundle name, skill name).
 
 ## Role
 

@@ -5,6 +5,8 @@ Date: 2026-08-06 · Goal: minimal pdd service live on k3s staging, PDD methodolo
 ## Outcome (verified)
 
 - Image built and pushed: ghcr.io/tactile-taco/pdd-repository:latest
+  (renamed from pdd-repository on 2026-08-13 — historical record; repo and
+  image are now pdd-registry)
   (digest sha256:b3397643…; built on the M6 via Dockerfile path).
 - Deployed: Deployment + Service + Ingress (traefik) on the staging guest
   (k3s v1.32.7), pod Running, rollout complete.
