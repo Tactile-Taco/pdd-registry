@@ -24,9 +24,7 @@ jobs:
         env:
           PDD_EVIDENCE_KEY: ${{ secrets.PDD_EVIDENCE_KEY }}
       # The fleet is a client system outside the PDD loop (stochastic agents);
-      # its deterministic parts are tested here.
-      - name: Memory-plane fleet tests
-        run: python3 -m pytest memory-plane/tests/ -q
+      # its deterministic parts are tested in the annotation-memory-plane repo.
       - name: Three-layer Validator Loop
         run: make validate
       # The signing key is scoped to the evidence steps only.
