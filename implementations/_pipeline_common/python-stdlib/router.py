@@ -14,6 +14,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import time
 import urllib.error
 import urllib.request
 from typing import Any, Optional
@@ -112,8 +113,24 @@ class ModelRouter:
             },
             method="POST",
         )
-        with urllib.request.urlopen(req, timeout=self.timeout) as resp:  # noqa: S310 — configured endpoint
-            data = json.loads(resp.read().decode("utf-8"))
+        # Pace calls so free-tier rate limits (429) are not tripped by bursts;
+        # on 429, back off and retry the SAME model before failing over.
+        _pacing = float(os.environ.get("MODEL_PACING_SECONDS", "0.3"))
+        _retries = int(os.environ.get("MODEL_RETRY_429", "5"))
+        if _pacing > 0:
+            time.sleep(_pacing)
+        attempt = 0
+        while True:
+            try:
+                with urllib.request.urlopen(req, timeout=self.timeout) as resp:  # noqa: S310
+                    data = json.loads(resp.read().decode("utf-8"))
+                break
+            except urllib.error.HTTPError as e:  # noqa: S110
+                if e.code == 429 and attempt < _retries:
+                    attempt += 1
+                    time.sleep(min(2 ** attempt, 30))  # 2,4,8,16,30…
+                    continue
+                raise
         choice = data["choices"][0]
         text = choice["message"].get("content") or ""
         usage = data.get("usage") or {}
