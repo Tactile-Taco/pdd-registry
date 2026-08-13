@@ -35,7 +35,7 @@ MODEL_PRICING: dict[str, tuple[float, float]] = {
 
 
 def _price_for(model: str) -> tuple[float, float]:
-    for prefix in ("nousresearch/", "openrouter/"):
+    for prefix in ("nousresearch/", "openrouter/", "anyrouter/"):
         if model.startswith(prefix) or model.startswith(("gemini-", "claude-", "gpt-")):
             return (0.0, 0.0)
     return MODEL_PRICING.get(model, (0.14, 0.28))
@@ -97,19 +97,35 @@ class ModelRouter:
     # -- internals ------------------------------------------------------------
 
     def _call(self, model: str, messages: list[dict], max_tokens: int) -> dict:
+        # anyrouter/* models are routed DIRECTLY to the AnyRouter free gateway
+        # (OpenAI-compatible), bypassing Bifrost — a free backup that doesn't
+        # touch shared infra. The model id is passed through as-is (e.g.
+        # "anyrouter/free"). Any other model goes through Bifrost as usual.
+        if model.startswith("anyrouter/"):
+            base = os.environ.get("ANYROUTER_URL", "https://api.anyrouter.dev/v1").rstrip("/")
+            key = os.environ.get("ANYROUTER_API_KEY", "")
+            req_model = model
+        else:
+            base = self.base_url
+            key = self.api_key
+            req_model = model
         body = {
-            "model": model,
+            "model": req_model,
             "messages": messages,
             "max_tokens": max_tokens,
             "temperature": 0.0,
             "response_format": {"type": "json_object"},
         }
         req = urllib.request.Request(
-            self.base_url + "/chat/completions",
+            base + "/chat/completions",
             data=json.dumps(body).encode("utf-8"),
             headers={
                 "Content-Type": "application/json",
-                "Authorization": f"Bearer {self.api_key}",
+                "Authorization": f"Bearer {key}",
+                # AnyRouter sits behind Cloudflare which 403s the bare
+                # Python-urllib User-Agent (error 1010); use a browser UA.
+                "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+                              "(KHTML, like Gecko) Chrome/126.0 Safari/537.36",
             },
             method="POST",
         )
