@@ -31,7 +31,7 @@ for _name in ("_pipeline_common", "transcript-chunking", "uncertainty-pass"):
 
 import transcript_chunking as tc  # noqa: E402
 import uncertainty_pass as uc  # noqa: E402
-from baselines import BaselineStore, detect_model  # noqa: E402
+from baselines import BaselineStore, detect_model, is_synthetic  # noqa: E402
 from common import list_transcripts  # noqa: E402
 
 SOURCES = ["reasonix", "omp", "claude", "codex", "kimi", "hermes"]
@@ -61,6 +61,8 @@ def main() -> int:
                 continue
             files += 1
             model = detect_model(source, filename, lines)
+            if is_synthetic(model):
+                continue  # synthetic/test fixtures (e.g. "<synthetic>") are dropped
             try:
                 turns = tc.render_turns(source, lines)
                 if not turns:

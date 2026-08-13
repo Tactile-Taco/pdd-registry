@@ -31,7 +31,33 @@ def test_detect_model_hermes_omp_claude():
     assert detect_model("omp", "f.jsonl", omp) == "deepseek-v4-flash"
     claude = ['{"type": "user", "message": {"id": "m1", "model": "claude-sonnet-4-5", "content": "hi"}}']
     assert detect_model("claude", "f.jsonl", claude) == "claude-sonnet-4-5"
-    assert detect_model("kimi", "f.jsonl", ["{\"role\":\"user\"}"]) == "unknown"
+    assert detect_model("kimi", "f.jsonl", ["{\"role\":\"user\"}"]) == "kimi-k2.6"
+
+
+def test_detect_model_kimi_by_date_threshold():
+    # before Kimi K3 release (2026-07-27) -> kimi-k2.6
+    pre = ['{"role": "_system_prompt", "content": "current date and time in ISO format is `2026-06-14T20:45:13.123Z`. You are Kimi Code CLI."}']
+    assert detect_model("kimi", "f.jsonl", pre) == "kimi-k2.6"
+    # on/after release -> kimi-k3
+    post = ['{"role": "_system_prompt", "content": "current date and time in ISO format is `2026-07-30T09:00:00Z`."}']
+    assert detect_model("kimi", "f.jsonl", post) == "kimi-k3"
+    # latest date across records wins (long session spanning the release)
+    span = ['{"role": "_system_prompt", "content": "current date and time in ISO format is `2026-07-20T00:00:00Z`."}',
+            '{"role": "_system_prompt", "content": "current date and time in ISO format is `2026-07-28T00:00:00Z`."}']
+    assert detect_model("kimi", "f.jsonl", span) == "kimi-k3"
+    # no date present -> default kimi-k2.6
+    assert detect_model("kimi", "f.jsonl", ['{"role": "_system_prompt", "content": "no date here"}']) == "kimi-k2.6"
+
+
+def test_is_synthetic_flags_fixtures():
+    from baselines import is_synthetic
+    assert is_synthetic("<synthetic>") is True
+    assert is_synthetic("deepseek-v4-flash") is False
+    assert is_synthetic("") is False
+    # claude synthetic fixture detected via normalize_model
+    claude = ['{"type": "assistant", "message": {"model": "<synthetic>", "content": "x"}}']
+    assert detect_model("claude", "f.jsonl", claude) == "<synthetic>"
+    assert is_synthetic(detect_model("claude", "f.jsonl", claude)) is True
 
 
 def test_baseline_store_accumulate_merge_stats(tmp_path):

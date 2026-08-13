@@ -12,6 +12,14 @@ import math
 import os
 import re
 
+# Kimi Code CLI transcripts carry no explicit model key, but their system prompt
+# embeds the session's "current date". Kimi traces are kimi-k2.6 by default;
+# after Kimi K3's open-source release (2026-07-27) they are assumed kimi-k3.
+# Overridable via env in case the release date needs adjusting.
+KIMI_K3_RELEASE = os.environ.get("KIMI_K3_RELEASE_DATE", "2026-07-27")
+_KIMI_DATE_RE = re.compile(r"current date and time in ISO format is `(20\d\d-\d\d-\d\d)")
+_SYNTHETIC_RE = re.compile(r"^\s*<")
+
 
 def normalize_model(raw) -> str:
     """Collapse provider-qualified / dash-joined model ids to a stable slug.
@@ -80,6 +88,34 @@ def detect_model(source: str, filename: str, lines: list[str]) -> str:
                 if isinstance(msg, dict) and msg.get("model"):
                     return normalize_model(msg["model"])
         return "unknown"
+    if source == "kimi":
+        return kimi_model(lines)
+    return "unknown"
+
+
+def is_synthetic(model: str) -> bool:
+    """True for synthetic/test fixtures (e.g. a claude file keyed '<synthetic>')."""
+    return bool(model) and bool(_SYNTHETIC_RE.match(model))
+
+
+def kimi_model(lines: list[str]) -> str:
+    """Kimi traces: kimi-k2.6 by default; kimi-k3 once the session's current
+    date is at/after the K3 release. Uses the latest date found across the
+    session's system-prompt records."""
+    latest: str | None = None
+    for line in lines:
+        try:
+            o = json.loads(line)
+        except Exception:
+            continue
+        if not isinstance(o, dict) or o.get("role") != "_system_prompt":
+            continue
+        m = _KIMI_DATE_RE.search(str(o.get("content", "")))
+        if m and (latest is None or m.group(1) > latest):
+            latest = m.group(1)
+    if latest is None:
+        return "kimi-k2.6"  # assume k2.6 unless provably after K3
+    return "kimi-k3" if latest >= KIMI_K3_RELEASE else "kimi-k2.6"
     return "unknown"
 
 
