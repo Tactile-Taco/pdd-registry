@@ -92,7 +92,27 @@ class ModelRouter:
         messages.append({"role": "user", "content": prompt})
         out = self.complete(messages, max_tokens=max_tokens)
         self.last_usage = {"tokens_in": out["tokens_in"], "tokens_out": out["tokens_out"]}
-        return json.loads(_extract_json(out["text"]))
+        obj, ok = _parse_json_object(out["text"])
+        if not ok:
+            # The model returned a non-object (e.g. a JSON array) for a prompt
+            # that asked for a single object. Retry once with an explicit hint;
+            # this converts a flaky array response into a usable dict instead
+            # of crashing the caller's `.get()` (see topic-transition/flow).
+            retry = messages + [{
+                "role": "user",
+                "content": "Return ONLY a single JSON object (not an array) for the task above.",
+            }]
+            out2 = self.complete(retry, max_tokens=max_tokens)
+            self.last_usage = {
+                "tokens_in": out["tokens_in"] + out2["tokens_in"],
+                "tokens_out": out["tokens_out"] + out2["tokens_out"],
+            }
+            obj, ok = _parse_json_object(out2["text"])
+            if not ok:
+                raise RouterError(
+                    "model returned non-object JSON after retry "
+                    f"(starts with: {out2['text'][:40]!r})")
+        return obj
 
     # -- internals ------------------------------------------------------------
 
@@ -208,7 +228,10 @@ class StubRouter:
         messages.append({"role": "user", "content": prompt})
         out = self.complete(messages, max_tokens=max_tokens)
         self.last_usage = {"tokens_in": out["tokens_in"], "tokens_out": out["tokens_out"]}
-        return json.loads(_extract_json(out["text"]))
+        obj, ok = _parse_json_object(out["text"])
+        if not ok:
+            raise RouterError("stub router returned non-object JSON")
+        return obj
 
 
 def _extract_json(text: str) -> str:
@@ -217,3 +240,17 @@ def _extract_json(text: str) -> str:
         text = re.sub(r"^```(?:json)?\s*", "", text)
         text = re.sub(r"\s*```$", "", text)
     return text
+
+
+def _parse_json_object(text: str) -> tuple:
+    """Parse a JSON response and confirm it is a JSON *object* (dict).
+
+    Returns (obj, True) on a dict; (None, False) if unparseable or non-object
+    (e.g. the model returned an array). Never raises for shape issues — callers
+    decide whether to retry or surface an error.
+    """
+    try:
+        obj = json.loads(_extract_json(text))
+    except Exception:
+        return None, False
+    return (obj, True) if isinstance(obj, dict) else (None, False)
