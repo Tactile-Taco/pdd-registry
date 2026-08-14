@@ -11,7 +11,7 @@ Use this skill to turn human intent into a machine-checkable PDD bundle. Treat n
 
 ## Registry integration
 - Search the registry BEFORE authoring (pdd-registry-client DECIDE):
-  `python3 scripts/pdd.py search "<capability>"`. Author a new bundle only
+  `pdd registry search "<capability>"`. Author a new bundle only
   when no sealed protocol covers the capability and the gap is documented in
   the ambiguity log.
 - Apply the DECIDE match taxonomy: a TRUE match means adopt, not author; a
@@ -81,7 +81,7 @@ Use this skill to turn human intent into a machine-checkable PDD bundle. Treat n
      └── evidence-requirements.yaml
      ```
    - Start from `assets/templates/` when creating files.
-   - Run `scripts/check_bundle.py <bundle-dir>` after creating or editing a bundle (hardened linter), then `scripts/validate_pdd_bundle.py <bundle-dir>` (upstream structural check).
+   - Run `pdd workflow lint <bundle-dir>` after creating or editing a bundle (hardened linter; the upstream structural check is folded into it — the bundled `scripts/` copies are fallbacks for minimal environments).
 
 ## Output Requirements
 
@@ -123,7 +123,7 @@ Every completed bundle should include:
 1. **Cross-protocol declaration.** `protocol.yaml` gains optional `depends_on` (list of protocol names this bundle consumes) and `provides` (named handshakes other bundles may reference). Never let two bundles define the same handshake differently — promote shared shapes to a `shared/` schema and reference it.
 2. **Validator set registry.** Every bundle includes `validators/validator-set.yaml` listing approved validator identities and versions (paper appendix conformance). The Validation Engine must reject runs by unlisted validator versions.
 3. **Runtime-ledger slot.** Bundle layout includes `evidence/runtime-ledger.jsonl` (created empty) so the Runtime Verification Layer has a canonical append target inside the evidence namespace.
-4. **Hardened linter.** Run `scripts/check_bundle.py <bundle-dir>` — verifies required files, status enum, unique invariant IDs, validator mapping for every `must` invariant, resolvable handshake references, and a non-empty validator set.
+4. **Hardened linter.** Run `pdd workflow lint <bundle-dir>` — verifies required files, status enum, unique invariant IDs, validator mapping for every `must` invariant, resolvable handshake references, and a non-empty validator set.
 5. **Mediated Q&A rule.** When authoring inside a team, you may NOT read reference implementations or external sources. Ask the orchestrator formal questions; record answers in the ambiguity log as resolved assumptions with provenance `orchestrator`.
 6. **Critical ambiguity classification.** Every resolved ambiguity is classified by blast radius before sealing:
    - **Cosmetic**: all readings yield the same observable behavior. Safe to assume; log as a resolved assumption.

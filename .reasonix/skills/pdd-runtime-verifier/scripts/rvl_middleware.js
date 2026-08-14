@@ -8,7 +8,7 @@ import { createHash, createHmac } from "node:crypto";
 const KEY = process.env.PDD_EVIDENCE_KEY;
 if (!KEY) throw new Error("PDD_EVIDENCE_KEY is not set (or is empty); refusing to sign ledger blocks (fail closed)");
 const sha = (s) => "sha256:" + createHash("sha256").update(s).digest("hex");
-// Canonical JSON matching evidence_chain.py: sorted keys recursively, compact (no spaces),
+// Canonical JSON matching pdd.evidence (pdd-cli package, byte-compatible with the old evidence_chain.py): sorted keys recursively, compact (no spaces),
 // so digests computed here verify identically on the Python side.
 const canonical = (o) => {
   if (Array.isArray(o)) return "[" + o.map(canonical).join(",") + "]";

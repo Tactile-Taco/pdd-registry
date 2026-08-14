@@ -26,7 +26,7 @@ artifacts; implementations, validators, and evidence are versioned alongside
 them (docker-like: bundles are portable, digestable, and sealable units).
 
 ## Registry integration
-- The loop STARTS with the registry: `python3 scripts/pdd.py index` +
+- The loop STARTS with the registry: `pdd registry index` +
   `search` (pdd-registry-client DECIDE) to find adoptable protocols before
   authoring anything. The registry is the shared state between iterations —
   `git pull origin main` + re-index before each loop pass.
@@ -42,7 +42,7 @@ author -> lint -> seal -> generate -> validate -> evidence -> (CI) -> runtime at
 ```
 
 1. **Author** (`pdd-protocol-author`): draft the bundle under `pdd-bundles/<name>/` with status `draft`. Record every assumption in `ambiguity-log.md`.
-2. **Lint**: `make lint` (or `python3 .reasonix/skills/pdd-protocol-author/scripts/check_bundle.py pdd-bundles/<name>`) — required files, unique invariant ids, `must` invariants mapped to validators, resolvable handshakes.
+2. **Lint**: `make lint` (or `pdd workflow lint pdd-bundles/<name>`) — required files, unique invariant ids, `must` invariants mapped to validators, resolvable handshakes.
 3. **Seal** (`pdd-contract-negotiator`): zero open conflicts, versions pinned, `status: sealed`, negotiation minutes committed. Sealed bundles change only via version events. Sealing precedes implementation: generators work against `sealed`-only bundles (step 4).
 4. **Generate** (`pdd-implementation-generator`): implement against `status: sealed` bundles; emit a `candidate-manifest.json`. No self-declared compliance.
 5. **Validate** (`pdd-validation-engine`): `make validate` — structural (schema), behavioral (property tests + mutation sanity), operational (capability/sandbox checks). Verdict + `validation-results.json`.

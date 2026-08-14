@@ -12,6 +12,6 @@ jobs:
         with: { python-version: "3.12" }
       - run: pip install pyyaml
       - name: Bundle lint
-        run: for d in protocols/*/; do python3 harness/check_bundle.py "$d"; done
+        run: for d in protocols/*/; do pdd workflow lint "$d"; done
       - name: Compatibility
         run: python3 harness/check_compatibility.py protocols/

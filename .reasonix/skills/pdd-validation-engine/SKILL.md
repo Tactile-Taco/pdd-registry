@@ -13,7 +13,7 @@ The admission controller. Generation proposes; validation decides. All three lay
   `depends_on`) FIRST — they are parallelizable and unblock everything
   downstream; a bundle whose `depends_on` targets are draft/unsealed is not
   admissible yet — report the blocked edge explicitly, never a silent skip.
-- Registry context feeds the loop: `python3 scripts/pdd.py index` gives the
+- Registry context feeds the loop: `pdd registry index` gives the
   live catalog; `evidence verify` confirms a candidate's chain before
   re-validation; re-validation after a candidate change is mandatory —
   never reuse an old verdict for a new digest.

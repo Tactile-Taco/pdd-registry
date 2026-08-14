@@ -42,7 +42,7 @@ Language/compiler versions; dependency graph + package hashes; generated files +
 - Append-only: corrections are new blocks.
 - Violation blocks bind: protocol id+version, implementation version, violated invariant id, redacted observation, verifier identity.
 
-## Operations (scripts/evidence_chain.py)
+## Operations (pdd.evidence — the pdd-cli package; formerly scripts/evidence_chain.py)
 - `build` — construct + sign an evidence object from validation results.
 - `append` — append a ledger block (recomputes chain hash).
 - `verify` — re-walk a ledger, recompute every link, report first divergence.

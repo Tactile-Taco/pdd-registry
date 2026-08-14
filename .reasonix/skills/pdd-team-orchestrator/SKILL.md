@@ -33,7 +33,7 @@ The team's control plane. Hold context, route work between role agents, enforce 
 When recreating an existing system: ONLY the orchestrator accesses the reference (repo, docs, product). Authors ask formal questions; the orchestrator answers with facts and formal invariants (e.g. "pagination is capped at 500 items per page"). Record every exchange with provenance. Protocols express distilled intent, not copied code.
 
 ## Pipeline gates (owner + artifact)
-1. `draft-complete` — author; bundle passes check_bundle.py.
+1. `draft-complete` — author; bundle passes pdd workflow lint.
 2. `negotiated` — negotiator; zero open conflicts; minutes committed.
 3. `sealed` — orchestrator; versions pinned; bundles frozen.
 4. `candidate-ready` — generator; candidate manifest emitted.
