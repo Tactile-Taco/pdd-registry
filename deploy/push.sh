@@ -86,11 +86,20 @@ printf 'PDD_PUBLISH_TOKEN=%s\n' "${PDD_PUBLISH_TOKEN}" \
   | ssh_guest 'sudo k3s kubectl create secret generic pdd-publish-token \
       --from-env-file=/dev/stdin --dry-run=client -o yaml | sudo k3s kubectl apply -f -'
 
+echo "==> Refreshing tailscale TLS cert (90-day validity) + k8s secret"
+# The ingress serves the tailnet node name with a publicly-trusted tailscale
+# cert (SAN = STAGING_TAILSCALE_DNS); refreshed on every deploy so the
+# deployment never silently rolls onto the Traefik default cert.
+# shellcheck disable=SC2029
+ssh_guest 'sudo tailscale cert --cert-file=/etc/pdd-tls.crt --key-file=/etc/pdd-tls.key "'"${STAGING_TAILSCALE_DNS}"'" \
+  && sudo k3s kubectl create secret tls pdd-tls --cert=/etc/pdd-tls.crt --key=/etc/pdd-tls.key \
+       --dry-run=client -o yaml | sudo k3s kubectl apply -f -'
+
 echo "==> Applying manifest (host + image digest substituted) to ${STAGING_TAILSCALE_IP}"
 MANIFEST="deploy/k8s.yaml"
 # Escape & for sed (the values are operator-controlled, but never trust them).
 DNS_ESC="${STAGING_TAILSCALE_DNS//&/\\&}"
-SUBSTITUTED="$(sed -e "s/__STAGING_HOST__/${PROJECT}.${DNS_ESC}/" \
+SUBSTITUTED="$(sed -e "s/__STAGING_HOST__/${DNS_ESC}/" \
     -e "s|image: ghcr.io/tactile-taco/${PROJECT}.*|image: ghcr.io/tactile-taco/${PROJECT}@sha256:${DIGEST}|" \
     "${MANIFEST}")"
 # Fail closed if the digest substitution did not land (e.g. manifest drift):
@@ -98,7 +107,7 @@ SUBSTITUTED="$(sed -e "s/__STAGING_HOST__/${PROJECT}.${DNS_ESC}/" \
 printf '%s' "${SUBSTITUTED}" | grep -q "image: ghcr.io/tactile-taco/${PROJECT}@sha256:${DIGEST}" \
   || { echo "manifest substitution failed for ${MANIFEST}" >&2; exit 1; }
 # Same guard for the host rule: __STAGING_HOST__ must not survive the sed.
-printf '%s' "${SUBSTITUTED}" | grep -q "host: ${PROJECT}." \
+printf '%s' "${SUBSTITUTED}" | grep -q "host: ${STAGING_TAILSCALE_DNS}" \
   || { echo "host substitution failed for ${MANIFEST}" >&2; exit 1; }
 printf '%s' "${SUBSTITUTED}" \
   | ssh_guest 'sudo k3s kubectl apply -f -'
