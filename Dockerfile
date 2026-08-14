@@ -5,7 +5,7 @@
 #
 # The loop tooling (linter, validation engine, evidence chain, CLI) comes from
 # the pdd-cli package — single source of truth; the Makefile and server call
-# the installed `pdd` binary. Pin to a release tag once v0.1.0 ships.
+# the installed `pdd` binary. Pinned to the v0.1.0 release tag.
 FROM python:3.12-slim
 
 ENV PYTHONUNBUFFERED=1 \
@@ -13,12 +13,16 @@ ENV PYTHONUNBUFFERED=1 \
 
 WORKDIR /opt/pdd
 
+# git is needed to pip-install pdd-cli from the release tag.
+RUN apt-get update && apt-get install -y --no-install-recommends git \
+    && rm -rf /var/lib/apt/lists/*
+
 RUN pip install --no-cache-dir \
     pytest==9.0.3 \
     hypothesis==6.165.0 \
     jsonschema==4.26.0 \
     pyyaml==6.0.3 \
-    "pdd-cli @ git+https://github.com/Tactile-Taco/pdd-cli.git"
+    "pdd-cli @ git+https://github.com/Tactile-Taco/pdd-cli.git@v0.1.0"
 
 COPY src/ src/
 COPY pdd-bundles/ pdd-bundles/

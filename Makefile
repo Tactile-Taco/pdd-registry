@@ -1,8 +1,10 @@
 .PHONY: install lint test validate evidence all ci-install seal
 
 # The pdd CLI is the shared loop tooling (repo: Tactile-Taco/pdd-cli).
-PY ?= .venv/bin/python
-PDD ?= .venv/bin/pdd
+# CI installs it on PATH; local dev: `make install` then override
+# PY=.venv/bin/python PDD=.venv/bin/pdd.
+PY ?= python3
+PDD ?= pdd
 BUNDLE = pdd-bundles/user-registry
 IMPL = implementations/user-registry/python-stdlib
 # Where the validator loop ran (CI run URL, or urn: for local runs).
