@@ -14,19 +14,21 @@ jobs:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
       - uses: actions/setup-python@e797f83bcb11b83ae66e0230d6156d7c80228e7c # v6.0.0
         with: { python-version: "3.12" }
-      - run: pip install pyyaml==6.0.3 pytest==9.0.3 hypothesis==6.165.0 jsonschema==4.26.0
+      - run: pip install pyyaml==6.0.3 pytest==9.0.3 hypothesis==6.165.0 jsonschema==4.26.0 "pdd-cli @ git+https://github.com/Tactile-Taco/pdd-cli.git"
       - name: Bundle lint
-        run: for d in pdd-bundles/*/; do python3 .reasonix/skills/pdd-protocol-author/scripts/check_bundle.py "$d"; done
+        run: pdd workflow lint
       # make test runs the candidate suite under env -i (the signing key is
       # stripped there), then the service verification surface with the key.
       - name: Candidate suite (scrubbed) + service verification (key)
         run: make test
         env:
           PDD_EVIDENCE_KEY: ${{ secrets.PDD_EVIDENCE_KEY }}
+      # The fleet is a client system outside the PDD loop (stochastic agents);
+      # its deterministic parts are tested in the annotation-memory-plane repo.
       - name: Three-layer Validator Loop
         run: make validate
       # The signing key is scoped to the evidence steps only.
-      - name: Evidence chain build + verify
+      - name: Evidence chain build + verify + staleness
         run: make evidence
         env:
           PDD_EVIDENCE_KEY: ${{ secrets.PDD_EVIDENCE_KEY }}

@@ -53,7 +53,7 @@
       "invariant_id": "S-002",
       "layer": "structural",
       "outcome": "pass",
-      "evidence": "enumerated error kinds referenced in candidate source"
+      "evidence": "error-kind markers ['invalid_request'] referenced in candidate source"
     },
     {
       "invariant_id": "S-003",
@@ -77,7 +77,7 @@
       "invariant_id": "B-001,B-002,B-003,B-004,B-005",
       "layer": "behavioral",
       "outcome": "pass",
-      "evidence": "pytest: 10 passed in 3.68s"
+      "evidence": "pytest: 10 passed in 3.82s"
     },
     {
       "invariant_id": "B-001",
@@ -88,20 +88,20 @@
     {
       "invariant_id": "O-001,O-002",
       "layer": "operational",
-      "outcome": "pass",
-      "evidence": "docker sandbox (network none, read-only fs): sandbox smoke ok"
+      "outcome": "skip",
+      "evidence": "sandbox not requested or docker not found; static scan only"
     },
     {
       "invariant_id": "O-005",
       "layer": "operational",
       "outcome": "observe",
-      "evidence": "p95=0.00ms over 1000 calls (budget 500ms, should-tier)"
+      "evidence": "p95=0.01ms over 1000 calls (budget 500ms, should-tier)"
     }
   ],
   "verdict": "admit",
   "verdict_reason": "all must invariants pass; no mutation-suspect flags",
   "environment": {
-    "runtime": "3.14.6",
+    "runtime": "3.14.7",
     "os": "linux"
   }
 }

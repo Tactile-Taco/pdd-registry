@@ -21,6 +21,7 @@ set -euo pipefail
 : "${STAGING_TAILSCALE_IP:?Set STAGING_TAILSCALE_IP (Infisical misc-secrets)}"
 : "${STAGING_TAILSCALE_DNS:?Set STAGING_TAILSCALE_DNS (Infisical misc-secrets)}"
 : "${PDD_EVIDENCE_KEY:?Set PDD_EVIDENCE_KEY (must match the key the evidence was signed with)}"
+: "${PDD_PUBLISH_TOKEN:?Set PDD_PUBLISH_TOKEN (shared bearer token for the publish surface)}"
 
 PROJECT="pdd-registry"
 IMAGE="ghcr.io/tactile-taco/${PROJECT}:latest"
@@ -78,6 +79,11 @@ echo "==> Creating evidence Secret on ${STAGING_TAILSCALE_IP} (idempotent)"
 # in any process listing or shell history.
 printf 'PDD_EVIDENCE_KEY=%s\n' "${PDD_EVIDENCE_KEY}" \
   | ssh_guest 'sudo k3s kubectl create secret generic pdd-evidence-key \
+      --from-env-file=/dev/stdin --dry-run=client -o yaml | sudo k3s kubectl apply -f -'
+
+echo "==> Creating publish-token Secret on ${STAGING_TAILSCALE_IP} (idempotent)"
+printf 'PDD_PUBLISH_TOKEN=%s\n' "${PDD_PUBLISH_TOKEN}" \
+  | ssh_guest 'sudo k3s kubectl create secret generic pdd-publish-token \
       --from-env-file=/dev/stdin --dry-run=client -o yaml | sudo k3s kubectl apply -f -'
 
 echo "==> Applying manifest (host + image digest substituted) to ${STAGING_TAILSCALE_IP}"

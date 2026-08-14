@@ -32,6 +32,13 @@ spec:
                   name: pdd-evidence-key
                   key: PDD_EVIDENCE_KEY
                   optional: true
+            # PDD_PUBLISH_TOKEN authorizes POST /publish (created at deploy time).
+            - name: PDD_PUBLISH_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: pdd-publish-token
+                  key: PDD_PUBLISH_TOKEN
+                  optional: true
 ---
 apiVersion: v1
 kind: Service

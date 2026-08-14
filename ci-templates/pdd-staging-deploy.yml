@@ -26,6 +26,7 @@ jobs:
           STAGING_SSH_KEY_MATERIAL: ${{ secrets.STAGING_SSH_KEY }}
           STAGING_KNOWN_HOSTS: deploy/staging-known_hosts
           PDD_EVIDENCE_KEY: ${{ secrets.PDD_EVIDENCE_KEY }}
+          PDD_PUBLISH_TOKEN: ${{ secrets.PDD_PUBLISH_TOKEN }}
         run: |
           # The secret holds key material; ssh -i needs a file. Materialize
           # under $RUNNER_TEMP with 0600 perms (the value is masked in logs).

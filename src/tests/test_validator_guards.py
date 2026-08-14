@@ -1,16 +1,11 @@
-"""Unit tests for the Validation Engine's security guards
-(validators/validate_candidate.py + scripts/pdd.py hardening).
+"""Unit tests for the Validation Engine's security guards (pdd.engine).
 
-Runs inside the service suite (`pytest src/tests`) without the evidence key.
+The engine lives in the pdd-cli package (single source — the linter, engine,
+and evidence chain were folded out of this repo into it). Runs inside the
+service suite (`pytest src/tests`) without the evidence key.
 """
 
-import sys
-from pathlib import Path
-
-REPO_ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(REPO_ROOT / "validators"))
-
-import validate_candidate as vc  # noqa: E402
+from pdd import engine as vc  # noqa: E402
 
 
 def _raises_systemexit(fn, *args):
@@ -99,13 +94,16 @@ def test_assert_safe_expression_rejects_non_string():
     assert _raises_systemexit(vc._assert_safe_expression, 42)
 
 
-# --- pdd.py duplicate gate (subprocess boundary) ------------------------------
+# --- single-source gate (no duplicated guard in the CLI path) -----------------
 
-def test_pdd_assert_safe_expression_matches_validator():
-    sys.path.insert(0, str(REPO_ROOT / "scripts"))
-    import pdd as pdd_cli  # noqa: E402
-
-    for ok in ("r['ok'] is True", "r['count'] >= 0"):
-        pdd_cli._assert_safe_expression(ok)
-    for bad in ("sys.modules['os'].system('id')", "open('/etc/passwd')", "f()"):
-        assert _raises_systemexit(pdd_cli._assert_safe_expression, bad), bad
+def test_cli_smoke_path_uses_the_engine_guard():
+    """The old pdd.py duplicated _assert_safe_expression across the subprocess
+    boundary; the CLI now imports the engine's guard — verify the workflow
+    run command resolves to the very same function object."""
+    import inspect
+    from pdd.workflow import run as run_mod
+    src = inspect.getsource(run_mod)
+    assert "from ..engine import _assert_safe_expression" in src
+    # and the engine's guard still bites on the hostile forms
+    for bad in ("__import__('os')", "open('/etc/passwd')", "f()"):
+        assert _raises_systemexit(vc._assert_safe_expression, bad), bad

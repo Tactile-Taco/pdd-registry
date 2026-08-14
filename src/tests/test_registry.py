@@ -138,15 +138,17 @@ def test_load_bundle_tolerates_null_sections(tmp_path):
 
 
 def test_ledger_view_limit():
+    # user-registry's chain has >= 2 blocks: the original admission plus the
+    # bundle-drift re-attestation (append-only; history is never rewritten).
     view = registry_index.ledger_view(ROOT / "evidence", "user-registry", limit=1)
-    assert view["count"] == 1
+    assert view["count"] >= 2
     assert len(view["blocks"]) == 1
     assert view["blocks"][0]["decision"] == "attest-pass"
     full = registry_index.ledger_view(ROOT / "evidence", "user-registry")
-    assert full["count"] == 1 and len(full["blocks"]) == 1
+    assert full["count"] >= 2 and len(full["blocks"]) == full["count"]
     # limit=0 means zero blocks (never "all" via the -0 slice)
     zero = registry_index.ledger_view(ROOT / "evidence", "user-registry", limit=0)
-    assert zero["count"] == 1 and zero["blocks"] == []
+    assert zero["count"] >= 2 and zero["blocks"] == []
 
 
 # --- HTTP routes (v2) ------------------------------------------------------
@@ -207,7 +209,7 @@ def test_get_bundle_capabilities(client):
 def test_get_bundle_ledger(client):
     status, body = client("/bundles/user-registry/ledger?limit=1")
     assert status == 200
-    assert body["count"] == 1
+    assert body["count"] >= 2
     assert len(body["blocks"]) == 1
     assert body["blocks"][0]["decision"] == "attest-pass"
     # fail-closed: `verified` is a real verification result, never assumed

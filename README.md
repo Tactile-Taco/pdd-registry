@@ -23,11 +23,15 @@ pdd-bundles/            # THE protocol registry (durable, versioned, sealed)
   pdd-registry/         #   dogfood bundle: catalog search + read views (registry core)
 implementations/        # candidate realizations (replaceable; never authoritative)
   user-registry/python-stdlib/
-validators/             # the three-layer Validation Engine (S / B / O)
 evidence/               # admission evidence objects, discovery logs, runtime ledger
-scripts/pdd.py          # the docker-like CLI
 ci-templates/           # GitHub Actions workflows (install via `make ci-install`)
 .reasonix/skills/       # the PDD team skills that drive this workflow
+
+The CLI (linter, three-layer validation engine, evidence chain, registry
+client) lives in the **pdd-cli** repo (`Tactile-Taco/pdd-cli`, installed as the
+`pdd` binary) — single source of truth for the loop tooling; the Makefile,
+CI, and server call the installed `pdd`. This repo owns the data: bundles,
+implementations, evidence.
 ```
 
 ## Quickstart
@@ -41,16 +45,15 @@ make evidence   # signed evidence object + genesis ledger block + ledger verify 
 make all        # the whole loop (the commit gate; needs $PDD_EVIDENCE_KEY exported)
 ```
 
-The CLI:
+The CLI (install from the pdd-cli repo):
 
 ```bash
-python3 scripts/pdd.py bundle lint user-registry
-python3 scripts/pdd.py validate user-registry --sandbox --pbt-runs 5000
-python3 scripts/pdd.py evidence build user-registry --impl implementations/user-registry/python-stdlib
-python3 scripts/pdd.py evidence verify user-registry
-python3 scripts/pdd.py run user-registry --sandbox
-python3 scripts/pdd.py index             # registry catalog over pdd-bundles/*
-python3 scripts/pdd.py search idempotent # search names, purpose, invariants, capabilities
+pdd workflow lint                          # lint every bundle
+pdd workflow validate user-registry --impl implementations/user-registry/python-stdlib --sandbox --pbt-runs 5000
+pdd workflow evidence build user-registry --impl implementations/user-registry/python-stdlib --validation-resource <url>
+pdd workflow evidence verify user-registry
+pdd workflow run user-registry --impl implementations/user-registry/python-stdlib --sandbox
+pdd registry search idempotent             # HTTP client for the deployed instance
 ```
 
 The same index powers the service's v2 read API (docs/service-features-v2.md):
@@ -102,7 +105,7 @@ mkdir pdd-bundles/my-protocol
 # copy the template set:
 cp -r .reasonix/skills/pdd-protocol-author/assets/templates/* pdd-bundles/my-protocol/
 # author, then:
-make lint && python3 scripts/pdd.py bundle seal my-protocol
+make lint && pdd workflow seal pdd-bundles/my-protocol
 ```
 
 ## Evidence chain integrity

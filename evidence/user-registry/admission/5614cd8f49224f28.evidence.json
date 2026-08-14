@@ -2,7 +2,7 @@
   "protocol": {
     "name": "user-registry",
     "version": "1.0.0",
-    "bundle_digest": "sha256:52a6dacd9a4b57e0548512065ef10b27e9d26e5d6d68b9596d2bc474538b4d16"
+    "bundle_digest": "sha256:ecf72a1122d8866b10666833b93f1601d7f26591fdbde1637b602136e6048318"
   },
   "implementation": {
     "artifact_digest": "sha256:5614cd8f49224f28f4bed982555e2971d58334590744e57ca75c7f6616676dcf"
@@ -55,7 +55,7 @@
       "invariant_id": "S-002",
       "layer": "structural",
       "outcome": "pass",
-      "evidence": "enumerated error kinds referenced in candidate source"
+      "evidence": "error-kind markers ['invalid_request'] referenced in candidate source"
     },
     {
       "invariant_id": "S-003",
@@ -76,35 +76,36 @@
       "evidence": "forbidden signals=[]"
     },
     {
-      "invariant_id": "B-001..B-005",
+      "invariant_id": "B-001,B-002,B-003,B-004,B-005",
       "layer": "behavioral",
       "outcome": "pass",
-      "evidence": "pytest: 10 passed in 3.70s"
+      "evidence": "pytest: 10 passed in 4.49s"
     },
     {
       "invariant_id": "B-001",
       "layer": "behavioral",
       "outcome": "pass",
-      "evidence": "mutant rejected by B-001 property (exit 1) \u2014 property is not vacuous"
+      "evidence": "mutant rejected by B001_repeat (exit 1, assertion failure) \u2014 property is not vacuous"
     },
     {
       "invariant_id": "O-001,O-002",
       "layer": "operational",
-      "outcome": "pass",
-      "evidence": "docker sandbox (network none, read-only fs): sandbox smoke ok"
+      "outcome": "skip",
+      "evidence": "sandbox not requested or docker not found; static scan only"
     },
     {
       "invariant_id": "O-005",
       "layer": "operational",
       "outcome": "observe",
-      "evidence": "p95=0.00ms over 1000 creates (budget 500ms, should-tier)"
+      "evidence": "p95=0.01ms over 1000 calls (budget 500ms, should-tier)"
     }
   ],
   "provenance": {
-    "time": "2026-08-06T11:19:26Z",
+    "time": "2026-08-14T01:04:34Z",
     "manifest": "user-registry-python-stdlib",
-    "discovery_digest": "sha256:feea3c972df5bc8e73157a0476906cf8d2e1b50639eeba90ff65b233a54f8a4e"
+    "discovery_digest": "sha256:feea3c972df5bc8e73157a0476906cf8d2e1b50639eeba90ff65b233a54f8a4e",
+    "validation_resource": "urn:pdd-registry:validation:local"
   },
-  "digest": "sha256:61b4b8957c14f201764d9a6c2df0b0d3feacb06b218d94d3fb3217879b1b394c",
-  "signature": "hmac-sha256:83059ea84c44eb8aa38c3fc37d002764e228b41081869fe37745349725a002b7"
+  "digest": "sha256:8edf185eb6cfa29b9d2659ae2a26293abad1a26b5a56824dad14916b44b0e239",
+  "signature": "hmac-sha256:001c2049bab5e246eb14b363cb2ff3b9e019ac371899c813d9948a91688a6efd"
 }
