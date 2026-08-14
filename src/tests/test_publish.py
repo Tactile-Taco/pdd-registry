@@ -5,6 +5,7 @@ with the same PDD_EVIDENCE_KEY the committed registry evidence uses.
 """
 
 import importlib.util
+import hashlib
 import json
 import os
 import sqlite3
@@ -81,7 +82,7 @@ def _bundle_files(name="demo", namespace="test-ns", version="1.0.0") -> dict:
 
 
 def _submission(files=None, name="demo", namespace="test-ns", version="1.0.0",
-                sign_key=None):
+                sign_key=None, discovery=None):
     files = files if files is not None else _bundle_files(name, namespace, version)
     bundle_digest = server._bundle_digest_of(files)
     proto = {"name": name, "version": version, "bundle_digest": bundle_digest}
@@ -91,14 +92,21 @@ def _submission(files=None, name="demo", namespace="test-ns", version="1.0.0",
     if sign_key:
         os.environ["PDD_EVIDENCE_KEY"] = sign_key
     try:
-        evidence = pdd_evidence.build_evidence(proto, "sha256:impl", [], [], {})
+        meta = {}
+        if discovery is not None:
+            meta["discovery_digest"] = "sha256:" + hashlib.sha256(
+                json.dumps(discovery, indent=2).encode()).hexdigest()
+        evidence = pdd_evidence.build_evidence(proto, "sha256:impl", [], [], meta)
     finally:
         if sign_key and saved is not None:
             os.environ["PDD_EVIDENCE_KEY"] = saved
-    return {
+    payload = {
         "namespace": namespace, "name": name, "version": version,
         "bundle": files, "evidence": evidence,
     }
+    if discovery is not None:
+        payload["discovery"] = discovery
+    return payload
 
 
 def _post(url, payload, token=None):
@@ -226,3 +234,38 @@ def test_publish_new_version_no_collision():
     status, resp = server._handle_publish(sub)
     assert status == 201
     assert resp["version"] == "1.1.0"
+
+
+DISC = {"files": ["protocol.yaml"], "dependencies": [], "invariant_lineage": {},
+        "known_limitations": []}
+
+
+def test_publish_discovery_binding_stores_verifiable_copy():
+    sub = _submission(discovery=DISC)
+    status, resp = server._handle_publish(sub)
+    assert status == 201, resp
+    disc_file = next((server.EVIDENCE / "demo" / "discovery").glob("*.discovery.json"))
+    signed = (sub["evidence"].get("provenance") or {}).get("discovery_digest")
+    on_disk = "sha256:" + hashlib.sha256(disc_file.read_bytes()).hexdigest()
+    assert signed == on_disk
+    # the CLI-style verify (ledger + admission + discovery binding) passes
+    assert pdd_evidence.verify_ledger(server.EVIDENCE / "demo" / "runtime-ledger.jsonl")["ok"]
+    adm_file = next((server.EVIDENCE / "demo" / "admission").glob("*.evidence.json"))
+    assert pdd_evidence.verify_evidence_object(adm_file)["ok"]
+
+
+def test_publish_discovery_tamper_400():
+    sub = _submission(discovery=DISC)
+    sub["discovery"] = {"files": ["tampered"], "dependencies": [], "invariant_lineage": {},
+                        "known_limitations": []}
+    status, resp = server._handle_publish(sub)
+    assert status == 400
+    assert resp["error"]["code"] == "conflict"
+
+
+def test_publish_discovery_required_when_bound_400():
+    sub = _submission(discovery=DISC)
+    del sub["discovery"]
+    status, resp = server._handle_publish(sub)
+    assert status == 400
+    assert "discovery content required" in resp["error"]["message"]

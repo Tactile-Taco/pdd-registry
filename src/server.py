@@ -365,6 +365,25 @@ def _handle_publish(payload: dict) -> tuple[int, dict]:
         return 400, {"status": "error", "error": {"code": "invalid_request",
                                                   "message": f"registry-owned namespace requires HMAC-signed evidence: {hmac_msg}"}}
 
+    # --- discovery binding: the signed provenance binds the discovery-log
+    # digest; the payload carries the content, which must match (proof the
+    # registry holds exactly what the author signed). Absent discovery is
+    # acceptable only when the evidence binds none.
+    discovery = payload.get("discovery")
+    disc_digest = (evidence.get("provenance") or {}).get("discovery_digest")
+    if discovery is not None and not isinstance(discovery, dict):
+        return 400, {"status": "error", "error": {"code": "invalid_request",
+                                                  "message": "discovery must be an object"}}
+    if disc_digest:
+        if not isinstance(discovery, dict):
+            return 400, {"status": "error", "error": {"code": "invalid_request",
+                                                      "message": "evidence binds a discovery digest; discovery content required"}}
+        computed = "sha256:" + hashlib.sha256(
+            json.dumps(discovery, indent=2).encode()).hexdigest()
+        if computed != disc_digest:
+            return 400, {"status": "error", "error": {"code": "conflict",
+                                                      "message": f"discovery content does not match the signed digest ({computed} != {disc_digest})"}}
+
     evidence_digest = _evidence_file_digest(evidence)
     idem_key = "|".join((namespace, name, version, bundle_digest, evidence_digest))
 
@@ -380,12 +399,12 @@ def _handle_publish(payload: dict) -> tuple[int, dict]:
                 return 409, {"status": "error", "error": {"code": "conflict",
                                                           "message": f"bundle name {name!r} already exists in the catalog with a different digest"}}
         rc, resp = _store_submission(namespace, name, version, bundle, evidence,
-                                     bundle_digest, evidence_digest, idem_key, hmac_ok)
+                                     bundle_digest, evidence_digest, idem_key, discovery)
         return rc, resp
 
 
 def _store_submission(namespace, name, version, bundle, evidence,
-                      bundle_digest, evidence_digest, idem_key, hmac_ok) -> tuple[int, dict]:
+                      bundle_digest, evidence_digest, idem_key, discovery) -> tuple[int, dict]:
     """Content-addressed storage + ledger append + sqlite record."""
     artifact_digest = (evidence.get("implementation") or {}).get("artifact_digest") or ""
     prefix16 = evidence_digest.split(":")[1][:16]
@@ -398,7 +417,8 @@ def _store_submission(namespace, name, version, bundle, evidence,
     disc = EVIDENCE / name / "discovery"
     disc.mkdir(parents=True, exist_ok=True)
     disc_file = disc / f"{prefix16}.discovery.json"
-    disc_file.write_text(json.dumps(evidence.get("discovery_log") or {}, indent=2))
+    disc_file.write_text(json.dumps(discovery if discovery is not None
+                                    else evidence.get("discovery_log") or {}, indent=2))
     val = EVIDENCE / name / "validation"
     val.mkdir(parents=True, exist_ok=True)
     cand_prefix = artifact_digest.split(":")[1][:12] if artifact_digest else prefix16[:12]
