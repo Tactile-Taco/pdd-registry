@@ -22,7 +22,7 @@ RUN pip install --no-cache-dir \
     hypothesis==6.165.0 \
     jsonschema==4.26.0 \
     pyyaml==6.0.3 \
-    "pdd-cli @ git+https://github.com/Tactile-Taco/pdd-cli.git@v0.1.0"
+    "pdd-cli @ git+https://github.com/Tactile-Taco/pdd-cli.git@v0.2.0"
 
 COPY src/ src/
 COPY pdd-bundles/ pdd-bundles/
