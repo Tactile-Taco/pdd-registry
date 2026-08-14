@@ -39,15 +39,19 @@ from pdd import evidence as pdd_evidence  # noqa: E402
 PORT = int(os.environ.get("PORT", "8080"))
 ROOT = Path(os.environ.get("PDD_ROOT", "/opt/pdd"))
 BUNDLES = ROOT / "pdd-bundles"
-EVIDENCE = ROOT / "evidence"
+# Runtime-written data (published bundles, evidence, idempotency db) lives on
+# a persistent volume in production (PDD_DATA_DIR) so rollouts do not wipe
+# published submissions; the image's committed evidence seeds it at boot.
+DATA_DIR = Path(os.environ.get("PDD_DATA_DIR", ROOT))
+EVIDENCE = DATA_DIR / "evidence"
 SKILLS = ROOT / ".reasonix" / "skills"
 PDD = "pdd"
 # Server-owned published-bundle store (catalog merge source; git stays the
 # author-side distribution layer). PUBLISHED/<name>/ holds the latest version;
 # PUBLISHED/<name>/<version>/ keeps immutable version snapshots.
-PUBLISHED = ROOT / "published"
+PUBLISHED = DATA_DIR / "published"
 # SQLite metadata: publish idempotency + submission history (stdlib sqlite3).
-DB_PATH = ROOT / "pdd.db"
+DB_PATH = DATA_DIR / "pdd.db"
 PUBLISH_TOKEN_ENV = "PDD_PUBLISH_TOKEN"
 # Registry-owned namespaces require HMAC-signed evidence (cannot be squatted
 # by a token holder with a stub object).

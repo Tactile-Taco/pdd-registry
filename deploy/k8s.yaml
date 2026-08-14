@@ -17,6 +17,23 @@ spec:
       labels:
         app: pdd-registry
     spec:
+      initContainers:
+        # Seed the persistent data volume from the image once (no-clobber:
+        # append-only ledgers and published admissions on the volume survive
+        # rollouts; new committed evidence files appear on the next boot).
+        - name: pdd-seed
+          image: ghcr.io/tactile-taco/pdd-registry@sha256:c92ae4d042f55e4ee5260ae812dbfaf7a1fb9903c0ffba294b36560f3bbd9803
+          imagePullPolicy: Always
+          command: ["sh", "-c"]
+          args:
+            - |
+              mkdir -p /data/evidence /data/published
+              cp -rn /opt/pdd/evidence/. /data/evidence/ 2>/dev/null || true
+              cp -rn /opt/pdd/published/. /data/published/ 2>/dev/null || true
+              echo "seeded $(find /data/evidence -type f | wc -l) evidence files"
+          volumeMounts:
+            - name: pdd-data
+              mountPath: /data
       containers:
         - name: pdd-registry
           image: ghcr.io/tactile-taco/pdd-registry@sha256:c92ae4d042f55e4ee5260ae812dbfaf7a1fb9903c0ffba294b36560f3bbd9803
@@ -39,6 +56,29 @@ spec:
                   name: pdd-publish-token
                   key: PDD_PUBLISH_TOKEN
                   optional: true
+            # Runtime-written data on the persistent volume (rollouts survive).
+            - name: PDD_DATA_DIR
+              value: /data
+          volumeMounts:
+            - name: pdd-data
+              mountPath: /data
+      volumes:
+        - name: pdd-data
+          persistentVolumeClaim:
+            claimName: pdd-data
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pdd-data
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+  # k3s local-path provisioner (host disk on the staging guest).
+  storageClassName: local-path
 ---
 apiVersion: v1
 kind: Service
