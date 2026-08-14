@@ -231,6 +231,15 @@ def _canon(x) -> bytes:
     return json.dumps(x, sort_keys=True, separators=(",", ":")).encode()
 
 
+def _evidence_file_digest(evidence: dict) -> str:
+    """Digest of the evidence object AS WRITTEN TO DISK (json.dumps indent=2) —
+    the same bytes the CLI's evidence build writes and the ledger attests.
+    (The canonical-json digest differs from the file bytes and would break
+    ledger attestation of the on-disk object.)"""
+    return "sha256:" + hashlib.sha256(
+        json.dumps(evidence, indent=2).encode()).hexdigest()
+
+
 def _evidence_digest_ok(evidence: dict) -> tuple[bool, str]:
     """Recompute digest + HMAC of an evidence object (same scheme as the
     evidence chain). Registry-owned namespaces MUST HMAC-verify (publish 400
@@ -356,7 +365,7 @@ def _handle_publish(payload: dict) -> tuple[int, dict]:
         return 400, {"status": "error", "error": {"code": "invalid_request",
                                                   "message": f"registry-owned namespace requires HMAC-signed evidence: {hmac_msg}"}}
 
-    evidence_digest = "sha256:" + hashlib.sha256(_canon(evidence)).hexdigest()
+    evidence_digest = _evidence_file_digest(evidence)
     idem_key = "|".join((namespace, name, version, bundle_digest, evidence_digest))
 
     with _publish_lock:
@@ -430,6 +439,26 @@ def _store_submission(namespace, name, version, bundle, evidence,
     return 201, {"status": "published", "name": name, "version": version,
                  "bundle_digest": bundle_digest, "evidence_digest": evidence_digest,
                  "namespace": namespace}
+
+
+def _evidence_status(name: str) -> str:
+    """Three-state evidence view: verified (all records cryptographically
+    verified), unverified (records exist but fail verification), invalid
+    (structurally broken), else no evidence present -> 'none'."""
+    adm_dir = EVIDENCE / name / "admission"
+    if not adm_dir.is_dir():
+        return "none"
+    try:
+        rows = _admission(name)
+    except Exception:  # noqa: BLE001
+        return "invalid"
+    if not rows:
+        return "none"
+    if all(r.get("verified") is True for r in rows):
+        return "verified"
+    if any("error" in r or r.get("signature_valid") is False for r in rows):
+        return "invalid"
+    return "unverified"
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -516,6 +545,7 @@ class Handler(BaseHTTPRequestHandler):
                 "depends_on": b.get("depends_on", []), "provides": b.get("provides", {}),
                 "invariant_ids": {layer: [it["id"] for it in b["invariants"][layer]]
                                   for layer in registry_index.LAYERS},
+                "evidence_status": _evidence_status(name),
             })
             return
         sub = parts[2]

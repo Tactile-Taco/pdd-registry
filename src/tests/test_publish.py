@@ -195,6 +195,24 @@ def test_publish_idempotent_republish():
     assert ledger.read_text().count("attest-pass") == 1
 
 
+def test_publish_ledger_attests_the_on_disk_evidence_file():
+    """The ledger's evidence_digest must equal the digest of the admission
+    file bytes (the CLI's verify recomputes file digests) — a canonical-json
+    digest here would break /evidence/verify attestation."""
+    sub = _submission()
+    assert server._handle_publish(sub)[0] == 201
+    import hashlib
+    ledger = server.EVIDENCE / "demo" / "runtime-ledger.jsonl"
+    block = json.loads(ledger.read_text().splitlines()[-1])
+    obs = block.get("observations") or {}
+    adm_file = next((server.EVIDENCE / "demo" / "admission").glob("*.evidence.json"))
+    on_disk = "sha256:" + hashlib.sha256(adm_file.read_bytes()).hexdigest()
+    assert obs["evidence_digest"] == on_disk
+    # and the CLI-style verify (ledger + every admission file) passes
+    assert pdd_evidence.verify_ledger(ledger)["ok"] is True
+    assert pdd_evidence.verify_evidence_object(adm_file)["ok"] is True
+
+
 def test_publish_name_collision_with_catalog_409():
     # "user-registry" exists in the git checkout with a different digest.
     sub = _submission(name="user-registry", files=_bundle_files(name="user-registry"))
