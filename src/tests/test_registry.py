@@ -322,3 +322,119 @@ def test_bundles_filter_depends_on_positive(client, monkeypatch):
 def test_load_catalog_missing_dir(tmp_path):
     """A missing bundles dir yields an empty catalog, not an exception."""
     assert registry_index.load_catalog(tmp_path / "does-not-exist") == []
+
+
+# --- implementation index / picker ----------------------------------------
+
+FLAT_MANIFEST = {
+    "artifact_id": "user-registry-python-stdlib",
+    "protocol": {"name": "user-registry", "version": "1.0.0", "status": "sealed"},
+    "language": "python",
+    "runtime": "python-3.12",
+    "files": ["user_registry.py"],
+    "entry_module": "user_registry",
+}
+
+NESTED_MANIFEST = {
+    "candidate_manifest": {
+        "schema_version": "1.0",
+        "implementation": "react",
+        "artifact_id": "urn:pdd-todo:react:app:1",
+        "entry_module": "server/index.js",
+        "implements": [
+            {"protocol": "todo-engine", "version": "1.0.0",
+             "evidence": "evidence/todo-engine/validation-results.json"},
+            {"protocol": "public-api", "version": "1.0.0",
+             "evidence": "evidence/public-api/validation-results.json"},
+        ],
+        "host": {"class": "node-runtime",
+                 "affinity": {"runtime": "node@24", "framework": "express@4.22"}},
+        "files": {"todo-engine": ["server/engine.js"], "public-api": ["server/api.js"]},
+        "provides_seams": ["public-api.api"],
+    }
+}
+
+
+def _write_impl_tree(tmp: Path):
+    """implementations/<name>/<variant> and implementations/<stack> layouts."""
+    (tmp / "implementations" / "user-registry" / "python-stdlib").mkdir(parents=True)
+    (tmp / "implementations" / "user-registry" / "python-stdlib"
+     / "candidate-manifest.json").write_text(json.dumps(FLAT_MANIFEST))
+    (tmp / "implementations" / "react").mkdir(parents=True)
+    (tmp / "implementations" / "react" / "candidate-manifest.json").write_text(
+        json.dumps(NESTED_MANIFEST))
+    ev = tmp / "implementations" / "react" / "evidence"
+    (ev / "todo-engine").mkdir(parents=True)
+    (ev / "todo-engine" / "validation-results.json").write_text(json.dumps(
+        {"protocol": "todo-engine", "result": "pass", "timestamp": "2026-08-14T00:00:00Z"}))
+    (ev / "public-api").mkdir(parents=True)
+    (ev / "public-api" / "validation-results.json").write_text(json.dumps(
+        {"protocol": "public-api", "result": "pass", "timestamp": "2026-08-14T00:00:00Z"}))
+
+
+def test_implementations_loads_both_manifest_shapes(tmp_path):
+    _write_impl_tree(tmp_path)
+    impls = registry_index.load_implementations(tmp_path / "implementations")
+    by = {(e["name"], e["variant"]): e for e in impls}
+    assert set(by) == {("user-registry", "python-stdlib"), ("react", ".")}
+    flat = by[("user-registry", "python-stdlib")]
+    assert flat["protocols"][0]["protocol"] == "user-registry"
+    assert flat["host_class"] == "python"
+    nested = by[("react", ".")]
+    assert {p["protocol"] for p in nested["protocols"]} == {"todo-engine", "public-api"}
+    assert nested["host_class"] == "node-runtime"
+    assert nested["affinity"]["framework"] == "express@4.22"
+
+
+def test_implementations_filter_and_rank(tmp_path):
+    _write_impl_tree(tmp_path)
+    impls = registry_index.load_implementations(tmp_path / "implementations")
+    # protocol filter
+    assert [e["name"] for e in registry_index.filter_implementations(impls, protocol="todo-engine")] == ["react"]
+    # host class filter
+    assert [e["name"] for e in registry_index.filter_implementations(impls, host_class="python")] == ["user-registry"]
+    # affinity filter
+    assert [e["name"] for e in registry_index.filter_implementations(impls, affinity="express")] == ["react"]
+    # evidence=pass requires every protocol to pass
+    assert [e["name"] for e in registry_index.filter_implementations(impls, evidence="pass")] == ["react"]
+    # rank: more protocols + passes first
+    ranked = registry_index.filter_implementations(impls)
+    assert ranked[0]["name"] == "react"
+
+
+def test_implementations_http_route(tmp_path):
+    _write_impl_tree(tmp_path)
+    server.IMPLEMENTATIONS = tmp_path / "implementations"
+    client = client_fixture_client()
+    status, body = client("/implementations?protocol=todo-engine")
+    assert status == 200
+    assert body["count"] == 1
+    assert body["implementations"][0]["name"] == "react"
+    status, body = client("/implementations?host_class=python")
+    assert status == 200
+    assert body["count"] == 1
+    assert body["implementations"][0]["name"] == "user-registry"
+    status, body = client("/implementations?affinity=express&evidence=pass")
+    assert status == 200
+    assert body["count"] == 1
+
+
+def client_fixture_client():
+    """Borrow the module-level `client` fixture by re-instantiating it."""
+    import threading
+    import urllib.request
+    import urllib.error
+    from http.server import HTTPServer
+    httpd = HTTPServer(("127.0.0.1", 0), server.Handler)
+    thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+    thread.start()
+    base = f"http://127.0.0.1:{httpd.server_address[1]}"
+
+    def get(path):
+        try:
+            with urllib.request.urlopen(base + path) as resp:
+                return resp.status, _decode(resp.read())
+        except urllib.error.HTTPError as err:
+            return err.code, _decode(err.read())
+
+    return get

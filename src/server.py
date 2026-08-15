@@ -39,6 +39,7 @@ from pdd import evidence as pdd_evidence  # noqa: E402
 PORT = int(os.environ.get("PORT", "8080"))
 ROOT = Path(os.environ.get("PDD_ROOT", "/opt/pdd"))
 BUNDLES = ROOT / "pdd-bundles"
+IMPLEMENTATIONS = ROOT / "implementations"
 # Runtime-written data (published bundles, evidence, idempotency db) lives on
 # a persistent volume in production (PDD_DATA_DIR) so rollouts do not wipe
 # published submissions; the image's committed evidence seeds it at boot.
@@ -534,6 +535,17 @@ class Handler(BaseHTTPRequestHandler):
                     return
                 results = registry_index.search(_catalog_strict(), q)
                 self._json({"query": q, "count": len(results), "results": results})
+                return
+            if path == "/implementations":
+                entries = registry_index.load_implementations(IMPLEMENTATIONS, EVIDENCE)
+                matched = registry_index.filter_implementations(
+                    entries,
+                    protocol=(query.get("protocol") or [None])[0],
+                    host_class=(query.get("host_class") or [None])[0],
+                    affinity=(query.get("affinity") or [None])[0],
+                    evidence=(query.get("evidence") or [None])[0],
+                )
+                self._json({"implementations": matched, "count": len(matched)})
                 return
             if path.startswith("/bundles/"):
                 self._bundle_route(path, query)
