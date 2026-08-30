@@ -1,0 +1,61 @@
+# Validation plan — design-system descriptor v1.0.0
+# Every invariant maps to a real, computed validator. No self-attestation.
+
+DS-S-01:
+  validator: descriptor-lint
+  method: >
+    JSON-Schema validation of the descriptor against
+    schemas/descriptor.schema.json (draft-07); all required fields present,
+    no additionalProperties violations.
+  evidence: validation-results.json keyed DS-S-01 (pass/fail + schema errors)
+  tooling: node validators/descriptor-lint.js
+
+DS-S-02:
+  validator: descriptor-lint
+  method: >
+    Token-table checks: name uniqueness, kebab-case grammar, hex grammar for
+    type=color, pairing fg/bg references resolve to declared tokens.
+  evidence: validation-results.json keyed DS-S-02 (+ violations list)
+
+DS-S-03:
+  validator: descriptor-lint
+  method: >
+    Normative-filter encoding check: machine_checkable=true implies a
+    measurement object with selector/proxy and threshold/window;
+    machine_checkable=false implies demote_reason in the controlled set.
+
+DS-S-04:
+  validator: descriptor-lint
+  method: >
+    Provenance block presence and shape: generator.tool non-empty string,
+    raw_output_hash.{algorithm,value} present.
+
+DS-S-05:
+  validator: descriptor-lint
+  method: >
+    Semver grammar on descriptor_version; MAJOR/MINOR classification is
+    reviewed at seal time per the version-event rules in the registry skill.
+
+DS-B-01:
+  validator: contrast-check
+  method: >
+    For every pairing with relation=contrast_ratio, compute WCAG relative
+    luminance ratio from the referenced token values; fail if < threshold.
+
+DS-B-02:
+  validator: descriptor-determinism
+  method: >
+    Lint the descriptor twice in separate processes; byte-compare normalized
+    violation reports; any difference fails.
+
+DS-B-03:
+  validator: descriptor-lint
+  method: >
+    Enumerate demoted items; verify each carries demote_reason in
+    {unmeasurable, proxy-rejected, style-intent}.
+
+DS-O-01:
+  validator: descriptor-offline
+  method: >
+    Run lint under network-disabled sandbox policy; success proves offline
+    capability; any egress attempt fails the run.

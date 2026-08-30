@@ -1,0 +1,10 @@
+# Approved validator identities — design-system descriptor v1.0.0
+validators:
+  - id: descriptor-lint
+    version: "1.0.0"
+  - id: contrast-check
+    version: "1.0.0"
+  - id: descriptor-determinism
+    version: "1.0.0"
+  - id: descriptor-offline
+    version: "1.0.0"

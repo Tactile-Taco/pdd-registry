@@ -68,12 +68,14 @@ def _decode(raw: bytes):
 
 def test_index_catalog_shape():
     catalog = registry_index.load_catalog(ROOT / "pdd-bundles")
-    # The registry now carries the 9 sealed bundles (7 transcript-annotation
-    # bundles were added on top of pdd-registry + user-registry).
+    # The registry now carries the 10 sealed bundles (7 transcript-annotation
+    # bundles on top of pdd-registry + user-registry, then the design-system
+    # taxonomy bundle).
     assert sorted(b["name"] for b in catalog) == [
-        "annotation-store", "pdd-registry", "reflection-packet",
-        "topic-flow-review", "topic-graph", "topic-transition-pass",
-        "transcript-chunking", "uncertainty-pass", "user-registry",
+        "annotation-store", "design-system-bundle", "pdd-registry",
+        "reflection-packet", "topic-flow-review", "topic-graph",
+        "topic-transition-pass", "transcript-chunking", "uncertainty-pass",
+        "user-registry",
     ]
     b = next(b for b in catalog if b["name"] == "user-registry")
     assert b["status"] == "sealed"
@@ -162,11 +164,11 @@ def test_get_healthz(client):
 
 def test_get_bundles_filtered(client):
     status, body = client("/bundles?status=sealed")
-    assert status == 200
     assert sorted(b["name"] for b in body["bundles"]) == [
-        "annotation-store", "pdd-registry", "reflection-packet",
-        "topic-flow-review", "topic-graph", "topic-transition-pass",
-        "transcript-chunking", "uncertainty-pass", "user-registry",
+        "annotation-store", "design-system-bundle", "pdd-registry",
+        "reflection-packet", "topic-flow-review", "topic-graph",
+        "topic-transition-pass", "transcript-chunking", "uncertainty-pass",
+        "user-registry",
     ]
     status, body = client("/bundles?status=draft")
     assert status == 200

@@ -1,0 +1,23 @@
+# Behavioral invariants (B) — design-system descriptor v1.0.0
+behavioral_invariants:
+  - id: DS-B-01
+    statement: >
+      Every pairing rule satisfies its declared relation against the referenced
+      tokens' values: contrast_ratio >= threshold, or the pairing is rejected.
+    severity: must
+    validation: [descriptor-lint]
+
+  - id: DS-B-02
+    statement: >
+      machine_checkable=true items are deterministic: two lint runs over an
+      unchanged descriptor produce identical checkable-item sets (no ambient
+      state, no ordering dependence).
+    severity: must
+    validation: [descriptor-determinism]
+
+  - id: DS-B-03
+    statement: >
+      Demoted checklist items (machine_checkable=false) each carry a demote_reason
+      from the controlled set: unmeasurable | proxy-rejected | style-intent.
+    severity: should
+    validation: [descriptor-lint]

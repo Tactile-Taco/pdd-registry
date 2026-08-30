@@ -1,0 +1,40 @@
+# Structural invariants (S) — design-system descriptor v1.0.0
+structural_invariants:
+  - id: DS-S-01
+    statement: >
+      Every descriptor validates against schemas/descriptor.schema.json:
+      required fields (descriptor_version, generator, tokens, pairings),
+      token shape {name, value, type, category}, pairing shape
+      {fg, bg, relation, threshold}.
+    severity: must
+    validation: [descriptor-lint]
+
+  - id: DS-S-02
+    statement: >
+      Token names are unique and kebab-case; values are hex colors (#RGB/#RRGGBB)
+      for type=color tokens; every pairing references declared token names.
+    severity: must
+    validation: [descriptor-lint]
+
+  - id: DS-S-03
+    statement: >
+      Every item with machine_checkable=true declares a measurement definition
+      (selector/proxy + threshold/window); items without one are
+      machine_checkable=false with a demote_reason.
+    severity: must
+    validation: [descriptor-lint]
+
+  - id: DS-S-04
+    statement: >
+      Descriptor carries generator provenance: tool identity, query/version,
+      raw output hash (algorithm+value). Hash present even when the tool is
+      anonymous/internal.
+    severity: should
+    validation: [descriptor-lint]
+
+  - id: DS-S-05
+    statement: >
+      descriptor_version follows semver; additive token/checklist additions are
+      minor; changed or removed tokens/thresholds are major.
+    severity: must
+    validation: [descriptor-lint]

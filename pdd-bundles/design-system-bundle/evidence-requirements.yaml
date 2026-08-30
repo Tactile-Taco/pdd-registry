@@ -1,0 +1,29 @@
+# Evidence requirements — design-system descriptor v1.0.0
+
+The evidence object emitted by each validation run MUST match this contract
+exactly (field names verbatim):
+
+schema_version: "1"
+protocol_name: string, must equal "design-system"
+protocol_version: string, semver of sealed bundle
+timestamp: ISO-8601 UTC
+implementation_artifact_hash:
+  algorithm: sha256
+  value: hash of the descriptor artifact under test (sorted path:sha256 lines)
+validation_results:
+  - invariant_id: string (DS-S-01 .. DS-O-01)
+    severity: must|should
+    result: pass|fail|skip          # skip requires reason + owner
+    detail: string                  # computed ratios / enumerated violations
+invariant_coverage:
+  - invariant_id: string
+    checked: boolean
+discovery_log:
+  - ts: ISO-8601
+    phase: lint|seal|implement|validate|audit|evidence
+    note: string
+passed: boolean                     # true iff all must = pass and no uncovered invariants
+validator_versions:
+  node: string
+dependency_manifest:                # NON-EMPTY; replayability contract
+  generator_example: string         # tool identity the example descriptor came from

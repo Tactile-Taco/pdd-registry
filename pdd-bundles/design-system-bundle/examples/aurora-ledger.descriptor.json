@@ -1,0 +1,73 @@
+{
+  "descriptor_version": "1.0.0",
+  "generator": {
+    "tool": "ui-ux-pro-max search.py --design-system",
+    "query": "fintech dashboard, dark-mode, security-first",
+    "version": "catalog verifiedAt 2026-08-13",
+    "raw_output_hash": {
+      "algorithm": "sha256",
+      "value": "f86c02021f43d1166e63996ba620a0a83b92102dac9a0fcdd87e8bbbbbbd24ef"
+    }
+  },
+  "tokens": [
+    { "name": "bg-base",       "value": "#0F172A", "type": "color", "category": "surface", "usage": "page background" },
+    { "name": "bg-panel",      "value": "#222735", "type": "color", "category": "surface", "usage": "card/panel background" },
+    { "name": "bg-raised",     "value": "#272F42", "type": "color", "category": "surface", "usage": "hover/raised surfaces" },
+    { "name": "text-primary",  "value": "#F8FAFC", "type": "color", "category": "text",    "usage": "primary copy" },
+    { "name": "text-muted",    "value": "#94A3B8", "type": "color", "category": "text",    "usage": "secondary copy" },
+    { "name": "accent",        "value": "#F59E0B", "type": "color", "category": "accent",  "usage": "brand accent / CTA fill" },
+    { "name": "accent-hover",  "value": "#FBBF24", "type": "color", "category": "accent",  "usage": "CTA hover state" },
+    { "name": "violet-accent", "value": "#8B5CF6", "type": "color", "category": "accent",  "usage": "data-viz secondary series" },
+    { "name": "danger",        "value": "#EF4444", "type": "color", "category": "accent",  "usage": "destructive/error" },
+    { "name": "border-subtle", "value": "#334155", "type": "color", "category": "border",  "usage": "hairline borders" },
+    { "name": "pure-black",    "value": "#000000", "type": "color", "category": "surface", "usage": "on-accent text polarity (RA-02)" },
+    { "name": "transition-fast", "value": "150ms", "type": "duration", "category": "motion", "usage": "micro-interaction floor" },
+    { "name": "transition-base", "value": "250ms", "type": "duration", "category": "motion", "usage": "standard transition target" },
+    { "name": "space-md",      "value": "16px",   "type": "dimension", "category": "spacing", "usage": "component gutter" },
+    { "name": "radius-lg",     "value": "12px",   "type": "dimension", "category": "radius",  "usage": "card corners" }
+  ],
+  "pairings": [
+    { "fg": "pure-black",   "bg": "accent",        "relation": "contrast_ratio", "threshold": 4.5 },
+    { "fg": "text-primary", "bg": "bg-panel",      "relation": "contrast_ratio", "threshold": 4.5 },
+    { "fg": "text-muted",   "bg": "bg-panel",      "relation": "contrast_ratio", "threshold": 3.0, "large_text_ok": true },
+    { "fg": "accent",       "bg": "bg-base",       "relation": "contrast_ratio", "threshold": 3.0, "large_text_ok": true }
+  ],
+  "measurements": [
+    {
+      "item": "visible focus indicator on every keyboard-focusable element",
+      "machine_checkable": true,
+      "proxy": {
+        "selector_or_method": ":focus-visible outline-width >= 2px and outline-style != none",
+        "property": "outline",
+        "threshold_or_window": { "min_width_px": 2 },
+        "intent_delta": "Proxy checks outline geometry only; a shadow-ring reading was rejected as indistinguishable-from-none under forced-colors. Delta: proxy may accept designs the intent would reject."
+      }
+    },
+    {
+      "item": "smooth transitions",
+      "machine_checkable": true,
+      "proxy": {
+        "selector_or_method": "computed transition-duration of interactive elements",
+        "property": "transition-duration",
+        "threshold_or_window": { "min_ms": 150, "max_ms": 300 },
+        "intent_delta": "'Smooth' is perceptual; window is the sealed operationalization."
+      }
+    },
+    {
+      "item": "no pictographic emoji in icon positions",
+      "machine_checkable": true,
+      "proxy": {
+        "selector_or_method": "text-content scan of buttons/links/icon roles for U+1F300-U+1FAFF, U+2600-U+27BF",
+        "property": "textContent",
+        "threshold_or_window": { "max_matches": 0 },
+        "intent_delta": "Range-based scan may miss rare pictographs outside listed blocks; accepted residual risk."
+      }
+    },
+    { "item": "generous whitespace rhythm", "machine_checkable": false, "demote_reason": "style-intent" },
+    { "item": "clean iconography feel",      "machine_checkable": false, "demote_reason": "unmeasurable" }
+  ],
+  "style_context": [
+    "Modern fintech aesthetic; confident, calm, security-forward.",
+    "Breathing-room layout with generous card padding."
+  ]
+}

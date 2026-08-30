@@ -1,0 +1,8 @@
+# Operational invariants (O) — design-system descriptor v1.0.0
+operational_invariants:
+  - id: DS-O-01
+    statement: >
+      Descriptor lint runs offline: no network access during validation;
+      all checks operate on bundle-local artifacts only.
+    severity: must
+    validation: [descriptor-offline]

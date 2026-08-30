@@ -1,0 +1,52 @@
+protocol:
+  name: design-system
+  version: 1.0.0
+  status: sealed
+  # Catalog addressing: display address taxonomy/design-system.
+  # Directory stays name-keyed (design-system/) per registry convention.
+  namespace: taxonomy
+
+# Same value as protocol.namespace above — the registry publisher reads the
+# nested key, the bundle linter reads this top-level one. Keep them in sync.
+namespace: taxonomy
+tags: [ui, design, tokens, style]
+
+purpose: >
+  Sealed vocabulary bundle defining the design-system DESCRIPTOR shape: the
+  interface between any generative/catalog design tool (the generator) and
+  PDD consumers. A descriptor declares tokens, pairing rules, motion windows,
+  and the source checklist split by the normative filter into
+  machine-checkable vs demoted items. Concrete brand identities register as
+  their own design/* bundles whose artifacts embed a conforming descriptor;
+  UI protocols consume them via depends_on. This bundle governs admission of
+  descriptors, never of implementations.
+
+boundary:
+  in_scope:
+    - Descriptor schema and field grammar
+    - Semantic checks over declared tokens, pairings, measurements
+    - Normative-filter encoding (machine-checkable flags require measurement definitions)
+    - Generator provenance requirements
+  out_of_scope:
+    - Any concrete palette, typeface choice, or brand identity (those live in design/* bundles)
+    - UI implementation conformance (governed by ui-* protocols)
+    - Aesthetic judgment beyond mechanically checkable declarations
+
+depends_on: []
+
+handshakes:
+  descriptor_schema: schemas/descriptor.schema.json
+
+seams:
+  descriptor_schema:
+    kind: wire
+    handshake: descriptor_schema
+
+invariants:
+  structural: invariants/structural.yaml
+  behavioral: invariants/behavioral.yaml
+  operational: invariants/operational.yaml
+
+capabilities: capability-manifest.yaml
+validators: validators/validation-plan.yaml
+evidence: evidence-requirements.yaml

@@ -1,0 +1,23 @@
+# Capability manifest — design-system descriptor v1.0.0
+
+capabilities:
+  dependencies:
+    # O-layer policy (engine reads this): the candidate is stdlib-only and
+    # does no I/O; typing/dataclasses are structural, json is not imported
+    # by the candidate itself but by nothing outside tests either — tests
+    # are excluded from the scan. Kept to the default stdlib set.
+    allowlist: [re, math, typing, dataclasses, json, datetime, functools, itertools, collections, enum, decimal, abc]
+    forbidden_modules: [os, subprocess, socket, urllib, requests, pathlib, tempfile, multiprocessing, threading]
+    forbidden_calls: [open, eval, exec, compile, __import__, input]
+    forbidden_attrs: [system, popen, call, Popen, run, connect, sendto, sendall, write_text, write_bytes, mkdir, unlink, remove]
+
+allowed:
+  - read bundle-local files (schemas/, invariants/, validators/, examples/)
+  - parse YAML/JSON descriptors
+  - compute WCAG contrast ratios from declared hex pairs
+  - compute hashes of artifacts
+
+forbidden_during_validation:
+  - network access (descriptor lint is fully offline)
+  - writes anywhere outside the validation evidence directory
+  - modification of sealed descriptor artifacts mid-run
